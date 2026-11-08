@@ -1,8 +1,15 @@
 import cors from "cors";
 import express from "express";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
 import { router } from "./routes/index.js";
 import { errorHandler, notFoundHandler } from "./middleware/error.js";
 import { cookieMiddleware } from "./middleware/cookie.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const frontendDistPath = path.resolve(__dirname, "../../frontend/dist");
 
 export const app = express();
 
@@ -29,8 +36,22 @@ app.get("/health", (_req, res) => {
   res.json({ ok: true, service: "digitalmarkaz360-api" });
 });
 
-app.get("/", (_req, res) => {
-  res.send(`
+// API routes mounted first
+app.use("/api", router);
+
+// In production or single-service Render deployment, serve built frontend SPA
+if (fs.existsSync(frontendDistPath)) {
+  app.use(express.static(frontendDistPath));
+  app.get("*", (req, res, next) => {
+    if (req.path.startsWith("/api") || req.path === "/health") {
+      return next();
+    }
+    res.sendFile(path.join(frontendDistPath, "index.html"));
+  });
+} else {
+  // Local development redirect/welcome page when frontend runs on Vite dev server
+  app.get("/", (_req, res) => {
+    res.send(`
     <!DOCTYPE html>
     <html>
       <head>
@@ -49,9 +70,9 @@ app.get("/", (_req, res) => {
       </body>
     </html>
   `);
-});
+  });
+}
 
-app.use("/api", router);
 app.use(notFoundHandler);
 app.use(errorHandler);
 

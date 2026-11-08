@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: digitalmarkaz360
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DB_HOST
+        placeholder: "your-mysql-host.example.com"
+      - key: DB_PORT
+        value: 3306
+      - key: DB_USER
+        placeholder: "your-mysql-username"
+      - key: DB_PASSWORD
+        placeholder: "your-mysql-password"
+      - key: DB_NAME
+        placeholder: "mobile_pos"
+      - key: DB_SSL
+        value: "true"
+      - key: ENFORCE_TOP_ADMIN_MFA
+        value: "false"

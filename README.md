@@ -97,8 +97,65 @@ npm run add:saas-admin <email> [password] [fullName]
 
 Example:
 ```bash
-npm run add:saas-admin e9956302@gmail.com admin123 "SaaS Platform Administrator"
+npm run add:saas-admin admin@example.com admin123 "SaaS Platform Administrator"
 ```
+
+## Deployment Guide (GitHub & Render)
+
+### 1. Uploading to GitHub
+
+1. Ensure Git is installed on your computer ([git-scm.com](https://git-scm.com/)).
+2. Initialize and push to your GitHub repository:
+   ```bash
+   git init
+   git add .
+   git commit -m "feat: initial commit DigitalMarkaz360 production ready"
+   git branch -M main
+   git remote add origin https://github.com/<your-username>/<your-repo-name>.git
+   git push -u origin main
+   ```
+> [!NOTE]
+> `.gitignore` automatically protects your `.env` files, uploads, and local logs from being pushed to GitHub.
+
+---
+
+### 2. Cloud MySQL Database (Required for Render)
+
+Render does **not** provide a native free MySQL service (Render only offers PostgreSQL). You can create a free cloud MySQL database in 2 minutes on any of these providers:
+- **Aiven for MySQL** (Free tier available, provides SSL host/port/user/password)
+- **TiDB Cloud Serverless** (Free 5GB MySQL-compatible database)
+- **Railway** (MySQL database add-on)
+- **Clever Cloud** (Free MySQL add-on)
+
+---
+
+### 3. Deploying to Render (Single Full-Stack Web Service)
+
+This is the recommended, free-tier friendly method. Render serves both the built frontend SPA and the backend REST API from a single service:
+
+1. Log into [dashboard.render.com](https://dashboard.render.com).
+2. Click **New +** → **Web Service**.
+3. Connect your GitHub repository.
+4. Configure the service:
+   - **Name**: `digitalmarkaz360`
+   - **Runtime**: `Node`
+   - **Build Command**: `npm install && npm run build`
+   - **Start Command**: `npm start`
+   - **Health Check Path**: `/health`
+5. Under **Environment Variables**, add:
+   - `NODE_ENV`: `production`
+   - `JWT_SECRET`: *(Click Generate or paste a secure 32+ character random string)*
+   - `DB_HOST`: *(Your cloud MySQL host, e.g. `mysql-xyz.aivencloud.com`)*
+   - `DB_PORT`: `3306`
+   - `DB_USER`: *(Your cloud MySQL username)*
+   - `DB_PASSWORD`: *(Your cloud MySQL password)*
+   - `DB_NAME`: `mobile_pos` *(or your database name)*
+   - `DB_SSL`: `true`
+   - `ENFORCE_TOP_ADMIN_MFA`: `false` *(set to `true` if you want mandatory MFA)*
+6. Click **Create Web Service**.
+
+> [!TIP]
+> On the very first start, the backend automatically detects a fresh database and auto-runs `schema.sql` and `seed.sql` to initialize all tables and default administrator accounts.
 
 ### SaaS Admin User Login History & System Forensics
 
