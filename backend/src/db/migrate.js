@@ -37,7 +37,14 @@ export async function runMigrations() {
           .map((s) => s.trim())
           .filter((s) => s.length > 0);
         for (const statement of statements) {
-          await query(statement);
+          try {
+            await pool.query(statement);
+          } catch (stmtErr) {
+            if (stmtErr.code === "ER_DUP_KEYNAME" || stmtErr.errno === 1061) {
+              continue;
+            }
+            throw stmtErr;
+          }
         }
         console.log("✔ Base schema initialized successfully.");
       }
@@ -49,7 +56,7 @@ export async function runMigrations() {
           .map((s) => s.trim())
           .filter((s) => s.length > 0);
         for (const statement of seedStatements) {
-          await query(statement);
+          await pool.query(statement);
         }
         console.log("✔ Base seed data applied successfully.");
       }

@@ -157,6 +157,25 @@ This is the recommended, free-tier friendly method. Render serves both the built
 > [!TIP]
 > On the very first start, the backend automatically detects a fresh database and auto-runs `schema.sql` and `seed.sql` to initialize all tables and default administrator accounts.
 
+---
+
+### 4. Deploying Directly on Railway (All-in-One: App + MySQL)
+
+Since Railway supports both Node.js apps and managed MySQL in the same project:
+
+1. In your Railway Project, click **+ Create** → **Database** → **Add MySQL**.
+2. Click **+ Create** → **GitHub Repo** → Select `POS`.
+3. In your Node service **Settings**:
+   - **Build Command**: `npm install && npm run build`
+   - **Start Command**: `npm start`
+4. In your Node service **Variables**, add:
+   - `NODE_ENV`: `production`
+   - `JWT_SECRET`: *(enter a long random 32+ character string)*
+   - `ENFORCE_TOP_ADMIN_MFA`: `false`
+   - Reference the MySQL service variables (click **Add Variable Reference**):
+     - `MYSQL_URL` (or `MYSQLHOST`, `MYSQLPORT`, `MYSQLUSER`, `MYSQLPASSWORD`, `MYSQLDATABASE`)
+5. Go to **Settings → Networking → Generate Domain** to get your live HTTPS URL.
+
 ### SaaS Admin User Login History & System Forensics
 
 The SaaS Super Admin panel includes real-time and historical tracking of all user authentications:
