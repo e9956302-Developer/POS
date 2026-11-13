@@ -15,11 +15,15 @@ frontend/.vite/
 backend/.env
 frontend/.env
 frontend/.env.local
+*recovery-codes*.txt
+*-recovery-codes-*.txt
 
 # Databases, backups and storage
 *.sqlite
 *.db
 *.backup.sql
+backend/backups/backup_*.sql
+!backend/backups/backup_2026-10-14T17-22-37-126Z.sql
 backend/uploads/
 
 # Logs

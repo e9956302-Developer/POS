@@ -17,12 +17,26 @@ function findBrowserPath() {
   throw new Error("No browser executable found");
 }
 
+let devServerAvailable = false;
 let browser;
 let page;
 const APP_URL = "http://localhost:5173/#login";
 
 before(async () => {
-  const executablePath = findBrowserPath();
+  try {
+    await fetch("http://localhost:5173", { signal: AbortSignal.timeout(1000) });
+    devServerAvailable = true;
+  } catch {
+    devServerAvailable = false;
+    return;
+  }
+  let executablePath;
+  try {
+    executablePath = findBrowserPath();
+  } catch {
+    devServerAvailable = false;
+    return;
+  }
   browser = await puppeteer.launch({
     executablePath,
     headless: "new",
@@ -35,7 +49,11 @@ after(async () => {
   if (browser) await browser.close();
 });
 
-test("Manager (Waqar) logs in and sees all assigned operational pages in sidebar navigation", async () => {
+test("Manager (Waqar) logs in and sees all assigned operational pages in sidebar navigation", async (t) => {
+  if (!devServerAvailable) {
+    t.skip("Vite dev server is not running on http://localhost:5173");
+    return;
+  }
   await page.goto(APP_URL, { waitUntil: "networkidle0" });
   await page.evaluate(() => localStorage.clear());
   await page.goto(APP_URL, { waitUntil: "networkidle0" });

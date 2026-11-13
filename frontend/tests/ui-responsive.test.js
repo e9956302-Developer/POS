@@ -24,13 +24,27 @@ const VIEWPORTS = {
   desktop: { width: 1280, height: 800, name: "Desktop (1280x800)" }
 };
 
+let devServerAvailable = false;
 let browser;
 let page;
 const APP_URL = "http://localhost:5173/#login";
 const LANDING_URL = "http://localhost:5173";
 
 before(async () => {
-  const executablePath = findBrowserPath();
+  try {
+    await fetch("http://localhost:5173", { signal: AbortSignal.timeout(1000) });
+    devServerAvailable = true;
+  } catch {
+    devServerAvailable = false;
+    return;
+  }
+  let executablePath;
+  try {
+    executablePath = findBrowserPath();
+  } catch {
+    devServerAvailable = false;
+    return;
+  }
   browser = await puppeteer.launch({
     executablePath,
     headless: "new",
@@ -165,7 +179,11 @@ async function navigateToTab(tabNamePattern) {
 // TEST SUITE: RESPONSIVE UI & OVERLAY FORMS TESTING
 // =========================================================================
 
-test("0. Application Landing Page is 100% responsive across mobile, tablet, and desktop viewports", async () => {
+test("0. Application Landing Page is 100% responsive across mobile, tablet, and desktop viewports", async (t) => {
+  if (!devServerAvailable) {
+    t.skip("Vite dev server is not running on http://localhost:5173");
+    return;
+  }
   for (const vp of Object.values(VIEWPORTS)) {
     await page.setViewport({ width: vp.width, height: vp.height });
     await page.goto(LANDING_URL, { waitUntil: "networkidle0" });
@@ -190,7 +208,11 @@ test("0. Application Landing Page is 100% responsive across mobile, tablet, and 
   }
 });
 
-test("1. Login Screen is 100% responsive across mobile, tablet, and desktop viewports", async () => {
+test("1. Login Screen is 100% responsive across mobile, tablet, and desktop viewports", async (t) => {
+  if (!devServerAvailable) {
+    t.skip("Vite dev server is not running on http://localhost:5173");
+    return;
+  }
   for (const vp of Object.values(VIEWPORTS)) {
     await page.setViewport({ width: vp.width, height: vp.height });
     await page.goto(APP_URL, { waitUntil: "networkidle0" });
@@ -211,7 +233,11 @@ test("1. Login Screen is 100% responsive across mobile, tablet, and desktop view
   }
 });
 
-test("2. Standard Store User pages and search toolbars fit within viewport width with zero overflow", async () => {
+test("2. Standard Store User pages and search toolbars fit within viewport width with zero overflow", async (t) => {
+  if (!devServerAvailable) {
+    t.skip("Vite dev server is not running on http://localhost:5173");
+    return;
+  }
   await loginUser("admin@mobilepos.local", "admin123");
 
   const standardPages = [
@@ -247,7 +273,11 @@ test("2. Standard Store User pages and search toolbars fit within viewport width
   }
 });
 
-test("3. Theme selection is linked to packages: Starter user has locked theme indicator without UI overflow", async () => {
+test("3. Theme selection is linked to packages: Starter user has locked theme indicator without UI overflow", async (t) => {
+  if (!devServerAvailable) {
+    t.skip("Vite dev server is not running on http://localhost:5173");
+    return;
+  }
   await loginUser("admin@mobilepos.local", "admin123");
   await page.setViewport(VIEWPORTS.mobileSmall);
 
@@ -276,7 +306,11 @@ test("3. Theme selection is linked to packages: Starter user has locked theme in
   await assertNoHorizontalOverflow(page, "Theme locked alert @ Mobile 375px");
 });
 
-test("4. Top Admin pages are 100% responsive across viewports", async () => {
+test("4. Top Admin pages are 100% responsive across viewports", async (t) => {
+  if (!devServerAvailable) {
+    t.skip("Vite dev server is not running on http://localhost:5173");
+    return;
+  }
   await loginUser("topadmin@mobilepos.local", "admin123");
 
   const topPages = [
@@ -302,7 +336,11 @@ test("4. Top Admin pages are 100% responsive across viewports", async () => {
   }
 });
 
-test("5. Store Branch Subscription Assignments: Packages and status dropdowns are on same line with adjusted compact status width", async () => {
+test("5. Store Branch Subscription Assignments: Packages and status dropdowns are on same line with adjusted compact status width", async (t) => {
+  if (!devServerAvailable) {
+    t.skip("Vite dev server is not running on http://localhost:5173");
+    return;
+  }
   await loginUser("topadmin@mobilepos.local", "admin123");
   await navigateToTab("Subscription Packages");
 
@@ -352,7 +390,11 @@ test("5. Store Branch Subscription Assignments: Packages and status dropdowns ar
   }
 });
 
-test("6. Overlay Forms and Modals fit strictly within screen width with zero breakout across mobile and desktop", async () => {
+test("6. Overlay Forms and Modals fit strictly within screen width with zero breakout across mobile and desktop", async (t) => {
+  if (!devServerAvailable) {
+    t.skip("Vite dev server is not running on http://localhost:5173");
+    return;
+  }
   await loginUser("topadmin@mobilepos.local", "admin123");
   await navigateToTab("Subscription Packages");
 
@@ -411,7 +453,11 @@ test("6. Overlay Forms and Modals fit strictly within screen width with zero bre
   await new Promise((r) => setTimeout(r, 400));
 });
 
-test("7. Package Feature Access includes Theme Customization module card and responsive floating save bar", async () => {
+test("7. Package Feature Access includes Theme Customization module card and responsive floating save bar", async (t) => {
+  if (!devServerAvailable) {
+    t.skip("Vite dev server is not running on http://localhost:5173");
+    return;
+  }
   await loginUser("topadmin@mobilepos.local", "admin123");
   await navigateToTab("Package Feature Access");
 
