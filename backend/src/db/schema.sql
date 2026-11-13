@@ -119,6 +119,9 @@ CREATE TABLE IF NOT EXISTS parties (
   cnic VARCHAR(30) NULL,
   address VARCHAR(255) NULL,
   notes TEXT NULL,
+  opening_balance DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  opening_balance_type ENUM('receivable', 'payable') NOT NULL DEFAULT 'receivable',
+  opening_balance_date DATE NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (business_id) REFERENCES businesses(id),
   FOREIGN KEY (branch_id) REFERENCES branches(id)

@@ -1,34 +1,53 @@
-import { query } from "./pool.js";
+import { pool, query } from "./pool.js";
 
-async function migrate() {
-  console.log("Starting Payroll Advances & Monthly Attendance Migration...");
+async function tableExists(tableName) {
+  const [rows] = await pool.execute(
+    `SELECT COUNT(*) AS count
+     FROM INFORMATION_SCHEMA.TABLES
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = ?`,
+    [tableName]
+  );
+  return Number(rows[0]?.count || 0) > 0;
+}
+
+async function columnExists(tableName, columnName) {
+  const [rows] = await pool.execute(
+    `SELECT COUNT(*) AS count
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = ?
+       AND COLUMN_NAME = ?`,
+    [tableName, columnName]
+  );
+  return Number(rows[0]?.count || 0) > 0;
+}
+
+export async function migratePayrollAdvances() {
+  console.log("=== Checking Payroll Advances & Monthly Attendance Migration ===");
 
   // 1. Add advance_deduction, computed_salary, overridden_fields, updated_by, updated_at to employee_salaries if not present
-  try {
-    const cols = await query("DESCRIBE employee_salaries");
-    const colNames = cols.map((c) => c.Field);
-    if (!colNames.includes("advance_deduction")) {
+  if (await tableExists("employee_salaries")) {
+    if (!(await columnExists("employee_salaries", "advance_deduction"))) {
       await query("ALTER TABLE employee_salaries ADD COLUMN advance_deduction DECIMAL(12,2) NOT NULL DEFAULT 0.00 AFTER bonus");
-      console.log("Added advance_deduction to employee_salaries");
+      console.log("✔ Added advance_deduction to employee_salaries");
     }
-    if (!colNames.includes("computed_salary")) {
+    if (!(await columnExists("employee_salaries", "computed_salary"))) {
       await query("ALTER TABLE employee_salaries ADD COLUMN computed_salary DECIMAL(12,2) NOT NULL DEFAULT 0.00 AFTER advance_deduction");
-      console.log("Added computed_salary to employee_salaries");
+      console.log("✔ Added computed_salary to employee_salaries");
     }
-    if (!colNames.includes("overridden_fields")) {
+    if (!(await columnExists("employee_salaries", "overridden_fields"))) {
       await query("ALTER TABLE employee_salaries ADD COLUMN overridden_fields JSON NULL DEFAULT NULL AFTER notes");
-      console.log("Added overridden_fields to employee_salaries");
+      console.log("✔ Added overridden_fields to employee_salaries");
     }
-    if (!colNames.includes("updated_by")) {
+    if (!(await columnExists("employee_salaries", "updated_by"))) {
       await query("ALTER TABLE employee_salaries ADD COLUMN updated_by INT NULL DEFAULT NULL AFTER created_by");
-      console.log("Added updated_by to employee_salaries");
+      console.log("✔ Added updated_by to employee_salaries");
     }
-    if (!colNames.includes("updated_at")) {
+    if (!(await columnExists("employee_salaries", "updated_at"))) {
       await query("ALTER TABLE employee_salaries ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at");
-      console.log("Added updated_at to employee_salaries");
+      console.log("✔ Added updated_at to employee_salaries");
     }
-  } catch (err) {
-    console.warn("Could not check/alter employee_salaries:", err.message);
   }
 
   // 2. Create employee_advances table
@@ -52,7 +71,6 @@ async function migrate() {
       FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
     )
   `);
-  console.log("Created employee_advances table");
 
   // 3. Create employee_monthly_attendance table
   await query(`
@@ -77,13 +95,15 @@ async function migrate() {
       FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
     )
   `);
-  console.log("Created employee_monthly_attendance table");
 
-  console.log("Payroll advances and monthly attendance migration complete!");
-  process.exit(0);
+  console.log("=== Payroll Advances & Monthly Attendance Migration Complete ===");
 }
 
-migrate().catch((err) => {
-  console.error("Migration failed:", err);
-  process.exit(1);
-});
+if (process.argv[1] && process.argv[1].endsWith("migratePayrollAdvances.js")) {
+  migratePayrollAdvances()
+    .then(() => process.exit(0))
+    .catch((err) => {
+      console.error("Migration failed:", err);
+      process.exit(1);
+    });
+}

@@ -89,6 +89,18 @@ export async function runMigrations() {
   } catch (err) {
     console.warn("Discounts migration notice:", err.message);
   }
+  try {
+    const { migrateOpeningBalances } = await import("./migrateOpeningBalances.js");
+    await migrateOpeningBalances();
+  } catch (err) {
+    console.warn("Opening balances migration notice:", err.message);
+  }
+  try {
+    const { migratePayrollAdvances } = await import("./migratePayrollAdvances.js");
+    await migratePayrollAdvances();
+  } catch (err) {
+    console.warn("Payroll advances migration notice:", err.message);
+  }
 
   // 3. Scan migrations directory
   const migrationsDir = path.join(__dirname, "migrations");

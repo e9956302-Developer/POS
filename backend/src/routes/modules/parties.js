@@ -64,29 +64,52 @@ partiesRouter.post(
       await assertBranchAccess(req.user, branchId);
     }
 
-    const result = await query(
-      `INSERT INTO parties (
-         business_id, branch_id, party_type, name, phone, cnic, address, notes,
-         opening_balance, opening_balance_type, opening_balance_date
-       )
-       VALUES (
-         :businessId, :branchId, :partyType, :name, :phone, :cnic, :address, :notes,
-         :openingBalance, :openingBalanceType, :openingBalanceDate
-       )`,
-      {
-        businessId: req.user.business_id,
-        branchId: branchId || null,
-        partyType,
-        name: name.trim(),
-        phone: phone || null,
-        cnic: cnic || null,
-        address: address || null,
-        notes: notes || null,
-        openingBalance: Number(openingBalance || 0),
-        openingBalanceType: openingBalanceType || (partyType === "vendor" ? "payable" : "receivable"),
-        openingBalanceDate: openingBalanceDate || null
+    let result;
+    const insertPayload = {
+      businessId: req.user.business_id,
+      branchId: branchId || null,
+      partyType,
+      name: name.trim(),
+      phone: phone || null,
+      cnic: cnic || null,
+      address: address || null,
+      notes: notes || null,
+      openingBalance: Number(openingBalance || 0),
+      openingBalanceType: openingBalanceType || (partyType === "vendor" ? "payable" : "receivable"),
+      openingBalanceDate: openingBalanceDate || null
+    };
+
+    try {
+      result = await query(
+        `INSERT INTO parties (
+           business_id, branch_id, party_type, name, phone, cnic, address, notes,
+           opening_balance, opening_balance_type, opening_balance_date
+         )
+         VALUES (
+           :businessId, :branchId, :partyType, :name, :phone, :cnic, :address, :notes,
+           :openingBalance, :openingBalanceType, :openingBalanceDate
+         )`,
+        insertPayload
+      );
+    } catch (insertErr) {
+      if (insertErr.code === "ER_BAD_FIELD_ERROR" || insertErr.message?.includes("opening_balance")) {
+        const { migrateOpeningBalances } = await import("../../db/migrateOpeningBalances.js");
+        await migrateOpeningBalances();
+        result = await query(
+          `INSERT INTO parties (
+             business_id, branch_id, party_type, name, phone, cnic, address, notes,
+             opening_balance, opening_balance_type, opening_balance_date
+           )
+           VALUES (
+             :businessId, :branchId, :partyType, :name, :phone, :cnic, :address, :notes,
+             :openingBalance, :openingBalanceType, :openingBalanceDate
+           )`,
+          insertPayload
+        );
+      } else {
+        throw insertErr;
       }
-    );
+    }
 
     const rows = await query(
       `SELECT * FROM parties WHERE id = :id AND business_id = :businessId`,
@@ -166,10 +189,23 @@ partiesRouter.put(
     }
 
     if (updates.length > 0) {
-      await query(
-        `UPDATE parties SET ${updates.join(", ")} WHERE id = :id AND business_id = :businessId`,
-        params
-      );
+      try {
+        await query(
+          `UPDATE parties SET ${updates.join(", ")} WHERE id = :id AND business_id = :businessId`,
+          params
+        );
+      } catch (updateErr) {
+        if (updateErr.code === "ER_BAD_FIELD_ERROR" || updateErr.message?.includes("opening_balance")) {
+          const { migrateOpeningBalances } = await import("../../db/migrateOpeningBalances.js");
+          await migrateOpeningBalances();
+          await query(
+            `UPDATE parties SET ${updates.join(", ")} WHERE id = :id AND business_id = :businessId`,
+            params
+          );
+        } else {
+          throw updateErr;
+        }
+      }
     }
 
     const rows = await query(
