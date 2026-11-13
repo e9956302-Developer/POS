@@ -67,8 +67,16 @@ export const api = {
   login: (payload) => request("/auth/login", { method: "POST", body: JSON.stringify(payload) }),
   me: () => request("/auth/me"),
   updateProfile: (payload) => request("/auth/profile", { method: "PUT", body: JSON.stringify(payload) }),
-  mfaStatus: () => request("/auth/mfa/status"),
-  mfaSetup: (token) => request("/auth/mfa/setup", { method: "POST", ...(token ? { token } : {}) }),
+  mfaStatus: (userId) => request(userId ? `/auth/mfa/status?userId=${encodeURIComponent(userId)}` : "/auth/mfa/status"),
+  mfaSetup: (tokenOrPayload) => {
+    const opts = { method: "POST" };
+    if (typeof tokenOrPayload === "string" && tokenOrPayload.length > 30) {
+      opts.token = tokenOrPayload;
+    } else if (tokenOrPayload) {
+      opts.body = JSON.stringify(typeof tokenOrPayload === "object" ? tokenOrPayload : { userId: tokenOrPayload });
+    }
+    return request("/auth/mfa/setup", opts);
+  },
   mfaConfirm: (payload, token) =>
     request("/auth/mfa/confirm", {
       method: "POST",

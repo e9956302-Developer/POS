@@ -4,6 +4,12 @@ export function badRequest(message) {
   return error;
 }
 
+export function notFound(message = "Resource not found") {
+  const error = new Error(message);
+  error.status = 404;
+  return error;
+}
+
 export function validationFailed(header, errors) {
   const fullText = [header, ...errors.map((e) => `- ${e.formattedMessage}`)].join("\n");
   const error = new Error(fullText);

@@ -452,3 +452,106 @@ test("Acceptance 6: Direct server-level CLI recovery tool resets admin and write
   });
   assert.equal(loginRes.status, 200, "Login with CLI recovery password must succeed");
 });
+
+test("Acceptance 7: Top Admin can configure, confirm, and reset MFA for another SaaS Admin row without affecting own MFA", async () => {
+  // Step 1: Create a second SaaS Admin (targetUser) with mfa_enabled = 0
+  const targetEmail = `saas_target_${Date.now()}@digitalmarkaz360.local`;
+  const initialHash = await bcrypt.hash("InitialStrongPassword123!#", 12);
+  const [topRole] = await query("SELECT id FROM roles WHERE name = 'top_admin'");
+  const insertRes = await query(
+    `INSERT INTO users (business_id, role_id, branch_id, full_name, email, password_hash, is_active, mfa_enabled)
+     VALUES (NULL, ?, NULL, 'Target SaaS Admin', ?, ?, 1, 0)`,
+    [topRole.id, targetEmail, initialHash]
+  );
+  const targetUserId = insertRes.insertId;
+
+  // Top Admin (main admin) sets up MFA for themselves first to ensure their own MFA is distinct
+  const mainSecret = generateTotpSecret(20);
+  await query("UPDATE users SET mfa_enabled = 1, mfa_secret = ? WHERE id = ?", [mainSecret, topAdminUserId]);
+
+  // Log in as main Top Admin
+  const loginRes = await fetch(`${baseUrl}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: topAdminEmail, password: "ServerRecoveryKey2026!#" })
+  });
+  assert.equal(loginRes.status, 200);
+  const { mfaTicket } = await loginRes.json();
+  const code = generateTotpToken(mainSecret);
+  const verifyRes = await fetch(`${baseUrl}/api/auth/mfa/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mfaTicket, code })
+  });
+  assert.equal(verifyRes.status, 200);
+  const { token: adminToken } = await verifyRes.json();
+
+  // 1. Check target user's MFA status using adminToken
+  const statusRes = await fetch(`${baseUrl}/api/auth/mfa/status?userId=${targetUserId}`, {
+    headers: { Authorization: `Bearer ${adminToken}` }
+  });
+  assert.equal(statusRes.status, 200);
+  const statusData = await statusRes.json();
+  assert.equal(statusData.mfaEnabled, false);
+  assert.equal(statusData.userId, targetUserId);
+  assert.equal(statusData.email, targetEmail);
+
+  // 2. Generate MFA setup for target user
+  const setupRes = await fetch(`${baseUrl}/api/auth/mfa/setup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({ userId: targetUserId })
+  });
+  assert.equal(setupRes.status, 200);
+  const setupData = await setupRes.json();
+  assert.equal(setupData.userId, targetUserId);
+  assert.equal(setupData.email, targetEmail);
+  assert.ok(setupData.secret);
+  assert.notEqual(setupData.secret, mainSecret, "Target user gets their own secret, not main admin's secret");
+
+  // 3. Confirm MFA for target user
+  const targetTotpCode = generateTotpToken(setupData.secret);
+  const confirmRes = await fetch(`${baseUrl}/api/auth/mfa/confirm`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({
+      userId: targetUserId,
+      secret: setupData.secret,
+      code: targetTotpCode,
+      recoveryCodes: setupData.recoveryCodes
+    })
+  });
+  assert.equal(confirmRes.status, 200);
+  const confirmData = await confirmRes.json();
+  assert.equal(confirmData.success, true);
+  assert.equal(confirmData.userId, targetUserId);
+
+  // Verify target user has mfa_enabled = 1 in database
+  const [dbTarget] = await query("SELECT mfa_enabled, mfa_secret FROM users WHERE id = ?", [targetUserId]);
+  assert.equal(dbTarget.mfa_enabled, 1);
+  assert.equal(dbTarget.mfa_secret, setupData.secret);
+
+  // Verify main Top Admin's own MFA was NOT overwritten!
+  const [dbMain] = await query("SELECT mfa_enabled, mfa_secret FROM users WHERE id = ?", [topAdminUserId]);
+  assert.equal(dbMain.mfa_enabled, 1);
+  assert.equal(dbMain.mfa_secret, mainSecret, "Main admin secret must NOT be modified");
+
+  // 4. Disable MFA for target user using admin credentials
+  const disableRes = await fetch(`${baseUrl}/api/auth/mfa/disable`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({
+      userId: targetUserId,
+      currentPassword: "ServerRecoveryKey2026!#"
+    })
+  });
+  assert.equal(disableRes.status, 200);
+
+  // Verify target user's MFA is now disabled
+  const [dbTargetDisabled] = await query("SELECT mfa_enabled, mfa_secret FROM users WHERE id = ?", [targetUserId]);
+  assert.equal(dbTargetDisabled.mfa_enabled, 0);
+  assert.equal(dbTargetDisabled.mfa_secret, null);
+
+  // Clean up
+  await query("DELETE FROM users WHERE id = ?", [targetUserId]);
+});

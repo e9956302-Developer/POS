@@ -6,7 +6,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { env } from "../../config/env.js";
 import { query } from "../../db/pool.js";
 import { fetchUserSubscription, isBusinessAdmin, requireAuth, resolveUserPermissions } from "../../middleware/auth.js";
-import { badRequest, isValidEmail } from "../../utils/http.js";
+import { badRequest, notFound, isValidEmail } from "../../utils/http.js";
 import {
   generateTotpSecret,
   generateTotpToken,
@@ -604,20 +604,35 @@ authRouter.get(
   "/mfa/status",
   requireAuth,
   asyncHandler(async (req, res) => {
+    let targetUserId = req.user.id;
+    if (req.query.userId && req.user.role_name === "top_admin") {
+      targetUserId = Number(req.query.userId) || req.query.userId;
+    }
     const [user] = await query(
-      "SELECT mfa_enabled, mfa_enrolled_at FROM users WHERE id = ?",
-      [req.user.id]
+      "SELECT id, full_name, email, role_id, mfa_enabled, mfa_enrolled_at FROM users WHERE id = ?",
+      [targetUserId]
     );
+    if (!user) {
+      throw notFound("User not found");
+    }
     const [recoveryCount] = await query(
       "SELECT COUNT(*) AS total, SUM(CASE WHEN used_at IS NULL THEN 1 ELSE 0 END) AS remaining FROM user_recovery_codes WHERE user_id = ?",
-      [req.user.id]
+      [targetUserId]
     );
+
+    const isSelf = Number(targetUserId) === Number(req.user.id);
+    const canDisable = isSelf ? req.user.role_name !== "top_admin" : req.user.role_name === "top_admin";
+
     res.json({
+      userId: user.id,
+      email: user.email,
+      fullName: user.full_name,
       mfaEnabled: Boolean(user?.mfa_enabled),
       enrolledAt: user?.mfa_enrolled_at,
       remainingRecoveryCodes: Number(recoveryCount?.remaining || 0),
       totalRecoveryCodes: Number(recoveryCount?.total || 0),
-      canDisable: req.user.role_name !== "top_admin"
+      canDisable,
+      isSelf
     });
   })
 );
@@ -626,12 +641,27 @@ authRouter.all(
   "/mfa/setup",
   requireAuth,
   asyncHandler(async (req, res) => {
-    const user = req.user;
+    let targetUser = req.user;
+    const requestedUserId = req.body?.userId || req.query?.userId;
+    if (requestedUserId && req.user.role_name === "top_admin") {
+      const [u] = await query(
+        "SELECT id, email, full_name, role_id FROM users WHERE id = ?",
+        [requestedUserId]
+      );
+      if (!u) {
+        throw notFound("User not found");
+      }
+      targetUser = u;
+    }
+
     const secret = generateTotpSecret(20);
-    const uri = generateTotpUri(user.email, "DigitalMarkaz360", secret);
+    const uri = generateTotpUri(targetUser.email, "DigitalMarkaz360", secret);
     const recoveryCodes = generateRecoveryCodes(10);
 
     res.json({
+      userId: targetUser.id,
+      email: targetUser.email,
+      fullName: targetUser.full_name,
       secret,
       uri,
       recoveryCodes,
@@ -644,8 +674,16 @@ authRouter.post(
   "/mfa/confirm",
   requireAuth,
   asyncHandler(async (req, res) => {
-    const { secret, code, recoveryCodes } = req.body;
-    const userId = req.user.id;
+    const { secret, code, recoveryCodes, userId } = req.body;
+    let targetUserId = req.user.id;
+    let targetEmail = req.user.email;
+
+    if (userId && req.user.role_name === "top_admin") {
+      const [u] = await query("SELECT id, email FROM users WHERE id = ?", [userId]);
+      if (!u) throw notFound("User not found");
+      targetUserId = u.id;
+      targetEmail = u.email;
+    }
 
     if (!secret || !code || !Array.isArray(recoveryCodes) || recoveryCodes.length !== 10) {
       throw badRequest("Secret, 6-digit confirmation code, and 10 recovery codes are required");
@@ -659,16 +697,16 @@ authRouter.post(
     // Persist MFA Secret and activate
     await query(
       "UPDATE users SET mfa_secret = ?, mfa_enabled = 1, mfa_enrolled_at = NOW() WHERE id = ?",
-      [secret, userId]
+      [secret, targetUserId]
     );
 
     // Save hashed recovery codes
-    await query("DELETE FROM user_recovery_codes WHERE user_id = ?", [userId]);
+    await query("DELETE FROM user_recovery_codes WHERE user_id = ?", [targetUserId]);
     for (const rawCode of recoveryCodes) {
       const codeHash = hashRecoveryCode(rawCode);
       await query(
         "INSERT INTO user_recovery_codes (user_id, code_hash) VALUES (?, ?)",
-        [userId, codeHash]
+        [targetUserId, codeHash]
       );
     }
 
@@ -676,47 +714,87 @@ authRouter.post(
     await triggerSecurityAlert({
       alertType: "mfa_enrolled",
       severity: "medium",
-      userId,
-      recipientEmail: req.user.email,
+      userId: targetUserId,
+      recipientEmail: targetEmail,
       subject: "[SECURITY] Multi-Factor Authentication Successfully Configured",
-      message: `MFA (TOTP Authenticator) was successfully configured on account ${req.user.email} from IP ${getClientIp(req)}.`
+      message: `MFA (TOTP Authenticator) was successfully configured on account ${targetEmail}${Number(targetUserId) !== Number(req.user.id) ? ` by admin ${req.user.email}` : ""} from IP ${getClientIp(req)}.`
     });
 
     res.json({
       success: true,
-      message: "Multi-Factor Authentication is now enabled. Your recovery codes have been hashed and stored."
+      userId: targetUserId,
+      message: `Multi-Factor Authentication is now enabled for ${targetEmail}. Your recovery codes have been hashed and stored.`
     });
   })
 );
 
-// Disable MFA (Prohibited for Top Admin per Requirement A.1)
+// Disable MFA (Prohibited for Top Admin on their own account per Requirement A.1)
 authRouter.post(
   "/mfa/disable",
   requireAuth,
   asyncHandler(async (req, res) => {
-    if (req.user.role_name === "top_admin") {
-      return res.status(403).json({
-        message: "MFA is mandatory for SaaS Top Admin accounts and cannot be disabled."
-      });
+    const { currentPassword, code, userId } = req.body;
+    let targetUserId = req.user.id;
+    let targetEmail = req.user.email;
+    const isSelf = !userId || Number(userId) === Number(req.user.id);
+
+    if (!isSelf) {
+      if (req.user.role_name !== "top_admin") {
+        return res.status(403).json({
+          message: "Only SaaS Top Admin can disable MFA for other accounts."
+        });
+      }
+      const [u] = await query("SELECT id, email FROM users WHERE id = ?", [userId]);
+      if (!u) throw notFound("User not found");
+      targetUserId = u.id;
+      targetEmail = u.email;
+
+      if (!currentPassword) {
+        throw badRequest("Administrator password is required to reset 2FA for this account");
+      }
+      const [adminUser] = await query("SELECT password_hash FROM users WHERE id = ?", [req.user.id]);
+      const validAdminPwd = await bcrypt.compare(currentPassword, adminUser.password_hash);
+      if (!validAdminPwd) {
+        throw badRequest("Invalid administrator password");
+      }
+    } else {
+      if (req.user.role_name === "top_admin") {
+        return res.status(403).json({
+          message: "MFA is mandatory for SaaS Top Admin accounts and cannot be disabled."
+        });
+      }
+
+      if (!currentPassword || !code) {
+        throw badRequest("Current password and verification code are required to disable MFA");
+      }
+
+      const [user] = await query("SELECT password_hash, mfa_secret FROM users WHERE id = ?", [req.user.id]);
+      const validPwd = await bcrypt.compare(currentPassword, user.password_hash);
+      const validCode = verifyTotpToken(code, user.mfa_secret);
+
+      if (!validPwd || !validCode) {
+        throw badRequest("Invalid password or verification code");
+      }
     }
 
-    const { currentPassword, code } = req.body;
-    if (!currentPassword || !code) {
-      throw badRequest("Current password and verification code are required to disable MFA");
-    }
+    await query("UPDATE users SET mfa_enabled = 0, mfa_secret = NULL, mfa_enrolled_at = NULL WHERE id = ?", [targetUserId]);
+    await query("DELETE FROM user_recovery_codes WHERE user_id = ?", [targetUserId]);
 
-    const [user] = await query("SELECT password_hash, mfa_secret FROM users WHERE id = ?", [req.user.id]);
-    const validPwd = await bcrypt.compare(currentPassword, user.password_hash);
-    const validCode = verifyTotpToken(code, user.mfa_secret);
+    // Security Alert
+    await triggerSecurityAlert({
+      alertType: "mfa_disabled",
+      severity: "high",
+      userId: targetUserId,
+      recipientEmail: targetEmail,
+      subject: "[SECURITY] Multi-Factor Authentication Disabled",
+      message: `MFA was disabled for account ${targetEmail} by admin ${req.user.email} from IP ${getClientIp(req)}.`
+    });
 
-    if (!validPwd || !validCode) {
-      throw badRequest("Invalid password or verification code");
-    }
-
-    await query("UPDATE users SET mfa_enabled = 0, mfa_secret = NULL WHERE id = ?", [req.user.id]);
-    await query("DELETE FROM user_recovery_codes WHERE user_id = ?", [req.user.id]);
-
-    res.json({ success: true, message: "MFA has been disabled." });
+    res.json({
+      success: true,
+      userId: targetUserId,
+      message: `Two-Factor Authentication has been disabled for ${targetEmail}.`
+    });
   })
 );
 

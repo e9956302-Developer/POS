@@ -4,41 +4,41 @@ import { LanguageSwitcher } from "../LanguageSwitcher.jsx";
 import { useLanguage } from "../../context/LanguageContext.jsx";
 
 export function ExecutiveLayout({
-  session,
-  companyName,
-  companyCode,
-  companyLogo,
-  isTopAdmin,
-  isCompanyAdmin,
-  isBranchPortal,
-  canSwitchBranch,
-  currentBranchId,
-  currentBranchName,
-  branches,
-  handleSwitchBranch,
-  activeTab,
-  setActiveTab,
-  setError,
-  tabs,
-  pageBreadcrumb,
-  theme,
-  hasThemeAccess,
-  handleCycleTheme,
-  handleSelectTheme,
-  THEMES,
-  notifications,
-  unreadNotifCount,
-  notifDropdownOpen,
-  setNotifDropdownOpen,
-  notifBellRef,
-  handleMarkAllRead,
-  handleMarkNotifRead,
-  userDropdownOpen,
-  setUserDropdownOpen,
-  userMenuRef,
-  handleOpenEditProfile,
-  setShowMfaModal,
-  setShowLogoutConfirm,
+  session = {},
+  companyName = "DigitalMarkaz360",
+  companyCode = "",
+  companyLogo = null,
+  isTopAdmin = false,
+  isCompanyAdmin = false,
+  isBranchPortal = false,
+  canSwitchBranch = false,
+  currentBranchId = null,
+  currentBranchName = "",
+  branches = [],
+  handleSwitchBranch = () => {},
+  activeTab = "dashboard",
+  setActiveTab = () => {},
+  setError = () => {},
+  tabs = [],
+  pageBreadcrumb = null,
+  theme = "dark",
+  hasThemeAccess = true,
+  handleCycleTheme = () => {},
+  handleSelectTheme = () => {},
+  THEMES = [],
+  notifications = [],
+  unreadNotifCount = 0,
+  notifDropdownOpen = false,
+  setNotifDropdownOpen = () => {},
+  notifBellRef = null,
+  handleMarkAllRead = () => {},
+  handleMarkNotifRead = () => {},
+  userDropdownOpen = false,
+  setUserDropdownOpen = () => {},
+  userMenuRef = null,
+  handleOpenEditProfile = () => {},
+  setShowMfaModal = () => {},
+  setShowLogoutConfirm = () => {},
   availedPackages = [],
   children
 }) {
@@ -58,10 +58,19 @@ export function ExecutiveLayout({
     }));
   }
 
+  const safeTabs = Array.isArray(tabs) ? tabs : [];
+  const safeBranches = Array.isArray(branches) ? branches : [];
+  const safeNotifications = Array.isArray(notifications) ? notifications : [];
+
   // Active top tab and sub-items detection
-  const activeParentTab = tabs.find(
+  const activeParentTab = safeTabs.find(
     (t) => t.key === activeTab || (t.subItems && t.subItems.some((s) => s.key === activeTab))
   );
+
+  const userName = session?.full_name || session?.fullName || "User";
+  const userEmail = session?.email || "";
+  const userRole = session?.role_name || session?.roleName || session?.role || (isTopAdmin ? "Top Admin" : "Staff");
+  const userInitial = userName.charAt(0).toUpperCase();
 
   return (
     <div className={`executive-layout-root ${isCollapsed ? "sidebar-collapsed" : ""}`}>
@@ -100,7 +109,7 @@ export function ExecutiveLayout({
 
           {/* Navigation Menu */}
           <nav className="executive-nav-menu">
-            {tabs.map((tab) => {
+            {safeTabs.map((tab) => {
               if (tab.subItems && tab.subItems.length > 0) {
                 const isGroupOpen = openGroups[tab.key] ?? false;
                 const isGroupActive = activeTab === tab.key || activeTab.startsWith(`${tab.key}_`);
@@ -243,7 +252,7 @@ export function ExecutiveLayout({
                   type="button"
                   className="executive-logout-btn-icon"
                   onClick={() => setShowLogoutConfirm(true)}
-                  title={`Logout (${session.full_name || session.fullName})`}
+                  title={`Logout (${userName})`}
                   aria-label="Logout"
                 >
                   🚪
@@ -305,7 +314,7 @@ export function ExecutiveLayout({
                         onChange={(e) => handleSwitchBranch(e.target.value)}
                         title={`Active Branch: ${currentBranchName}`}
                       >
-                        {branches.map((b) => {
+                        {safeBranches.map((b) => {
                           const isBranchExp =
                             b.is_expired ||
                             b.isExpired ||
@@ -333,59 +342,75 @@ export function ExecutiveLayout({
           </div>
 
           <div className="executive-header-right">
-            {/* Notifications Dropdown */}
-            <div className="executive-dropdown-anchor" ref={notifBellRef}>
-              <button
-                type="button"
-                className={`executive-icon-btn ${unreadNotifCount > 0 ? "has-unread" : ""}`}
-                onClick={() => setNotifDropdownOpen(!notifDropdownOpen)}
-                title="Notifications"
-                aria-label="Notifications"
-              >
-                <span className="executive-bell-icon">🔔</span>
-                {unreadNotifCount > 0 && (
-                  <span className="executive-notif-pill">
-                    {unreadNotifCount > 99 ? "99+" : unreadNotifCount}
-                  </span>
-                )}
-              </button>
+            {/* Header Language Switcher */}
+            <LanguageSwitcher />
 
-              {notifDropdownOpen && (
-                <div className="executive-notif-dropdown">
-                  <div className="executive-notif-dropdown-header">
-                    <h4>Notifications</h4>
-                    {unreadNotifCount > 0 && (
-                      <button
-                        type="button"
-                        className="executive-mark-read-btn"
-                        onClick={handleMarkAllRead}
-                      >
-                        Mark all as read
-                      </button>
-                    )}
-                  </div>
-                  <div className="executive-notif-list">
-                    {notifications && notifications.length > 0 ? (
-                      notifications.slice(0, 10).map((n) => (
-                        <div
-                          key={n.id}
-                          className={`executive-notif-item ${!n.is_read ? "unread" : ""}`}
-                          onClick={() => handleMarkNotifRead(n.id)}
+            {/* Theme Toggle Button */}
+            <button
+              type="button"
+              className="executive-icon-btn executive-theme-btn"
+              onClick={handleCycleTheme}
+              style={{ padding: "0 8px", width: "auto", fontSize: "0.8rem", color: "#fbbf24" }}
+              title={hasThemeAccess ? `Theme: ${THEMES.find((t) => t.key === theme)?.name}` : "Theme selection locked"}
+            >
+              {hasThemeAccess ? (THEMES.find((t) => t.key === theme)?.label || "🎨 Theme") : "🔒 Theme"}
+            </button>
+
+            {/* Notifications Dropdown */}
+            {!isTopAdmin && (
+              <div className="executive-dropdown-anchor" ref={notifBellRef}>
+                <button
+                  type="button"
+                  className={`executive-icon-btn ${unreadNotifCount > 0 ? "has-unread" : ""}`}
+                  onClick={() => setNotifDropdownOpen(!notifDropdownOpen)}
+                  title="Notifications"
+                  aria-label="Notifications"
+                >
+                  <span className="executive-bell-icon">🔔</span>
+                  {unreadNotifCount > 0 && (
+                    <span className="executive-notif-pill">
+                      {unreadNotifCount > 99 ? "99+" : unreadNotifCount}
+                    </span>
+                  )}
+                </button>
+
+                {notifDropdownOpen && (
+                  <div className="executive-notif-dropdown">
+                    <div className="executive-notif-dropdown-header">
+                      <h4>Notifications</h4>
+                      {unreadNotifCount > 0 && (
+                        <button
+                          type="button"
+                          className="executive-mark-read-btn"
+                          onClick={handleMarkAllRead}
                         >
-                          <div className="executive-notif-title">{n.title}</div>
-                          <div className="executive-notif-message">{n.message}</div>
-                          <div className="executive-notif-time">
-                            {n.created_at ? new Date(n.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
+                          Mark all as read
+                        </button>
+                      )}
+                    </div>
+                    <div className="executive-notif-list">
+                      {safeNotifications.length > 0 ? (
+                        safeNotifications.slice(0, 15).map((n) => (
+                          <div
+                            key={n.id}
+                            className={`executive-notif-item ${!n.is_read && !n.isRead ? "unread" : ""}`}
+                            onClick={() => handleMarkNotifRead(n)}
+                          >
+                            <div className="executive-notif-title">{n.title}</div>
+                            <div className="executive-notif-message">{n.message}</div>
+                            <div className="executive-notif-time">
+                              {n.due_date ? `Due: ${n.due_date}` : n.created_at ? new Date(n.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
+                            </div>
                           </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="executive-notif-empty">No notifications</div>
-                    )}
+                        ))
+                      ) : (
+                        <div className="executive-notif-empty">No notifications</div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
 
             {/* User Profile Menu */}
             <div className="executive-dropdown-anchor" ref={userMenuRef}>
@@ -396,14 +421,14 @@ export function ExecutiveLayout({
                 title="User menu"
               >
                 <div className="executive-user-avatar">
-                  {(session.full_name || session.fullName || "U").charAt(0).toUpperCase()}
+                  {userInitial}
                 </div>
                 <div className="executive-user-meta">
                   <span className="executive-user-name">
-                    {session.full_name || session.fullName}
+                    {userName}
                   </span>
                   <span className="executive-user-role">
-                    {session.roleName || session.role || (isTopAdmin ? "Top Admin" : "User")}
+                    {userRole}
                   </span>
                 </div>
                 <span className="executive-dropdown-caret">▾</span>
@@ -412,10 +437,27 @@ export function ExecutiveLayout({
               {userDropdownOpen && (
                 <div className="executive-user-dropdown">
                   <div className="executive-user-dropdown-header">
-                    <div className="name">{session.full_name || session.fullName}</div>
-                    <div className="email">{session.email}</div>
+                    <div className="name">{userName}</div>
+                    <div className="email">{userEmail}</div>
+                    <div className="role" style={{ fontSize: "0.7rem", color: "#fbbf24", marginTop: "2px" }}>{userRole}</div>
+                    {session?.business_name && (
+                      <div className="biz" style={{ fontSize: "0.72rem", color: "#94a3b8", marginTop: "2px" }}>
+                        🏢 {session.business_name}
+                      </div>
+                    )}
                   </div>
                   <div className="executive-user-dropdown-body">
+                    <button
+                      type="button"
+                      className="executive-dropdown-item"
+                      onClick={() => {
+                        setUserDropdownOpen(false);
+                        setActiveTab("dashboard");
+                      }}
+                    >
+                      <span>📊</span>
+                      <span>Dashboard Overview</span>
+                    </button>
                     <button
                       type="button"
                       className="executive-dropdown-item"
@@ -436,7 +478,15 @@ export function ExecutiveLayout({
                       }}
                     >
                       <span>🛡️</span>
-                      <span>Security & MFA</span>
+                      <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flex: 1 }}>
+                        <span>Two-Factor Auth</span>
+                        <span
+                          className={`badge ${session?.mfa_enabled || session?.mfaEnabled ? "badge-success" : "badge-neutral"}`}
+                          style={{ fontSize: "0.68rem", padding: "1px 6px" }}
+                        >
+                          {session?.mfa_enabled || session?.mfaEnabled ? "Active" : "Setup"}
+                        </span>
+                      </span>
                     </button>
                     <div className="executive-dropdown-divider" />
                     <button
@@ -461,8 +511,30 @@ export function ExecutiveLayout({
         <div className="executive-row2-bar">
           <div className="executive-breadcrumb-trail">
             <span className="executive-breadcrumb-home">💎</span>
-            <span className="executive-breadcrumb-sep">/</span>
-            <span className="executive-breadcrumb-active">{pageBreadcrumb || activeTab}</span>
+            {pageBreadcrumb && typeof pageBreadcrumb === "object" ? (
+              pageBreadcrumb.isNested ? (
+                <>
+                  <span className="executive-breadcrumb-parent">
+                    {pageBreadcrumb.parentIcon && <span style={{ marginRight: "4px" }}>{pageBreadcrumb.parentIcon}</span>}
+                    <span>{pageBreadcrumb.parent}</span>
+                  </span>
+                  <span className="executive-breadcrumb-sep">/</span>
+                  <span className="executive-breadcrumb-active">
+                    {pageBreadcrumb.currentIcon && <span style={{ marginRight: "4px" }}>{pageBreadcrumb.currentIcon}</span>}
+                    <span>{pageBreadcrumb.current}</span>
+                  </span>
+                </>
+              ) : (
+                <span className="executive-breadcrumb-active">
+                  {pageBreadcrumb.currentIcon && <span style={{ marginRight: "4px" }}>{pageBreadcrumb.currentIcon}</span>}
+                  <span>{pageBreadcrumb.current || activeTab}</span>
+                </span>
+              )
+            ) : (
+              <span className="executive-breadcrumb-active">
+                {String(pageBreadcrumb || activeTab || "Dashboard")}
+              </span>
+            )}
           </div>
 
           {activeParentTab && activeParentTab.subItems && activeParentTab.subItems.length > 0 && (

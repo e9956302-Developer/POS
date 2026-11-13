@@ -2,11 +2,16 @@ import React, { useState, useEffect } from "react";
 import QRCode from "qrcode";
 import { api } from "../api.js";
 
-export function MfaSetupModal({ isOpen, onClose, user, onMfaUpdated }) {
+export function MfaSetupModal({ isOpen, onClose, user, currentUser, onMfaUpdated }) {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
+
+  const targetUserId = user?.id;
+  const targetEmail = user?.email || "";
+  const targetName = user?.full_name || user?.fullName || targetEmail || "Administrator";
+  const isSelf = !currentUser || !targetUserId || Number(currentUser?.id) === Number(targetUserId);
 
   // Current status
   const [mfaStatus, setMfaStatus] = useState(null);
@@ -56,7 +61,7 @@ export function MfaSetupModal({ isOpen, onClose, user, onMfaUpdated }) {
     setLoading(true);
     setError("");
     try {
-      const status = await api.mfaStatus();
+      const status = await api.mfaStatus(targetUserId);
       setMfaStatus(status);
       if (status.mfaEnabled) {
         setViewState("status");
@@ -74,7 +79,7 @@ export function MfaSetupModal({ isOpen, onClose, user, onMfaUpdated }) {
     setLoading(true);
     setError("");
     try {
-      const data = await api.mfaSetup();
+      const data = await api.mfaSetup(targetUserId ? { userId: targetUserId } : undefined);
       setSetupData(data);
       if (data.uri) {
         const url = await QRCode.toDataURL(data.uri, {
@@ -101,7 +106,7 @@ export function MfaSetupModal({ isOpen, onClose, user, onMfaUpdated }) {
 
   function handleCopyAllCodes() {
     if (!setupData?.recoveryCodes) return;
-    const text = `DigitalMarkaz360 One-Time Backup Recovery Codes:\n\n${setupData.recoveryCodes.join("\n")}\n\nKeep these codes in a safe place. Each code can only be used once.`;
+    const text = `DigitalMarkaz360 One-Time Backup Recovery Codes:\nAccount: ${targetEmail || "User"}\n\n${setupData.recoveryCodes.join("\n")}\n\nKeep these codes in a safe place. Each code can only be used once.`;
     navigator.clipboard.writeText(text);
     setCopiedCodes(true);
     setTimeout(() => setCopiedCodes(false), 2500);
@@ -109,12 +114,12 @@ export function MfaSetupModal({ isOpen, onClose, user, onMfaUpdated }) {
 
   function handleDownloadCodes() {
     if (!setupData?.recoveryCodes) return;
-    const text = `====================================================\nDIGITALMARKAZ360 - EMERGENCY RECOVERY CODES\nAccount: ${user?.email || "User"}\nGenerated: ${new Date().toLocaleString()}\n====================================================\n\n${setupData.recoveryCodes.map((c, i) => `${i + 1}. ${c}`).join("\n")}\n\nIMPORTANT:\n- Each code can only be used once to log in if you lose access to your authenticator app.\n- Store this file in a secure password manager or encrypted drive.`;
+    const text = `====================================================\nDIGITALMARKAZ360 - EMERGENCY RECOVERY CODES\nAccount: ${targetEmail || user?.email || "User"}\nGenerated: ${new Date().toLocaleString()}\n====================================================\n\n${setupData.recoveryCodes.map((c, i) => `${i + 1}. ${c}`).join("\n")}\n\nIMPORTANT:\n- Each code can only be used once to log in if you lose access to your authenticator app.\n- Store this file in a secure password manager or encrypted drive.`;
     const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `digitalmarkaz360-recovery-codes-${user?.email || "backup"}.txt`;
+    a.download = `digitalmarkaz360-recovery-codes-${targetEmail || user?.email || "backup"}.txt`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -136,12 +141,13 @@ export function MfaSetupModal({ isOpen, onClose, user, onMfaUpdated }) {
       const res = await api.mfaConfirm({
         secret: setupData.secret,
         code: cleanCode,
-        recoveryCodes: setupData.recoveryCodes
+        recoveryCodes: setupData.recoveryCodes,
+        ...(targetUserId ? { userId: targetUserId } : {})
       });
       setSuccessMsg(res.message || "Two-Factor Authentication successfully enabled!");
       setViewState("completed");
       if (onMfaUpdated) {
-        onMfaUpdated(true);
+        onMfaUpdated(true, user);
       }
     } catch (err) {
       setError(err.message || "Failed to confirm MFA code. Check your clock.");
@@ -152,20 +158,26 @@ export function MfaSetupModal({ isOpen, onClose, user, onMfaUpdated }) {
 
   async function handleDisableMfa(e) {
     e?.preventDefault();
-    if (!disablePassword || !disableCode) {
+    if (isSelf && (!disablePassword || !disableCode)) {
       setError("Both your password and current 6-digit code are required.");
       return;
     }
+    if (!isSelf && !disablePassword) {
+      setError("Your admin password is required to reset 2FA for this user.");
+      return;
+    }
+
     setSubmitting(true);
     setError("");
     try {
       await api.mfaDisable({
         currentPassword: disablePassword,
-        code: disableCode.trim()
+        code: isSelf ? disableCode.trim() : undefined,
+        ...(targetUserId ? { userId: targetUserId } : {})
       });
-      setSuccessMsg("Two-Factor Authentication has been disabled.");
+      setSuccessMsg(`Two-Factor Authentication has been disabled for ${targetEmail || "account"}.`);
       if (onMfaUpdated) {
-        onMfaUpdated(false);
+        onMfaUpdated(false, user);
       }
       setTimeout(() => {
         loadStatus();
@@ -190,10 +202,14 @@ export function MfaSetupModal({ isOpen, onClose, user, onMfaUpdated }) {
             </div>
             <div>
               <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 700 }}>
-                Two-Factor Authentication (2FA)
+                {isSelf
+                  ? "Two-Factor Authentication (2FA)"
+                  : `Two-Factor Authentication: ${targetName}`}
               </h3>
               <p className="muted small" style={{ margin: "2px 0 0" }}>
-                Protect your account with Google Authenticator, Microsoft Authenticator, or Bitwarden
+                {isSelf
+                  ? "Protect your account with Google Authenticator, Microsoft Authenticator, or Bitwarden"
+                  : `Configuring 2FA security credentials for ${targetEmail}`}
               </p>
             </div>
           </div>
@@ -245,7 +261,9 @@ export function MfaSetupModal({ isOpen, onClose, user, onMfaUpdated }) {
                     Two-Factor Authentication is Active
                   </h4>
                   <p style={{ margin: 0, fontSize: "0.88rem", color: "var(--text-muted)" }}>
-                    Your account is securely protected using RFC-6238 Time-based One-Time Passwords (TOTP).
+                    {isSelf
+                      ? "Your account is securely protected using RFC-6238 Time-based One-Time Passwords (TOTP)."
+                      : `Account ${targetEmail} is securely protected using RFC-6238 Time-based One-Time Passwords (TOTP).`}
                   </p>
                 </div>
               </div>
@@ -288,7 +306,7 @@ export function MfaSetupModal({ isOpen, onClose, user, onMfaUpdated }) {
                     onClick={() => setViewState("disable_confirm")}
                     style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
                   >
-                    <span>🔓</span> Disable 2FA
+                    <span>🔓</span> {isSelf ? "Disable 2FA" : "Reset / Disable 2FA"}
                   </button>
                 ) : (
                   <span
@@ -308,41 +326,47 @@ export function MfaSetupModal({ isOpen, onClose, user, onMfaUpdated }) {
               <div className="alert warning" style={{ marginBottom: "1rem" }}>
                 <strong>⚠️ Warning: Disabling Two-Factor Authentication</strong>
                 <p style={{ margin: "4px 0 0", fontSize: "0.85rem" }}>
-                  Disabling 2FA reduces your account security. Your backup recovery codes will also be voided.
+                  {isSelf
+                    ? "Disabling 2FA reduces your account security. Your backup recovery codes will also be voided."
+                    : `You are resetting 2FA for ${targetName} (${targetEmail}). This will clear their authenticator secret and invalidate any existing recovery codes.`}
                 </p>
               </div>
 
               <label style={{ display: "block", marginBottom: "0.8rem" }}>
-                <span style={{ fontSize: "0.88rem", fontWeight: 600 }}>Current Account Password *</span>
+                <span style={{ fontSize: "0.88rem", fontWeight: 600 }}>
+                  {isSelf ? "Current Account Password *" : "Your Administrator Password *"}
+                </span>
                 <input
                   type="password"
                   value={disablePassword}
                   onChange={(e) => setDisablePassword(e.target.value)}
-                  placeholder="Enter current password"
+                  placeholder={isSelf ? "Enter current password" : "Enter your admin password to authorize reset"}
                   required
                   autoFocus
                   style={{ width: "100%", marginTop: "4px" }}
                 />
               </label>
 
-              <label style={{ display: "block", marginBottom: "1.2rem" }}>
-                <span style={{ fontSize: "0.88rem", fontWeight: 600 }}>Current 6-Digit Authenticator Code *</span>
-                <input
-                  type="text"
-                  maxLength={6}
-                  value={disableCode}
-                  onChange={(e) => setDisableCode(e.target.value.replace(/\D/g, ""))}
-                  placeholder="e.g. 123456"
-                  required
-                  style={{
-                    width: "100%",
-                    marginTop: "4px",
-                    fontFamily: "var(--font-mono, monospace)",
-                    letterSpacing: "0.2em",
-                    fontSize: "1.1rem"
-                  }}
-                />
-              </label>
+              {isSelf && (
+                <label style={{ display: "block", marginBottom: "1.2rem" }}>
+                  <span style={{ fontSize: "0.88rem", fontWeight: 600 }}>Current 6-Digit Authenticator Code *</span>
+                  <input
+                    type="text"
+                    maxLength={6}
+                    value={disableCode}
+                    onChange={(e) => setDisableCode(e.target.value.replace(/\D/g, ""))}
+                    placeholder="e.g. 123456"
+                    required
+                    style={{
+                      width: "100%",
+                      marginTop: "4px",
+                      fontFamily: "var(--font-mono, monospace)",
+                      letterSpacing: "0.2em",
+                      fontSize: "1.1rem"
+                    }}
+                  />
+                </label>
+              )}
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.6rem" }}>
                 <button
@@ -356,9 +380,9 @@ export function MfaSetupModal({ isOpen, onClose, user, onMfaUpdated }) {
                 <button
                   type="submit"
                   className="btn btn-danger"
-                  disabled={submitting || !disablePassword || disableCode.length !== 6}
+                  disabled={submitting || !disablePassword || (isSelf && disableCode.length !== 6)}
                 >
-                  {submitting ? "Disabling..." : "Confirm & Disable 2FA"}
+                  {submitting ? "Processing..." : isSelf ? "Confirm & Disable 2FA" : "Confirm & Reset 2FA"}
                 </button>
               </div>
             </form>
@@ -410,7 +434,7 @@ export function MfaSetupModal({ isOpen, onClose, user, onMfaUpdated }) {
                     {setupData?.secret || "••••••••••••••••••••••••••••••••"}
                   </div>
                   <div className="mfa-secret-meta small muted">
-                    <span>Account: <strong>{user?.email || "User"}</strong></span>
+                    <span>Account: <strong>{targetEmail || user?.email || "User"}</strong></span>
                     <span>Issuer: <strong>DigitalMarkaz360</strong></span>
                   </div>
                 </div>
@@ -533,7 +557,7 @@ export function MfaSetupModal({ isOpen, onClose, user, onMfaUpdated }) {
                 <h4 style={{ margin: "0 0 4px" }}>Step 3: Enter 6-Digit Verification Code</h4>
                 <p className="muted small" style={{ margin: 0 }}>
                   Enter the 6-digit code showing in your authenticator app for{" "}
-                  <strong>DigitalMarkaz360 ({user?.email})</strong> to activate 2FA:
+                  <strong>DigitalMarkaz360 ({targetEmail || user?.email || "User"})</strong> to activate 2FA:
                 </p>
               </div>
 

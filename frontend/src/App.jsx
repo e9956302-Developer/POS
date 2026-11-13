@@ -919,6 +919,7 @@ function AppContent() {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
   const [showMfaModal, setShowMfaModal] = useState(false);
+  const [mfaTargetUser, setMfaTargetUser] = useState(null);
   const [editProfileForm, setEditProfileForm] = useState({ fullName: "", email: "", password: "" });
   const [editProfileError, setEditProfileError] = useState("");
   const [editProfileSuccess, setEditProfileSuccess] = useState("");
@@ -1549,14 +1550,20 @@ function AppContent() {
           {activeTab === "top_saas_admins" ? (
             <TopSaasAdminsPage
               context={context}
-              onOpenMfaSetup={() => setShowMfaModal(true)}
+              onOpenMfaSetup={(targetAdm) => {
+                setMfaTargetUser(targetAdm || session);
+                setShowMfaModal(true);
+              }}
             />
           ) : null}
           {activeTab === "top_admins" ? (
             <TopAdminsPage
               context={context}
               initialBusinessId={topNavParams.businessId || ""}
-              onOpenMfaSetup={() => setShowMfaModal(true)}
+              onOpenMfaSetup={(targetAdm) => {
+                setMfaTargetUser(targetAdm || session);
+                setShowMfaModal(true);
+              }}
             />
           ) : null}
           {activeTab === "top_deleted_transactions" ? (
@@ -1726,14 +1733,28 @@ function AppContent() {
       {showMfaModal && (
         <MfaSetupModal
           isOpen={showMfaModal}
-          onClose={() => setShowMfaModal(false)}
-          user={session}
-          onMfaUpdated={(enabled) => {
-            setSession((prev) => ({
-              ...prev,
-              mfa_enabled: enabled ? 1 : 0,
-              mfaEnabled: Boolean(enabled)
-            }));
+          onClose={() => {
+            setShowMfaModal(false);
+            setMfaTargetUser(null);
+          }}
+          user={mfaTargetUser || session}
+          currentUser={session}
+          onMfaUpdated={(enabled, updatedUser) => {
+            const targetId = updatedUser?.id || mfaTargetUser?.id || session?.id;
+            if (Number(targetId) === Number(session?.id)) {
+              setSession((prev) => ({
+                ...prev,
+                mfa_enabled: enabled ? 1 : 0,
+                mfaEnabled: Boolean(enabled)
+              }));
+            }
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(
+                new CustomEvent("mfa:updated", {
+                  detail: { userId: targetId, enabled: Boolean(enabled) }
+                })
+              );
+            }
           }}
         />
       )}

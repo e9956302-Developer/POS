@@ -49,6 +49,21 @@ export function TopSaasAdminsPage({ context, onOpenMfaSetup, canActivate, initia
     loadAdmins();
   }, []);
 
+  useEffect(() => {
+    function handleMfaUpdated(e) {
+      const { userId, enabled } = e.detail || {};
+      if (userId !== undefined && userId !== null) {
+        setAdmins((prev) =>
+          prev.map((a) =>
+            Number(a.id) === Number(userId) ? { ...a, mfa_enabled: enabled ? 1 : 0 } : a
+          )
+        );
+      }
+    }
+    window.addEventListener("mfa:updated", handleMfaUpdated);
+    return () => window.removeEventListener("mfa:updated", handleMfaUpdated);
+  }, []);
+
   async function loadAdmins() {
     setLoading(true);
     setError("");
@@ -197,9 +212,9 @@ export function TopSaasAdminsPage({ context, onOpenMfaSetup, canActivate, initia
             <button
               type="button"
               className="secondary-btn"
-              onClick={onOpenMfaSetup}
+              onClick={() => onOpenMfaSetup(loggedInUser)}
               style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
-              title="Configure Two-Factor Authentication"
+              title="Configure Two-Factor Authentication for your account"
             >
               <span>🔐</span> Setup 2FA / MFA
             </button>
@@ -399,8 +414,17 @@ export function TopSaasAdminsPage({ context, onOpenMfaSetup, canActivate, initia
                       fontSize: "0.76rem",
                       cursor: onOpenMfaSetup ? "pointer" : "default"
                     }}
-                    onClick={() => onOpenMfaSetup && onOpenMfaSetup()}
-                    title={onOpenMfaSetup ? "Click to configure Two-Factor Authentication" : (adm.mfa_enabled ? "MFA Protected" : "Password Only")}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (onOpenMfaSetup) {
+                        onOpenMfaSetup(adm);
+                      }
+                    }}
+                    title={
+                      onOpenMfaSetup
+                        ? `Click to configure 2FA for ${adm.full_name || adm.email}`
+                        : adm.mfa_enabled ? "MFA Protected" : "Password Only"
+                    }
                   >
                     {adm.mfa_enabled ? "🔐 MFA Enabled" : "🔓 Password Only"}
                   </span>
@@ -669,6 +693,42 @@ export function TopSaasAdminsPage({ context, onOpenMfaSetup, canActivate, initia
                     onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
                   />
                 </label>
+
+                {onOpenMfaSetup && (
+                  <div
+                    className="full-span"
+                    style={{
+                      marginTop: "0.25rem",
+                      padding: "0.75rem 0.9rem",
+                      background: "var(--bg-card-hover, rgba(0,0,0,0.02))",
+                      borderRadius: "6px",
+                      border: "1px solid var(--border, #e2e8f0)",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      flexWrap: "wrap",
+                      gap: "0.5rem"
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: "0.88rem" }}>Two-Factor Authentication (2FA / MFA)</div>
+                      <div className="small muted">
+                        Status: {editingAdmin.mfa_enabled ? "🔐 Enrolled & Protected" : "🔓 Password Only (Not Enrolled)"}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="secondary-btn btn-sm"
+                      onClick={() => {
+                        const target = editingAdmin;
+                        setEditingAdmin(null);
+                        onOpenMfaSetup(target);
+                      }}
+                    >
+                      {editingAdmin.mfa_enabled ? "🔐 Manage 2FA" : "⚡ Setup 2FA"}
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="modal-footer">
