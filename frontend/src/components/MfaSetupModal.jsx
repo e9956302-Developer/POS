@@ -129,7 +129,7 @@ export function MfaSetupModal({ isOpen, onClose, user, currentUser, onMfaUpdated
 
   async function handleConfirmMfa(e) {
     e?.preventDefault();
-    const cleanCode = verifyCode.trim().replace(/\s+/g, "");
+    const cleanCode = verifyCode.replace(/\D/g, "");
     if (cleanCode.length !== 6) {
       setError("Please enter the complete 6-digit code from your authenticator app.");
       return;
@@ -172,7 +172,7 @@ export function MfaSetupModal({ isOpen, onClose, user, currentUser, onMfaUpdated
     try {
       await api.mfaDisable({
         currentPassword: disablePassword,
-        code: isSelf ? disableCode.trim() : undefined,
+        code: isSelf ? disableCode.replace(/\D/g, "") : undefined,
         ...(targetUserId ? { userId: targetUserId } : {})
       });
       setSuccessMsg(`Two-Factor Authentication has been disabled for ${targetEmail || "account"}.`);
@@ -352,9 +352,11 @@ export function MfaSetupModal({ isOpen, onClose, user, currentUser, onMfaUpdated
                   <span style={{ fontSize: "0.88rem", fontWeight: 600 }}>Current 6-Digit Authenticator Code *</span>
                   <input
                     type="text"
-                    maxLength={6}
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={8}
                     value={disableCode}
-                    onChange={(e) => setDisableCode(e.target.value.replace(/\D/g, ""))}
+                    onChange={(e) => setDisableCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                     placeholder="e.g. 123456"
                     required
                     style={{
@@ -564,9 +566,11 @@ export function MfaSetupModal({ isOpen, onClose, user, currentUser, onMfaUpdated
               <div className="mfa-verify-input-box">
                 <input
                   type="text"
-                  maxLength={6}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={8}
                   value={verifyCode}
-                  onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, ""))}
+                  onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                   placeholder="000 000"
                   autoFocus
                   required

@@ -43,7 +43,7 @@ export function LoginPage({ onLogin, onCompleteLogin, error, onBackToLanding }) 
     try {
       const payload = useRecoveryCode
         ? { mfaTicket, recoveryCode: recoveryCode.trim() }
-        : { mfaTicket, code: mfaCode.trim().replace(/\s+/g, "") };
+        : { mfaTicket, code: mfaCode.replace(/\D/g, "") };
 
       if (!useRecoveryCode && payload.code.length !== 6) {
         throw new Error("Please enter your full 6-digit authenticator code.");
@@ -262,9 +262,11 @@ export function LoginPage({ onLogin, onCompleteLogin, error, onBackToLanding }) 
 
               <input
                 type="text"
-                maxLength={6}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={8}
                 value={mfaCode}
-                onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ""))}
+                onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                 placeholder="000 000"
                 autoFocus
                 required

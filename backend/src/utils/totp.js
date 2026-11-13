@@ -68,10 +68,11 @@ export function generateTotpToken(secret, time = Date.now(), period = 30, digits
   return otp.toString().padStart(digits, "0");
 }
 
-export function verifyTotpToken(token, secret, window = 1, period = 30, digits = 6) {
+export function verifyTotpToken(token, secret, window = 2, period = 30, digits = 6) {
   if (!token || !secret) return false;
-  const cleanToken = String(token).trim();
-  if (cleanToken.length !== digits || !/^\d+$/.test(cleanToken)) return false;
+  // Robust sanitation: strip any non-digit chars (spaces, hyphens, non-breaking spaces)
+  const cleanToken = String(token).replace(/\D/g, "");
+  if (cleanToken.length !== digits) return false;
 
   const now = Date.now();
   for (let step = -window; step <= window; step++) {
