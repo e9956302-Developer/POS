@@ -51,7 +51,13 @@ export function TopSettingsPage({ context }) {
         changer_name: context?.session?.full_name || "You",
         changer_email: context?.session?.email || ""
       }));
-      setMessage(res.message || `Platform layout updated to ${pendingLayout === "modern_compact" ? "Modern Compact" : "Classic"}.`);
+      const layoutName =
+        pendingLayout === "midnight_executive"
+          ? "Executive Obsidian"
+          : pendingLayout === "modern_compact"
+          ? "Modern Compact"
+          : "Classic";
+      setMessage(res.message || `Platform layout updated to ${layoutName}.`);
       setPendingLayout(null);
     } catch (err) {
       setError(err.message || "Failed to update platform layout");
@@ -262,6 +268,95 @@ export function TopSettingsPage({ context }) {
                   {activeLayout === "modern_compact" ? "✓ Currently Active" : "Apply Modern Compact"}
                 </button>
               </div>
+
+              {/* Option 3: Executive Obsidian Theme & Layout */}
+              <div
+                className={`layout-card ${activeLayout === "midnight_executive" ? "active-layout" : "selectable-layout"}`}
+                onClick={() => handleSelectLayout("midnight_executive")}
+              >
+                <div className="layout-card-badge-row">
+                  {activeLayout === "midnight_executive" ? (
+                    <span className="badge badge-success" style={{ padding: "4px 10px", fontSize: "0.75rem", fontWeight: 700, background: "rgba(245, 158, 11, 0.2)", color: "#fbbf24", border: "1px solid rgba(245, 158, 11, 0.4)" }}>
+                      ● ACTIVE PLATFORM LAYOUT
+                    </span>
+                  ) : (
+                    <span className="badge badge-neutral" style={{ padding: "4px 10px", fontSize: "0.75rem" }}>
+                      Click to Activate
+                    </span>
+                  )}
+                </div>
+
+                {/* Visual Preview SVG: Executive Obsidian */}
+                <div className="layout-thumbnail">
+                  <svg viewBox="0 0 320 180" width="100%" height="160" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="320" height="180" rx="8" fill="#07090e" />
+                    {/* Floating Obsidian Sidebar */}
+                    <rect x="6" y="6" width="62" height="168" rx="8" fill="#0e121a" stroke="rgba(245, 158, 11, 0.3)" />
+                    {/* Diamond Brand Icon & Header */}
+                    <circle cx="20" cy="18" r="6" fill="#f59e0b" />
+                    <rect x="30" y="14" width="30" height="8" rx="2" fill="#fbbf24" opacity="0.9" />
+                    {/* Pill Nav Items with Gold Active Glow */}
+                    <rect x="12" y="32" width="50" height="8" rx="4" fill="rgba(245, 158, 11, 0.25)" stroke="#f59e0b" strokeWidth="0.8" />
+                    <rect x="12" y="44" width="50" height="8" rx="4" fill="#141a24" />
+                    <rect x="12" y="56" width="50" height="8" rx="4" fill="#141a24" />
+                    <rect x="12" y="68" width="50" height="8" rx="4" fill="#141a24" />
+                    <rect x="12" y="80" width="50" height="8" rx="4" fill="#141a24" />
+                    <rect x="12" y="92" width="50" height="8" rx="4" fill="#141a24" />
+                    <rect x="12" y="146" width="50" height="16" rx="4" fill="#141a24" stroke="rgba(245, 158, 11, 0.2)" />
+                    {/* Row 1 Floating Glass Header */}
+                    <rect x="74" y="6" width="240" height="22" rx="6" fill="#0e121a" stroke="rgba(245, 158, 11, 0.3)" />
+                    <circle cx="86" cy="17" r="5" fill="#f59e0b" />
+                    <rect x="96" y="13" width="65" height="8" rx="2" fill="#f8fafc" />
+                    <rect x="166" y="13" width="30" height="8" rx="4" fill="rgba(245, 158, 11, 0.2)" />
+                    <circle cx="288" cy="17" r="5" fill="#f59e0b" />
+                    <circle cx="302" cy="17" r="6" fill="#fbbf24" />
+                    {/* Row 2 Glass Breadcrumb Bar */}
+                    <rect x="74" y="32" width="240" height="12" rx="3" fill="#0a0e17" stroke="rgba(255, 255, 255, 0.05)" />
+                    <rect x="80" y="35" width="45" height="6" rx="2" fill="#fbbf24" opacity="0.85" />
+                    {/* Luxury Glass Metric Cards */}
+                    <rect x="74" y="48" width="76" height="34" rx="6" fill="#0e121a" stroke="rgba(245, 158, 11, 0.25)" />
+                    <rect x="80" y="54" width="35" height="6" rx="2" fill="#fbbf24" />
+                    <rect x="80" y="64" width="55" height="10" rx="2" fill="#f8fafc" />
+                    <rect x="156" y="48" width="76" height="34" rx="6" fill="#0e121a" stroke="rgba(245, 158, 11, 0.25)" />
+                    <rect x="162" y="54" width="35" height="6" rx="2" fill="#10b981" />
+                    <rect x="162" y="64" width="55" height="10" rx="2" fill="#f8fafc" />
+                    <rect x="238" y="48" width="76" height="34" rx="6" fill="#0e121a" stroke="rgba(245, 158, 11, 0.25)" />
+                    <rect x="244" y="54" width="35" height="6" rx="2" fill="#38bdf8" />
+                    <rect x="244" y="64" width="55" height="10" rx="2" fill="#f8fafc" />
+                    {/* High-Contrast Luxury Table with Golden Accent */}
+                    <rect x="74" y="88" width="240" height="86" rx="6" fill="#0e121a" stroke="rgba(245, 158, 11, 0.2)" />
+                    <rect x="78" y="92" width="232" height="13" rx="3" fill="#141a24" stroke="rgba(245, 158, 11, 0.3)" />
+                    <rect x="78" y="108" width="232" height="9" rx="2" fill="#07090e" />
+                    <rect x="78" y="120" width="232" height="9" rx="2" fill="#0e121a" />
+                    <rect x="78" y="132" width="232" height="9" rx="2" fill="#07090e" />
+                    <rect x="78" y="144" width="232" height="9" rx="2" fill="#0e121a" />
+                    <rect x="78" y="156" width="232" height="9" rx="2" fill="#07090e" />
+                  </svg>
+                </div>
+
+                <div className="layout-card-info">
+                  <h4 style={{ margin: "0 0 0.5rem 0", fontSize: "1.05rem" }}>Executive Obsidian</h4>
+                  <p className="muted" style={{ margin: 0, fontSize: "0.84rem", lineHeight: 1.45 }}>
+                    Ultra-premium luxury interface with deep obsidian glass surfaces, champagne gold accents, and high-contrast typography.
+                  </p>
+                  <ul className="layout-specs-list">
+                    <li>✓ Floating rounded sidebar with gold glow indicators</li>
+                    <li>✓ Obsidian glassmorphism cards with specular borders</li>
+                    <li>✓ High-contrast gold & amber status tokens for rapid POS checkout</li>
+                    <li>✓ Optimized for flagship retail boutiques & executive portals</li>
+                  </ul>
+                </div>
+
+                <button
+                  type="button"
+                  className={activeLayout === "midnight_executive" ? "primary-btn active-btn" : "secondary-btn"}
+                  style={{ width: "100%", marginTop: "1rem" }}
+                  onClick={() => handleSelectLayout("midnight_executive")}
+                  disabled={activeLayout === "midnight_executive"}
+                >
+                  {activeLayout === "midnight_executive" ? "✓ Currently Active" : "Apply Executive Obsidian"}
+                </button>
+              </div>
             </div>
 
             {/* Layout Governance & Audit Trail Metadata */}
@@ -272,7 +367,13 @@ export function TopSettingsPage({ context }) {
                     Global Server Configuration
                   </span>
                   <div style={{ fontSize: "0.95rem", fontWeight: 600, marginTop: "2px" }}>
-                    Active Layout: <span style={{ color: "var(--primary, #0ea5e9)" }}>{activeLayout === "modern_compact" ? "Modern Compact (layout-modern-compact)" : "Classic (layout-classic)"}</span>
+                    Active Layout: <span style={{ color: activeLayout === "midnight_executive" ? "#fbbf24" : "var(--primary, #0ea5e9)" }}>
+                      {activeLayout === "midnight_executive"
+                        ? "Executive Obsidian (layout-midnight-executive)"
+                        : activeLayout === "modern_compact"
+                        ? "Modern Compact (layout-modern-compact)"
+                        : "Classic (layout-classic)"}
+                    </span>
                   </div>
                 </div>
 
@@ -308,15 +409,15 @@ export function TopSettingsPage({ context }) {
 
             <div className="modal-body" style={{ padding: "1.5rem" }}>
               <div style={{ textAlign: "center", marginBottom: "1rem", fontSize: "2.5rem" }}>
-                {pendingLayout === "modern_compact" ? "⚡" : "📱"}
+                {pendingLayout === "midnight_executive" ? "💎" : pendingLayout === "modern_compact" ? "⚡" : "📱"}
               </div>
               <h4 style={{ textAlign: "center", margin: "0 0 0.75rem 0" }}>
-                Apply {pendingLayout === "modern_compact" ? "Modern Compact" : "Classic"} layout for all users?
+                Apply {pendingLayout === "midnight_executive" ? "Executive Obsidian" : pendingLayout === "modern_compact" ? "Modern Compact" : "Classic"} layout for all users?
               </h4>
               <p className="muted" style={{ fontSize: "0.9rem", lineHeight: 1.5, margin: 0 }}>
                 This is a global server-level setting that updates the layout for <strong>all companies, branches, and user portals</strong> across the platform.
               </p>
-              <div style={{ marginTop: "1rem", padding: "0.75rem", borderRadius: "6px", background: "rgba(14, 165, 233, 0.08)", border: "1px solid rgba(14, 165, 233, 0.2)", fontSize: "0.82rem" }}>
+              <div style={{ marginTop: "1rem", padding: "0.75rem", borderRadius: "6px", background: "rgba(245, 158, 11, 0.08)", border: "1px solid rgba(245, 158, 11, 0.2)", fontSize: "0.82rem" }}>
                 ℹ️ <strong>Note:</strong> Active user sessions will pick up the change immediately upon navigation or refresh. No user will be logged out and no in-progress work will be interrupted.
               </div>
             </div>

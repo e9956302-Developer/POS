@@ -5,6 +5,7 @@ const LayoutContext = createContext({
   activeLayout: "classic",
   setLayout: () => {},
   isModernCompact: false,
+  isMidnightExecutive: false,
   isClassic: true,
   isLoadingLayout: false,
   refreshLayout: async () => {}
@@ -25,7 +26,7 @@ export function LayoutProvider({ children }) {
   async function fetchLayout() {
     try {
       const data = await api.getPlatformLayout();
-      if (data && (data.active_layout === "classic" || data.active_layout === "modern_compact")) {
+      if (data && (data.active_layout === "classic" || data.active_layout === "modern_compact" || data.active_layout === "midnight_executive")) {
         setActiveLayout(data.active_layout);
         try {
           if (typeof localStorage !== "undefined") {
@@ -47,15 +48,16 @@ export function LayoutProvider({ children }) {
   useEffect(() => {
     // Synchronize HTML data attribute and root class
     if (typeof document === "undefined") return;
-    const layoutValue = activeLayout === "modern_compact" ? "modern_compact" : "classic";
+    const layoutValue = activeLayout || "classic";
     document.documentElement?.setAttribute("data-layout", layoutValue);
     if (document.body) {
+      document.body.classList.remove("layout-classic", "layout-modern-compact", "layout-midnight-executive");
       if (layoutValue === "modern_compact") {
         document.body.classList.add("layout-modern-compact");
-        document.body.classList.remove("layout-classic");
+      } else if (layoutValue === "midnight_executive") {
+        document.body.classList.add("layout-midnight-executive");
       } else {
         document.body.classList.add("layout-classic");
-        document.body.classList.remove("layout-modern-compact");
       }
     }
   }, [activeLayout]);
@@ -71,6 +73,7 @@ export function LayoutProvider({ children }) {
       } catch {}
     },
     isModernCompact: activeLayout === "modern_compact",
+    isMidnightExecutive: activeLayout === "midnight_executive",
     isClassic: activeLayout === "classic",
     isLoadingLayout,
     refreshLayout: fetchLayout

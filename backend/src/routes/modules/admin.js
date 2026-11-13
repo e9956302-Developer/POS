@@ -4311,9 +4311,9 @@ adminRouter.put(
   requireRole("top_admin"),
   asyncHandler(async (req, res) => {
     const { layout } = req.body;
-    if (!layout || !["classic", "modern_compact"].includes(layout)) {
+    if (!layout || !["classic", "modern_compact", "midnight_executive"].includes(layout)) {
       return res.status(400).json({
-        message: "Invalid layout choice. Allowed values are 'classic' and 'modern_compact'."
+        message: "Invalid layout choice. Allowed values are 'classic', 'modern_compact', and 'midnight_executive'."
       });
     }
 

@@ -50,7 +50,7 @@ test("SaaS Platform Layout Global Switch & Audit Logging", async (t) => {
   await t.test("Public endpoint returns current active layout without authentication", async () => {
     const res = await makeRequest(server, "/api/auth/platform-settings");
     assert.equal(res.status, 200);
-    assert.ok(res.data.active_layout === "classic" || res.data.active_layout === "modern_compact");
+    assert.ok(res.data.active_layout === "classic" || res.data.active_layout === "modern_compact" || res.data.active_layout === "midnight_executive");
   });
 
   await t.test("Non-top admin (Company Admin) cannot access or modify layout settings", async () => {
@@ -108,6 +108,22 @@ test("SaaS Platform Layout Global Switch & Audit Logging", async (t) => {
     assert.equal(latestAudit.entity_type, "platform_settings");
     const details = typeof latestAudit.details === "string" ? JSON.parse(latestAudit.details) : latestAudit.details;
     assert.equal(details.to, "modern_compact");
+  });
+
+  await t.test("Top Admin switches global platform layout to midnight_executive and audit log is written", async () => {
+    const putRes = await makeRequest(server, "/api/admin/platform-settings/layout", {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${topAdminToken}` },
+      body: JSON.stringify({ layout: "midnight_executive" })
+    });
+    assert.equal(putRes.status, 200);
+    assert.equal(putRes.data.active_layout, "midnight_executive");
+    assert.equal(putRes.data.success, true);
+
+    // Verify public endpoint returns midnight_executive
+    const publicRes = await makeRequest(server, "/api/auth/platform-settings");
+    assert.equal(publicRes.status, 200);
+    assert.equal(publicRes.data.active_layout, "midnight_executive");
   });
 
   await t.test("Top Admin can switch layout back to classic seamlessly", async () => {

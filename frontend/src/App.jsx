@@ -28,6 +28,7 @@ import { MfaSetupModal } from "./components/MfaSetupModal.jsx";
 import { LayoutProvider, useLayout } from "./context/LayoutContext.jsx";
 import { ClassicLayout } from "./components/layouts/ClassicLayout.jsx";
 import { ModernLayout } from "./components/layouts/ModernLayout.jsx";
+import { ExecutiveLayout } from "./components/layouts/ExecutiveLayout.jsx";
 import { TopSettingsPage } from "./pages/TopSettingsPage.jsx";
 import { SessionExpiredModal } from "./components/SessionExpiredModal.jsx";
 import { useLanguage } from "./context/LanguageContext.jsx";
@@ -493,7 +494,7 @@ export function BranchSubscriptionExpiredScreen({ branch, expiredOn, onLogout })
 
 function AppContent() {
   const { language, isRtl, t, formatCurrency } = useLanguage();
-  const { isModernCompact } = useLayout();
+  const { isModernCompact, isMidnightExecutive, activeLayout } = useLayout();
   const [session, setSession] = useState(null);
   const [guestView, setGuestView] = useState(() => {
     try {
@@ -1348,7 +1349,12 @@ function AppContent() {
     );
   }
 
-  const LayoutShell = isModernCompact ? ModernLayout : ClassicLayout;
+  const LayoutShell =
+    activeLayout === "midnight_executive"
+      ? ExecutiveLayout
+      : isModernCompact
+      ? ModernLayout
+      : ClassicLayout;
 
   return (
     <>
