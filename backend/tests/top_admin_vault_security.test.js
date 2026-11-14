@@ -465,15 +465,20 @@ test("Acceptance 7: Top Admin can configure, confirm, and reset MFA for another 
   );
   const targetUserId = insertRes.insertId;
 
-  // Top Admin (main admin) sets up MFA for themselves first to ensure their own MFA is distinct
+  // Top Admin (main admin) sets up MFA and a known password to ensure test is self-contained
+  const adminPassword = "TargetAdminTestPass123!#";
+  const adminHash = await bcrypt.hash(adminPassword, 12);
   const mainSecret = generateTotpSecret(20);
-  await query("UPDATE users SET mfa_enabled = 1, mfa_secret = ? WHERE id = ?", [mainSecret, topAdminUserId]);
+  await query(
+    "UPDATE users SET mfa_enabled = 1, mfa_secret = ?, password_hash = ?, is_active = 1, locked_until = NULL, failed_login_attempts = 0 WHERE id = ?",
+    [mainSecret, adminHash, topAdminUserId]
+  );
 
   // Log in as main Top Admin
   const loginRes = await fetch(`${baseUrl}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: topAdminEmail, password: "ServerRecoveryKey2026!#" })
+    body: JSON.stringify({ email: topAdminEmail, password: adminPassword })
   });
   assert.equal(loginRes.status, 200);
   const { mfaTicket } = await loginRes.json();
@@ -542,7 +547,7 @@ test("Acceptance 7: Top Admin can configure, confirm, and reset MFA for another 
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
     body: JSON.stringify({
       userId: targetUserId,
-      currentPassword: "ServerRecoveryKey2026!#"
+      currentPassword: adminPassword
     })
   });
   assert.equal(disableRes.status, 200);
