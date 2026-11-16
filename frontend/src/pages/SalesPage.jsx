@@ -31,6 +31,24 @@ function initialForm(defaultBranchId) {
   };
 }
 
+function highlightMatch(text, query) {
+  if (!text) return "";
+  if (!query || !query.trim()) return text;
+  const q = query.trim().toLowerCase();
+  const lower = text.toLowerCase();
+  const idx = lower.indexOf(q);
+  if (idx === -1) return text;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <strong style={{ color: "var(--primary)", textDecoration: "underline" }}>
+        {text.slice(idx, idx + q.length)}
+      </strong>
+      {text.slice(idx + q.length)}
+    </>
+  );
+}
+
 export function SalesPage({ context }) {
   const { t, isRtl, language, formatCurrency } = useLanguage();
   const isUrdu = language === "ur";
@@ -56,17 +74,37 @@ export function SalesPage({ context }) {
   const firstFieldRef = useRef(null);
   const formRef = useRef(null);
 
-  // Redesigned POS Sales Counter States — Unified Smart Scanner
-  const [salesMode, setSalesMode] = useState("all"); // "all" | "phone" | "product"
+  // Redesigned POS Sales Counter States — Universal Scan Combobox (ADDENDUM)
   const [universalScanInput, setUniversalScanInput] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchFailed, setSearchFailed] = useState(false);
+  const [awaitingPhoneModel, setAwaitingPhoneModel] = useState(null); // { modelId, name, units, stock }
   const scannerInputRef = useRef(null);
+  const comboboxContainerRef = useRef(null);
+  const debounceTimerRef = useRef(null);
   const phoneInputRef = scannerInputRef; // backward compatibility
   const productInputRef = scannerInputRef; // backward compatibility
   const [branchUnits, setBranchUnits] = useState([]);
   const [isLoadingBranchUnits, setIsLoadingBranchUnits] = useState(false);
-  const [selectedInStockUnitId, setSelectedInStockUnitId] = useState("");
   const [showCustomerDetails, setShowCustomerDetails] = useState(false);
   const [showQuickProductModal, setShowQuickProductModal] = useState(false);
+
+  // Close attached dropdown on click outside
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (comboboxContainerRef.current && !comboboxContainerRef.current.contains(event.target)) {
+        setIsDropdownOpen(false);
+        setHighlightedIndex(-1);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   // Sales Directory & Search State
   const [salesList, setSalesList] = useState([]);
@@ -241,35 +279,128 @@ export function SalesPage({ context }) {
     return Math.max(0, grandTotal - paid);
   }, [grandTotal, form.paidAmount]);
 
-  // Top accessories for 1-click chip addition
-  const popularAccessories = useMemo(() => {
-    return (availableProducts || []).slice(0, 6);
-  }, [availableProducts]);
+  // Universal Live Search Results: ranked per ADDENDUM specification
+  const searchResults = useMemo(() => {
+    const q = (debouncedQuery || "").trim().toLowerCase();
+    if (!q || q.length < 2) return [];
 
-  // Filtered accessories search
-  const filteredProducts = useMemo(() => {
-    if (!universalScanInput.trim()) return (availableProducts || []).slice(0, 30);
-    const q = universalScanInput.toLowerCase().trim();
-    return (availableProducts || []).filter((p) => {
-      const matchName = p.name && p.name.toLowerCase().includes(q);
-      const matchSku = p.sku && p.sku.toLowerCase().includes(q);
-      const matchBarcode = p.barcode && p.barcode.toLowerCase().includes(q);
-      return matchName || matchSku || matchBarcode;
-    }).slice(0, 30);
-  }, [availableProducts, universalScanInput]);
+    const results = [];
 
-  // Filtered in-stock handsets search
-  const filteredHandsets = useMemo(() => {
-    if (!universalScanInput.trim()) return [];
-    const q = universalScanInput.toLowerCase().trim();
-    return (branchUnits || []).filter((u) => {
-      const matchImei = u.imei && u.imei.toLowerCase().includes(q);
-      const matchModel = u.model_name && u.model_name.toLowerCase().includes(q);
-      const matchCompany = u.company && u.company.toLowerCase().includes(q);
-      const matchVariant = u.variant && u.variant.toLowerCase().includes(q);
-      return matchImei || matchModel || matchCompany || matchVariant;
-    }).slice(0, 15);
-  }, [branchUnits, universalScanInput]);
+    // 1. Accessories & Products (availableProducts)
+    (availableProducts || []).forEach((p) => {
+      const name = (p.name || "").trim();
+      const nameLower = name.toLowerCase();
+      const barcode = (p.barcode ? String(p.barcode) : "").trim();
+      const barcodeLower = barcode.toLowerCase();
+      const sku = (p.sku ? String(p.sku) : "").trim();
+      const skuLower = sku.toLowerCase();
+      const stock = Number(p.stock_quantity ?? 0);
+      const inStock = stock > 0;
+      const price = Number(p.sale_price ?? p.retail_price ?? 0);
+
+      let rank = 0;
+      let isBarcodeMatch = false;
+
+      if ((barcodeLower && barcodeLower === q) || (skuLower && skuLower === q)) {
+        rank = 100;
+        isBarcodeMatch = true;
+      } else if (nameLower.startsWith(q)) {
+        rank = 50;
+      } else if (nameLower.includes(q)) {
+        rank = 25;
+      } else if ((barcodeLower && barcodeLower.includes(q)) || (skuLower && skuLower.includes(q))) {
+        rank = 20;
+      }
+
+      if (rank > 0) {
+        results.push({
+          id: `prod-${p.id}`,
+          itemType: "product",
+          name,
+          secondaryText: [sku ? `SKU: ${sku}` : null, barcode ? `Barcode: ${barcode}` : null].filter(Boolean).join(" • "),
+          price,
+          stock,
+          inStock,
+          stockLabel: inStock ? (isUrdu ? `اسٹاک: ${stock}` : `In stock: ${stock}`) : (isUrdu ? "اسٹاک ختم" : "Out of stock"),
+          isBarcodeMatch,
+          rank,
+          rawItem: p
+        });
+      }
+    });
+
+    // 2. Mobile Handset Models (context.models + distinct models in branchUnits)
+    const modelMap = new Map();
+    (context.models || []).forEach((m) => {
+      if (m && m.id) {
+        modelMap.set(String(m.id), {
+          id: m.id,
+          company: m.company || "",
+          model_name: m.model_name || "",
+          variant: m.variant || ""
+        });
+      }
+    });
+    (branchUnits || []).forEach((u) => {
+      const key = u.model_id ? String(u.model_id) : `name-${u.company}-${u.model_name}`;
+      if (!modelMap.has(key)) {
+        modelMap.set(key, {
+          id: u.model_id || key,
+          company: u.company || "",
+          model_name: u.model_name || "",
+          variant: u.variant || ""
+        });
+      }
+    });
+
+    modelMap.forEach((m) => {
+      const matchingUnits = (branchUnits || []).filter(
+        (u) =>
+          String(u.model_id) === String(m.id) ||
+          (!u.model_id && u.model_name && u.model_name.toLowerCase() === (m.model_name || "").toLowerCase())
+      );
+      const stock = matchingUnits.length;
+      const inStock = stock > 0;
+      const price = inStock ? Number(matchingUnits[0].sale_price || matchingUnits[0].retail_price || 0) : 0;
+      const fullName = `${m.company || ""} ${m.model_name || ""}${m.variant ? ` (${m.variant})` : ""}`.trim() || m.model_name || "Phone";
+      const nameLower = fullName.toLowerCase();
+
+      let rank = 0;
+      if (nameLower.startsWith(q)) {
+        rank = 50;
+      } else if (nameLower.includes(q)) {
+        rank = 25;
+      }
+
+      if (rank > 0) {
+        results.push({
+          id: `phone-model-${m.id}`,
+          itemType: "phone_model",
+          name: fullName,
+          secondaryText: isUrdu ? "موبائل ہینڈ سیٹ ماڈل" : "Mobile Handset Model",
+          price,
+          stock,
+          inStock,
+          stockLabel: inStock ? (isUrdu ? `اسٹاک: ${stock} فون` : `In stock: ${stock} units`) : (isUrdu ? "اسٹاک ختم" : "Out of stock"),
+          isBarcodeMatch: false,
+          rank,
+          rawItem: { ...m, units: matchingUnits }
+        });
+      }
+    });
+
+    // Sort order:
+    // 1. Exact barcode/SKU match pinned at TOP
+    // 2. In-stock before out-of-stock within same rank
+    // 3. Name comparison
+    results.sort((a, b) => {
+      if (b.rank !== a.rank) return b.rank - a.rank;
+      if (a.inStock !== b.inStock) return a.inStock ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    return results.slice(0, 10);
+  }, [debouncedQuery, availableProducts, context.models, branchUnits, isUrdu]);
 
   // Cart actions
   function addPhoneToCart(unit, customPrice = null) {
@@ -334,58 +465,172 @@ export function SalesPage({ context }) {
     }));
   }
 
-  async function handlePhoneScan(rawImei) {
-    const raw = (rawImei || "").trim();
-    if (!raw) return;
+  // Combobox input change handler: debounces 200ms per keystroke (ADDENDUM Rule 1)
+  function handleInputChange(e) {
+    const val = e.target.value;
+    setUniversalScanInput(val);
+    setHighlightedIndex(-1);
+    setSearchFailed(false);
 
-    // Support both raw 15-digit IMEI and printed QR tag (e.g. IMEI:354892019482019|MODEL:...)
-    let imei = raw;
-    const qrMatch = raw.match(/IMEI[:=\s]+([0-9]{14,16})/i);
-    if (qrMatch) {
-      imei = qrMatch[1];
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
     }
 
-    if (imei.length < 14 || imei.length > 20) {
-      setError(`Invalid IMEI (${imei.length} digits). Standard IMEI is 15 digits.`);
-      return;
-    }
-    const localMatch = branchUnits.find((u) => u.imei === imei);
-    if (localMatch) {
-      addPhoneToCart(localMatch);
-      setUniversalScanInput("");
-      setTimeout(() => scannerInputRef.current?.focus(), 50);
-      return;
-    }
-    try {
-      const unit = await api.imeiLookup(imei);
-      if (!unit || !unit.id) {
-        setError(`IMEI ${imei} was not found in database.`);
-        return;
-      }
-      if (unit.current_status !== "in_stock") {
-        setError(`IMEI ${imei} is marked as '${unit.current_status}' and cannot be sold.`);
-        return;
-      }
-      if (String(unit.branch_id) !== String(form.branchId)) {
-        setError(`IMEI ${imei} belongs to branch #${unit.branch_id}, not currently selected branch.`);
-        return;
-      }
-      addPhoneToCart(unit);
-      setUniversalScanInput("");
-      setTimeout(() => scannerInputRef.current?.focus(), 50);
-    } catch (err) {
-      setError(err.message || `Failed to lookup IMEI ${imei}`);
+    const trimmed = val.trim();
+    if (trimmed.length >= 2) {
+      setIsSearching(true);
+      debounceTimerRef.current = setTimeout(() => {
+        setDebouncedQuery(trimmed);
+        setIsDropdownOpen(true);
+        setIsSearching(false);
+      }, 200);
+    } else {
+      setIsSearching(false);
+      setDebouncedQuery("");
+      setIsDropdownOpen(false);
     }
   }
 
-  // Unified Scanner Handler: handles 1D Barcode, 2D QR Code, Handset IMEI, and Product Barcode
+  // Combobox keyboard navigation handler (ADDENDUM Rule 4)
+  function handleKeyDown(e) {
+    if (e.key === "ArrowDown") {
+      if (!isDropdownOpen && searchResults.length > 0) {
+        setIsDropdownOpen(true);
+        setHighlightedIndex(0);
+        e.preventDefault();
+        return;
+      }
+      if (isDropdownOpen && searchResults.length > 0) {
+        e.preventDefault();
+        setHighlightedIndex((prev) => (prev < searchResults.length - 1 ? prev + 1 : 0));
+      }
+    } else if (e.key === "ArrowUp") {
+      if (isDropdownOpen && searchResults.length > 0) {
+        e.preventDefault();
+        setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : searchResults.length - 1));
+      }
+    } else if (e.key === "Escape") {
+      if (isDropdownOpen) {
+        e.preventDefault();
+        setIsDropdownOpen(false);
+        setHighlightedIndex(-1);
+      } else if (awaitingPhoneModel) {
+        e.preventDefault();
+        setAwaitingPhoneModel(null);
+      }
+    } else if (e.key === "Enter") {
+      if (isDropdownOpen && highlightedIndex >= 0 && highlightedIndex < searchResults.length) {
+        e.preventDefault();
+        const selected = searchResults[highlightedIndex];
+        if (selected.inStock) {
+          handleSelectItem(selected);
+        }
+        return;
+      }
+    }
+  }
+
+  // Row selection handler: adds product or prompts for phone model IMEI (ADDENDUM Rule 4)
+  function handleSelectItem(item) {
+    if (!item || !item.inStock) return;
+
+    if (item.itemType === "product") {
+      addProductToCart(item.rawItem);
+      setUniversalScanInput("");
+      setDebouncedQuery("");
+      setIsDropdownOpen(false);
+      setHighlightedIndex(-1);
+      setAwaitingPhoneModel(null);
+      setTimeout(() => scannerInputRef.current?.focus(), 50);
+    } else if (item.itemType === "phone_model") {
+      // Picked from dropdown: prompt for IMEI scan in the same field; do not guess a unit
+      setAwaitingPhoneModel(item);
+      setUniversalScanInput("");
+      setDebouncedQuery("");
+      setIsDropdownOpen(false);
+      setHighlightedIndex(-1);
+      setTimeout(() => scannerInputRef.current?.focus(), 50);
+    }
+  }
+
+  // Unified Scanner Handler: QR tag -> IMEI -> Barcode/SKU -> Fallback to dropdown
   async function handleUniversalScan(rawInput) {
     const raw = (rawInput || "").trim();
     if (!raw) return;
 
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    setIsSearching(false);
     setError("");
 
-    // 1. Check for QR Code Tag (e.g. "IMEI:354892019482019|MODEL:iPhone 13|CO:DigitalMarkaz360")
+    // Case A: Awaiting phone model's IMEI scan (Scenario S3)
+    if (awaitingPhoneModel) {
+      let imeiCandidate = null;
+      const qrMatch = raw.match(/IMEI[:=\s]+([0-9]{14,16})/i);
+      if (qrMatch) {
+        imeiCandidate = qrMatch[1];
+      } else if (/^\d{14,16}$/.test(raw.replace(/\s+/g, ""))) {
+        imeiCandidate = raw.replace(/\s+/g, "");
+      }
+
+      if (!imeiCandidate) {
+        setError(
+          isUrdu
+            ? `براہ کرم ماڈل "${awaitingPhoneModel.name}" کے لیے 15 ہندسوں کا IMEI یا QR کوڈ اسکین کریں۔`
+            : `Please scan or enter a 15-digit IMEI or QR tag for "${awaitingPhoneModel.name}".`
+        );
+        setTimeout(() => scannerInputRef.current?.focus(), 50);
+        return;
+      }
+
+      // Check local branchUnits
+      const unit = (branchUnits || []).find((u) => u.imei === imeiCandidate);
+      if (unit) {
+        addPhoneToCart(unit);
+        setAwaitingPhoneModel(null);
+        setUniversalScanInput("");
+        setDebouncedQuery("");
+        setIsDropdownOpen(false);
+        setHighlightedIndex(-1);
+        setTimeout(() => scannerInputRef.current?.focus(), 50);
+        return;
+      }
+
+      try {
+        const lookupUnit = await api.imeiLookup(imeiCandidate);
+        if (!lookupUnit || !lookupUnit.id) {
+          setError(isUrdu ? `آئی ایم ای آئی ${imeiCandidate} ڈیٹا بیس میں نہیں ملا۔` : `IMEI ${imeiCandidate} was not found in database.`);
+          setTimeout(() => scannerInputRef.current?.focus(), 50);
+          return;
+        }
+        if (lookupUnit.current_status !== "in_stock") {
+          setError(isUrdu ? `یہ فون فروخت کے لیے دستیاب نہیں ہے (${lookupUnit.current_status})۔` : `IMEI ${imeiCandidate} is marked as '${lookupUnit.current_status}' and cannot be sold.`);
+          setTimeout(() => scannerInputRef.current?.focus(), 50);
+          return;
+        }
+        if (String(lookupUnit.branch_id) !== String(form.branchId)) {
+          setError(isUrdu ? `یہ فون برانچ #${lookupUnit.branch_id} کا ہے، موجودہ برانچ کا نہیں۔` : `IMEI ${imeiCandidate} belongs to branch #${lookupUnit.branch_id}, not currently selected branch.`);
+          setTimeout(() => scannerInputRef.current?.focus(), 50);
+          return;
+        }
+        addPhoneToCart(lookupUnit);
+        setAwaitingPhoneModel(null);
+        setUniversalScanInput("");
+        setDebouncedQuery("");
+        setIsDropdownOpen(false);
+        setHighlightedIndex(-1);
+        setTimeout(() => scannerInputRef.current?.focus(), 50);
+        return;
+      } catch (err) {
+        setError(err.message || `Failed to verify IMEI ${imeiCandidate}`);
+        setTimeout(() => scannerInputRef.current?.focus(), 50);
+        return;
+      }
+    }
+
+    // Detection Pipeline: runs detection pipeline FIRST
+    // 1. QR Code Tag (e.g. "IMEI:354892019482019|MODEL:iPhone 13")
     let imeiCandidate = null;
     const qrMatch = raw.match(/IMEI[:=\s]+([0-9]{14,16})/i);
     if (qrMatch) {
@@ -395,37 +640,41 @@ export function SalesPage({ context }) {
       imeiCandidate = raw.replace(/\s+/g, "");
     }
 
-    // If an IMEI was detected from Barcode or QR Code
     if (imeiCandidate) {
-      const localMatch = branchUnits.find((u) => u.imei === imeiCandidate);
+      const localMatch = (branchUnits || []).find((u) => u.imei === imeiCandidate);
       if (localMatch) {
         addPhoneToCart(localMatch);
         setUniversalScanInput("");
+        setDebouncedQuery("");
+        setIsDropdownOpen(false);
+        setHighlightedIndex(-1);
         setTimeout(() => scannerInputRef.current?.focus(), 50);
         return;
       }
 
       try {
         const unit = await api.imeiLookup(imeiCandidate);
-        if (!unit || !unit.id) {
-          setError(isUrdu ? `آئی ایم ای آئی ${imeiCandidate} ڈیٹا بیس میں نہیں ملا۔` : `IMEI ${imeiCandidate} was not found in database.`);
+        if (unit && unit.id) {
+          if (unit.current_status !== "in_stock") {
+            setError(isUrdu ? `یہ فون فروخت کے لیے دستیاب نہیں ہے (${unit.current_status})۔` : `IMEI ${imeiCandidate} is marked as '${unit.current_status}' and cannot be sold.`);
+            setTimeout(() => scannerInputRef.current?.focus(), 50);
+            return;
+          }
+          if (String(unit.branch_id) !== String(form.branchId)) {
+            setError(isUrdu ? `یہ فون برانچ #${unit.branch_id} کا ہے، موجودہ برانچ کا نہیں۔` : `IMEI ${imeiCandidate} belongs to branch #${unit.branch_id}, not currently selected branch.`);
+            setTimeout(() => scannerInputRef.current?.focus(), 50);
+            return;
+          }
+          addPhoneToCart(unit);
+          setUniversalScanInput("");
+          setDebouncedQuery("");
+          setIsDropdownOpen(false);
+          setHighlightedIndex(-1);
+          setTimeout(() => scannerInputRef.current?.focus(), 50);
           return;
         }
-        if (unit.current_status !== "in_stock") {
-          setError(isUrdu ? `یہ فون فروخت کے لیے دستیاب نہیں ہے (${unit.current_status})۔` : `IMEI ${imeiCandidate} is marked as '${unit.current_status}' and cannot be sold.`);
-          return;
-        }
-        if (String(unit.branch_id) !== String(form.branchId)) {
-          setError(isUrdu ? `یہ فون برانچ #${unit.branch_id} کا ہے، موجودہ برانچ کا نہیں۔` : `IMEI ${imeiCandidate} belongs to branch #${unit.branch_id}, not currently selected branch.`);
-          return;
-        }
-        addPhoneToCart(unit);
-        setUniversalScanInput("");
-        setTimeout(() => scannerInputRef.current?.focus(), 50);
-        return;
       } catch (err) {
-        setError(err.message || `Failed to lookup IMEI ${imeiCandidate}`);
-        return;
+        // Not a phone unit, continue to check barcode/SKU
       }
     }
 
@@ -442,38 +691,19 @@ export function SalesPage({ context }) {
     if (matchedProduct) {
       addProductToCart(matchedProduct);
       setUniversalScanInput("");
+      setDebouncedQuery("");
+      setIsDropdownOpen(false);
+      setHighlightedIndex(-1);
       setTimeout(() => scannerInputRef.current?.focus(), 50);
       return;
     }
 
-    // 4. If Enter was pressed and there is exactly ONE product match by name
-    const matchingProds = (availableProducts || []).filter((p) =>
-      p.name && p.name.toLowerCase().includes(cleanQuery)
-    );
-    const matchingPhones = (branchUnits || []).filter((u) =>
-      (u.model_name && u.model_name.toLowerCase().includes(cleanQuery)) ||
-      (u.company && u.company.toLowerCase().includes(cleanQuery)) ||
-      (u.imei && u.imei.includes(raw))
-    );
-
-    if (matchingProds.length === 1 && matchingPhones.length === 0) {
-      addProductToCart(matchingProds[0]);
-      setUniversalScanInput("");
-      setTimeout(() => scannerInputRef.current?.focus(), 50);
-      return;
-    }
-
-    if (matchingPhones.length === 1 && matchingProds.length === 0) {
-      addPhoneToCart(matchingPhones[0]);
-      setUniversalScanInput("");
-      setTimeout(() => scannerInputRef.current?.focus(), 50);
-      return;
-    }
-
-    // If multiple or no exact matches, notify if nothing matched
-    if (matchingProds.length === 0 && matchingPhones.length === 0) {
-      setError(isUrdu ? `کوئی آئٹم، بارکوڈ یا آئی ایم ای آئی "${raw}" نہیں ملا۔` : `No item, barcode, or IMEI found matching "${raw}".`);
-    }
+    // 4. On NO exact match: pipeline fallback is THIS dropdown (Rule 1 & Rule 4)
+    // Scanned/typed text stays in field, dropdown opens filtered by text. Never add a "best guess".
+    setDebouncedQuery(raw);
+    setIsDropdownOpen(true);
+    setHighlightedIndex(-1);
+    setTimeout(() => scannerInputRef.current?.focus(), 50);
   }
 
   function updateCartItemQty(index, newQty) {
@@ -993,244 +1223,277 @@ export function SalesPage({ context }) {
               </div>
             </div>
 
-            {/* Universal Smart Barcode & QR Scanner Bar */}
+            {/* Universal Smart Barcode & QR Scanner Bar (ADDENDUM Single Combobox Specification) */}
             <div style={{ marginBottom: "1rem" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
                 <span style={{ fontSize: "0.82rem", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--primary)" }}>
-                  ⚡ {isUrdu ? "یونیورسل اسکینر (بارکوڈ اور کیو آر کوڈ)" : "Universal Scanner (Barcode & QR Code)"}
+                  ⚡ {isUrdu ? "یونیورسل اسکینر اور سرچ فیلڈ" : "Universal Scanner & Search Field"}
                 </span>
                 <span className="muted small">
-                  {isUrdu ? "فون کا IMEI، کیو آر ٹیگ یا سامان کا بارکوڈ اسکین کریں" : "Auto-detects 15-digit Phone IMEI, QR tags & Product barcodes"}
+                  {isUrdu ? "بارکوڈ، کیو آر کوڈ یا پروڈکٹ کا نام/SKU درج کریں" : "Auto-detects Barcodes, QR tags, Phone IMEIs & Live Product Search"}
                 </span>
               </div>
 
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  handleUniversalScan(universalScanInput);
-                }}
-                className="pos-scanner-bar"
-              >
-                <div className="pos-scanner-input-wrap">
-                  <span className="pos-scanner-icon">⚡</span>
-                  <input
-                    ref={scannerInputRef}
-                    type="text"
-                    className="pos-scanner-input"
-                    placeholder={
-                      isUrdu
-                        ? "یونیورسل فیلڈ: فون کا IMEI یا سامان کا بارکوڈ / کیو آر اسکین کریں..."
-                        : "Universal Scanner: Scan any Barcode, QR Code (Handset or Accessory), or type name/SKU..."
-                    }
-                    value={universalScanInput}
-                    onChange={(e) => setUniversalScanInput(e.target.value)}
-                    autoFocus
-                  />
-                  {universalScanInput && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setUniversalScanInput("");
-                        scannerInputRef.current?.focus();
-                      }}
-                      style={{
-                        position: "absolute",
-                        right: isUrdu ? "auto" : "0.75rem",
-                        left: isUrdu ? "0.75rem" : "auto",
-                        top: "50%",
-                        transform: "translateY(-50%)",
-                        background: "none",
-                        border: "none",
-                        color: "var(--text-muted)",
-                        fontSize: "1rem",
-                        cursor: "pointer",
-                        padding: "0.25rem"
-                      }}
-                      title="Clear"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-                <button
-                  type="submit"
-                  className="primary-btn"
-                  style={{ padding: "0.75rem 1.25rem", whiteSpace: "nowrap" }}
+              {/* Awaiting Phone IMEI Banner (Scenario S3) */}
+              {awaitingPhoneModel && (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "0.6rem 0.9rem",
+                    marginBottom: "0.5rem",
+                    borderRadius: "8px",
+                    background: "rgba(56, 189, 248, 0.12)",
+                    border: "1px solid var(--primary)",
+                    color: "var(--text)"
+                  }}
                 >
-                  ⚡ {isUrdu ? "اسکین / شامل کریں" : "Scan / Add"}
-                </button>
-                <button
-                  type="button"
-                  className="secondary-btn"
-                  onClick={() => setShowQuickProductModal(true)}
-                  style={{ padding: "0.75rem 1rem", whiteSpace: "nowrap" }}
-                  title={isUrdu ? "نیا پروڈکٹ کیٹلاگ میں شامل کریں" : "Quick add new product if not in catalog"}
-                >
-                  ➕ {t("inventory.add_product", "New Item")}
-                </button>
-              </form>
-
-              {/* Live Search Suggestions Dropdown (when typing in scanner bar) */}
-              {universalScanInput.trim() && (
-                <div className="pos-instock-list" style={{ marginTop: "0.5rem" }}>
-                  {filteredHandsets.length === 0 && filteredProducts.length === 0 ? (
-                    <div style={{ padding: "0.75rem 1rem", textAlign: "center", color: "var(--text-muted)" }}>
-                      {isUrdu ? `کوئی آئٹم "${universalScanInput}" سے مطابقت نہیں رکھتا۔` : `No item matching "${universalScanInput}". Press Enter to search database.`}
-                    </div>
-                  ) : (
-                    <>
-                      {/* Matching Handsets */}
-                      {filteredHandsets.length > 0 && (
-                        <div>
-                          <div style={{ padding: "0.35rem 0.75rem", fontSize: "0.75rem", fontWeight: "700", textTransform: "uppercase", color: "var(--primary)", background: "rgba(56, 189, 248, 0.08)" }}>
-                            📱 {isUrdu ? "دستیاب موبائل فونز" : "In-Stock Handsets"} ({filteredHandsets.length})
-                          </div>
-                          {filteredHandsets.map((u) => {
-                            const spec = [u.variant, u.storage, u.color].filter(Boolean).join(" • ");
-                            const rate = Number(u.sale_price || u.retail_price || u.cost_price || 0);
-                            return (
-                              <div
-                                key={`h-${u.id}`}
-                                className="pos-instock-item"
-                                onClick={() => {
-                                  addPhoneToCart(u);
-                                  setUniversalScanInput("");
-                                  setTimeout(() => scannerInputRef.current?.focus(), 50);
-                                }}
-                              >
-                                <div>
-                                  <strong>📱 {u.company} {u.model_name}</strong>
-                                  <span className="muted small" style={{ marginInlineStart: "0.5rem" }}>
-                                    {spec ? `(${spec}) ` : ""}| IMEI: <span className="font-mono">{u.imei}</span>
-                                  </span>
-                                </div>
-                                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                                  <strong style={{ color: "var(--primary)" }}>PKR {rate.toLocaleString()}</strong>
-                                  <span className="primary-btn btn-sm" style={{ padding: "2px 8px", fontSize: "0.75rem" }}>
-                                    + {t("common.add", "Add")}
-                                  </span>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      {/* Matching Products / Accessories */}
-                      {filteredProducts.length > 0 && (
-                        <div>
-                          <div style={{ padding: "0.35rem 0.75rem", fontSize: "0.75rem", fontWeight: "700", textTransform: "uppercase", color: "#a855f7", background: "rgba(168, 85, 247, 0.08)" }}>
-                            📦 {isUrdu ? "ایکسیسریز اور سامان" : "Accessories & Products"} ({filteredProducts.length})
-                          </div>
-                          {filteredProducts.map((p) => {
-                            const price = Number(p.sale_price || p.retail_price || 0);
-                            return (
-                              <div
-                                key={`p-${p.id}`}
-                                className="pos-instock-item"
-                                onClick={() => {
-                                  addProductToCart(p);
-                                  setUniversalScanInput("");
-                                  setTimeout(() => scannerInputRef.current?.focus(), 50);
-                                }}
-                              >
-                                <div>
-                                  <strong>📦 {p.name}</strong>
-                                  <span className="muted small" style={{ marginInlineStart: "0.5rem" }}>
-                                    ({p.category_name || (isUrdu ? "عام" : "General")} • {isUrdu ? "اسٹاک" : "Stock"}: {p.stock_quantity ?? 0}
-                                    {p.barcode ? ` • Barcode: ${p.barcode}` : ""})
-                                  </span>
-                                </div>
-                                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                                  <strong style={{ color: "var(--primary)" }}>PKR {price.toLocaleString()}</strong>
-                                  <span className="primary-btn btn-sm" style={{ padding: "2px 8px", fontSize: "0.75rem" }}>
-                                    + {t("common.add", "Add")}
-                                  </span>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </>
-                  )}
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.88rem" }}>
+                    <span style={{ fontSize: "1.1rem" }}>📱</span>
+                    <span>
+                      {isUrdu ? "ماڈل منتخب:" : "Model Selected:"} <strong>{awaitingPhoneModel.name}</strong> ({awaitingPhoneModel.stock} {isUrdu ? "دستیاب" : "in stock"}) —{" "}
+                      <span style={{ color: "var(--primary)", fontWeight: 600 }}>
+                        {isUrdu ? "اب اس فون کا 15 ہندسوں کا IMEI اسکین یا درج کریں" : "Now scan or enter this phone's 15-digit IMEI barcode or QR tag"}
+                      </span>
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="ghost-btn btn-sm"
+                    onClick={() => {
+                      setAwaitingPhoneModel(null);
+                      setTimeout(() => scannerInputRef.current?.focus(), 50);
+                    }}
+                    style={{ padding: "2px 8px", fontSize: "0.8rem", color: "#ef4444" }}
+                  >
+                    ✕ {isUrdu ? "منسوخ" : "Cancel"}
+                  </button>
                 </div>
               )}
 
-              {/* Handset Picker Dropdown */}
-              <div style={{ marginTop: "0.75rem", display: "flex", flexDirection: "column", gap: "0.3rem" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span className="muted small" style={{ fontWeight: "600" }}>
-                    👇 {t("sales.pick_from_inventory", "Or pick from branch in-stock handsets")}:
-                  </span>
-                  <span className="muted small">
-                    {branchUnits.length} {isUrdu ? "دستیاب فونز" : "ready to sell"}
-                  </span>
-                </div>
-                <select
-                  value={selectedInStockUnitId}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    if (val) {
-                      const unit = branchUnits.find((u) => String(u.id) === String(val));
-                      if (unit) {
-                        addPhoneToCart(unit);
-                        setSelectedInStockUnitId("");
-                        setTimeout(() => scannerInputRef.current?.focus(), 50);
-                      }
+              {/* Combobox with Attached Dropdown */}
+              <div ref={comboboxContainerRef} style={{ position: "relative", width: "100%" }}>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!isDropdownOpen || highlightedIndex < 0) {
+                      handleUniversalScan(universalScanInput);
                     }
                   }}
-                  style={{
-                    width: "100%",
-                    padding: "0.65rem 0.85rem",
-                    borderRadius: "8px",
-                    background: "var(--surface)",
-                    borderColor: "var(--border)"
-                  }}
+                  className="pos-scanner-bar"
+                  style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: 0 }}
                 >
-                  <option value="">
-                    {isUrdu
-                      ? `-- برانچ کے دستیاب فونز منتخب کریں (${branchUnits.length} دستیاب) --`
-                      : `-- Choose phone from branch inventory (${branchUnits.length} available) --`}
-                  </option>
-                  {branchUnits.map((u) => {
-                    const spec = [u.variant, u.storage, u.color].filter(Boolean).join(" • ");
-                    const rate = Number(u.sale_price || u.retail_price || u.cost_price || 0);
-                    return (
-                      <option key={u.id} value={u.id}>
-                        📱 {u.company} {u.model_name} {spec ? `(${spec})` : ""} | IMEI: {u.imei} - PKR {rate.toLocaleString()}
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
+                  <div className="pos-scanner-input-wrap" style={{ position: "relative", flex: 1 }}>
+                    <span className="pos-scanner-icon">⚡</span>
+                    <input
+                      ref={scannerInputRef}
+                      type="text"
+                      className="pos-scanner-input"
+                      placeholder={
+                        awaitingPhoneModel
+                          ? (isUrdu
+                              ? `ماڈل "${awaitingPhoneModel.name}" کے لیے فون کا IMEI یا QR کوڈ اسکین کریں...`
+                              : `Scan or type 15-digit IMEI for ${awaitingPhoneModel.name}...`)
+                          : (isUrdu
+                              ? "یونیورسل فیلڈ: فون کا IMEI، سامان کا بارکوڈ / کیو آر اسکین کریں یا نام لکھیں..."
+                              : "Universal Scanner: Scan any Barcode, QR Code (Handset or Accessory), or type name/SKU...")
+                      }
+                      value={universalScanInput}
+                      onChange={handleInputChange}
+                      onKeyDown={handleKeyDown}
+                      autoFocus
+                      autoComplete="off"
+                    />
+                    {universalScanInput && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUniversalScanInput("");
+                          setDebouncedQuery("");
+                          setIsDropdownOpen(false);
+                          setHighlightedIndex(-1);
+                          scannerInputRef.current?.focus();
+                        }}
+                        style={{
+                          position: "absolute",
+                          right: isUrdu ? "auto" : "0.75rem",
+                          left: isUrdu ? "0.75rem" : "auto",
+                          top: "50%",
+                          transform: "translateY(-50%)",
+                          background: "none",
+                          border: "none",
+                          color: "var(--text-muted)",
+                          fontSize: "1rem",
+                          cursor: "pointer",
+                          padding: "0.25rem"
+                        }}
+                        title="Clear"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    type="submit"
+                    className="primary-btn"
+                    style={{ padding: "0.75rem 1.25rem", whiteSpace: "nowrap" }}
+                  >
+                    ⚡ {isUrdu ? "اسکین / شامل کریں" : "Scan / Add"}
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-btn"
+                    onClick={() => setShowQuickProductModal(true)}
+                    style={{ padding: "0.75rem 1rem", whiteSpace: "nowrap" }}
+                    title={isUrdu ? "نیا پروڈکٹ کیٹلاگ میں شامل کریں" : "Quick add new product if not in catalog"}
+                  >
+                    ➕ {t("inventory.add_product", "New Item")}
+                  </button>
+                </form>
 
-              {/* Quick-Add Popular Accessory Chips */}
-              {popularAccessories.length > 0 && (
-                <div style={{ marginTop: "0.75rem" }}>
-                  <span className="muted small" style={{ display: "block", marginBottom: "0.35rem", fontWeight: "600" }}>
-                    ⚡ {isUrdu ? "اکثر فروخت ہونے والی ایکسیسریز" : "1-Click Fast Accessories"}:
-                  </span>
-                  <div className="pos-quick-chips">
-                    {popularAccessories.map((p) => {
-                      const price = Number(p.sale_price || p.retail_price || 0);
-                      return (
-                        <button
-                          key={p.id}
-                          type="button"
-                          className="pos-chip-btn"
+                {/* Attached Overlay Dropdown Panel (ADDENDUM Rules 1, 2, 3, 6) */}
+                {isDropdownOpen && (
+                  <div
+                    className="pos-attached-dropdown"
+                    style={{
+                      position: "absolute",
+                      top: "calc(100% + 4px)",
+                      left: 0,
+                      right: 0,
+                      zIndex: 1000,
+                      background: "var(--surface, #1e293b)",
+                      border: "1px solid var(--border, #334155)",
+                      borderRadius: "8px",
+                      boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3)",
+                      maxHeight: "360px",
+                      overflowY: "auto"
+                    }}
+                  >
+                    {searchFailed ? (
+                      <div style={{ padding: "0.85rem 1rem", textAlign: "center", color: "#ef4444", fontSize: "0.88rem" }}>
+                        ⚠️ {isUrdu ? "تلاش میں خرابی، دوبارہ کوشش کریں" : "Search failed, try again"}
+                      </div>
+                    ) : isSearching ? (
+                      <div
+                        style={{
+                          padding: "0.85rem 1rem",
+                          textAlign: "center",
+                          color: "var(--text-muted)",
+                          fontSize: "0.88rem",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "0.5rem"
+                        }}
+                      >
+                        <span className="spinner-border spinner-border-sm" role="status" style={{ width: "1rem", height: "1rem", borderWidth: "2px" }} />
+                        <span>{isUrdu ? "تلاش جاری ہے..." : "Searching products..."}</span>
+                      </div>
+                    ) : searchResults.length === 0 ? (
+                      <div style={{ padding: "0.85rem 1rem", textAlign: "center", color: "var(--text-muted)", fontSize: "0.88rem" }}>
+                        {isUrdu ? `کوئی پروڈکٹ "${debouncedQuery}" سے مطابقت نہیں رکھتا` : `No products match "${debouncedQuery}"`}
+                      </div>
+                    ) : (
+                      searchResults.map((item, idx) => (
+                        <div
+                          key={item.id}
+                          className={`pos-combobox-row ${idx === highlightedIndex ? "is-highlighted" : ""} ${!item.inStock ? "is-out-of-stock" : ""}`}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            padding: "0.6rem 0.85rem",
+                            borderBottom: idx < searchResults.length - 1 ? "1px solid var(--border, rgba(255,255,255,0.06))" : "none",
+                            background: idx === highlightedIndex ? "rgba(56, 189, 248, 0.15)" : "transparent",
+                            opacity: item.inStock ? 1 : 0.5,
+                            cursor: item.inStock ? "pointer" : "not-allowed",
+                            transition: "background 0.15s ease"
+                          }}
+                          onMouseEnter={() => {
+                            if (item.inStock) setHighlightedIndex(idx);
+                          }}
                           onClick={() => {
-                            addProductToCart(p);
-                            setTimeout(() => scannerInputRef.current?.focus(), 50);
+                            if (item.inStock) handleSelectItem(item);
                           }}
                         >
-                          <span>📦</span> {p.name} (PKR {price.toLocaleString()})
-                        </button>
-                      );
-                    })}
+                          <div style={{ display: "flex", flexDirection: "column", gap: "2px", overflow: "hidden", paddingRight: "0.5rem" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
+                              <span style={{ fontSize: "0.95rem" }}>{item.itemType === "phone_model" ? "📱" : "📦"}</span>
+                              <span style={{ fontWeight: 600, fontSize: "0.9rem", color: "var(--text)" }}>
+                                {highlightMatch(item.name, debouncedQuery)}
+                              </span>
+                              {item.isBarcodeMatch && (
+                                <span
+                                  style={{
+                                    fontSize: "0.7rem",
+                                    fontWeight: 700,
+                                    padding: "1px 6px",
+                                    borderRadius: "4px",
+                                    background: "#10b981",
+                                    color: "#ffffff"
+                                  }}
+                                >
+                                  {isUrdu ? "بارکوڈ میچ" : "Barcode match"}
+                                </span>
+                              )}
+                              {item.itemType === "phone_model" && (
+                                <span
+                                  style={{
+                                    fontSize: "0.7rem",
+                                    fontWeight: 600,
+                                    padding: "1px 6px",
+                                    borderRadius: "4px",
+                                    background: "rgba(56, 189, 248, 0.2)",
+                                    color: "var(--primary)"
+                                  }}
+                                >
+                                  {isUrdu ? "فون ماڈل" : "Phone Model"}
+                                </span>
+                              )}
+                            </div>
+                            {item.secondaryText && (
+                              <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontFamily: "monospace" }}>
+                                {item.secondaryText}
+                              </span>
+                            )}
+                          </div>
+
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexShrink: 0 }}>
+                            <div style={{ textAlign: "right" }}>
+                              <div style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--primary)" }}>
+                                PKR {item.price.toLocaleString()}
+                              </div>
+                              <div
+                                style={{
+                                  fontSize: "0.75rem",
+                                  fontWeight: 600,
+                                  color: item.inStock ? "#10b981" : "#ef4444"
+                                }}
+                              >
+                                {item.stockLabel}
+                              </div>
+                            </div>
+                            {item.inStock && (
+                              <span
+                                className="primary-btn btn-sm"
+                                style={{
+                                  padding: "3px 8px",
+                                  fontSize: "0.75rem",
+                                  borderRadius: "4px",
+                                  pointerEvents: "none"
+                                }}
+                              >
+                                + {item.itemType === "phone_model" ? (isUrdu ? "منتخب کریں" : "Select") : (isUrdu ? "شامل کریں" : "Add")}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
 
             {/* Multi-Product Validation Error Banner */}

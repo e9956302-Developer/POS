@@ -10897,6 +10897,48 @@ tr.highlight-pulse > td {
   pointer-events: none;
 }
 
+/* POS Combobox Attached Dropdown (ADDENDUM Spec) */
+.pos-attached-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  background: var(--surface, #1e293b);
+  border: 1px solid var(--border, #334155);
+  border-radius: var(--radius-md, 10px);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.pos-combobox-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 0.9rem;
+  border-bottom: 1px solid var(--table-border, rgba(255, 255, 255, 0.06));
+  transition: background var(--transition-fast, 0.12s ease);
+}
+
+.pos-combobox-row:last-child {
+  border-bottom: none;
+}
+
+.pos-combobox-row.is-highlighted {
+  background: rgba(56, 189, 248, 0.15) !important;
+}
+
+.pos-combobox-row:hover:not(.is-out-of-stock) {
+  background: var(--surface-hover, rgba(255, 255, 255, 0.06));
+}
+
+.pos-combobox-row.is-out-of-stock {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: grayscale(30%);
+}
+
 /* Quick Accessory Chips */
 .pos-quick-chips {
   display: flex;
