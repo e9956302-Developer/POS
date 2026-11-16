@@ -1290,6 +1290,10 @@ function AppContent() {
             onCompleteLogin={handleCompleteLogin}
             error={error}
             onBackToLanding={handleBackToLanding}
+            onMfaSetupRequired={({ enrollmentToken, user: enrollUser }) => {
+              setMfaTargetUser({ ...(enrollUser || {}), enrollmentToken });
+              setShowMfaModal(true);
+            }}
           />
         ) : (
           <LandingPage

@@ -728,6 +728,106 @@ authRouter.post(
   })
 );
 
+// =========================================================================
+// 3b. UNAUTHENTICATED MFA ENROLLMENT (for forced top_admin first-login)
+//     Accepts the short-lived enrollmentToken JWT instead of a session cookie.
+// =========================================================================
+authRouter.get(
+  "/mfa/enroll/setup",
+  asyncHandler(async (req, res) => {
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : req.query.enrollmentToken;
+    if (!token) return res.status(401).json({ message: "Enrollment token required" });
+
+    let payload;
+    try {
+      payload = jwt.verify(token, env.jwtSecret);
+    } catch {
+      return res.status(401).json({ message: "Enrollment token expired or invalid. Please log in again." });
+    }
+    if (payload.scope !== "mfa_enroll" || !payload.userId) {
+      return res.status(401).json({ message: "Invalid enrollment token" });
+    }
+
+    const [user] = await query("SELECT id, email, full_name FROM users WHERE id = ?", [payload.userId]);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const secret = generateTotpSecret(20);
+    const uri = generateTotpUri(user.email, "DigitalMarkaz360", secret);
+    const recoveryCodes = generateRecoveryCodes(10);
+
+    res.json({
+      userId: user.id,
+      email: user.email,
+      fullName: user.full_name,
+      secret,
+      uri,
+      recoveryCodes,
+      instructions: "Scan the QR code in Google Authenticator or Bitwarden, save your 10 recovery codes safely, and submit a 6-digit code to confirm."
+    });
+  })
+);
+
+authRouter.post(
+  "/mfa/enroll/confirm",
+  asyncHandler(async (req, res) => {
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : req.body.enrollmentToken;
+    if (!token) return res.status(401).json({ message: "Enrollment token required" });
+
+    let payload;
+    try {
+      payload = jwt.verify(token, env.jwtSecret);
+    } catch {
+      return res.status(401).json({ message: "Enrollment token expired or invalid. Please log in again." });
+    }
+    if (payload.scope !== "mfa_enroll" || !payload.userId) {
+      return res.status(401).json({ message: "Invalid enrollment token" });
+    }
+
+    const { secret, code, recoveryCodes } = req.body;
+    if (!secret || !code || !Array.isArray(recoveryCodes) || recoveryCodes.length !== 10) {
+      return res.status(400).json({ message: "Secret, 6-digit confirmation code, and 10 recovery codes are required" });
+    }
+
+    const isValid = verifyTotpToken(code, secret);
+    if (!isValid) {
+      return res.status(400).json({ message: "Invalid confirmation code. Ensure your device clock is synchronized." });
+    }
+
+    const [user] = await query("SELECT id, email, full_name FROM users WHERE id = ?", [payload.userId]);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    await query(
+      "UPDATE users SET mfa_secret = ?, mfa_enabled = 1, mfa_enrolled_at = NOW() WHERE id = ?",
+      [secret, user.id]
+    );
+
+    await query("DELETE FROM user_recovery_codes WHERE user_id = ?", [user.id]);
+    for (const rawCode of recoveryCodes) {
+      await query(
+        "INSERT INTO user_recovery_codes (user_id, code_hash) VALUES (?, ?)",
+        [user.id, hashRecoveryCode(rawCode)]
+      );
+    }
+
+    await triggerSecurityAlert({
+      alertType: "mfa_enrolled",
+      severity: "medium",
+      userId: user.id,
+      recipientEmail: user.email,
+      subject: "[SECURITY] Multi-Factor Authentication Successfully Configured",
+      message: `MFA (TOTP Authenticator) was successfully configured on account ${user.email} from IP ${getClientIp(req)}.`
+    });
+
+    res.json({
+      success: true,
+      userId: user.id,
+      message: `MFA is now enabled for ${user.email}. Please log in again with your authenticator app.`
+    });
+  })
+);
+
 // Disable MFA (Prohibited for Top Admin on their own account per Requirement A.1)
 authRouter.post(
   "/mfa/disable",

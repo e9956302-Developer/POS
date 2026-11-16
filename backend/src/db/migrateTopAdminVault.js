@@ -136,13 +136,7 @@ export async function migrateTopAdminVault() {
     await query(`ALTER TABLE audit_logs MODIFY COLUMN user_id INT NULL`);
   } catch {}
 
-  // 7. Ensure seeded top admin has MFA initialized for backwards compatibility in general tests
-  await query(
-    `UPDATE users u
-     JOIN roles r ON r.id = u.role_id
-     SET u.mfa_enabled = 1, u.mfa_secret = 'JBSWY3DPEHPK3PXP'
-     WHERE r.name = 'top_admin' AND u.is_break_glass = 0 AND (u.id = 1 OR u.email = 'topadmin@mobilepos.local')`
-  );
+  // 7. (Removed: do NOT reset mfa_secret on startup — doing so overwrites real enrolled secrets)
 
   // 8. Ensure break-glass super admin account exists in DB
   const [topAdminRole] = await query("SELECT id FROM roles WHERE name = 'top_admin' LIMIT 1");

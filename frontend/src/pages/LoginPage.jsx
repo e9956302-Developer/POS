@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { api } from "../api.js";
 import { useLanguage } from "../context/LanguageContext.jsx";
 import { LanguageSwitcher } from "../components/LanguageSwitcher.jsx";
 
-export function LoginPage({ onLogin, onCompleteLogin, error, onBackToLanding }) {
+export function LoginPage({ onLogin, onCompleteLogin, error, onBackToLanding, onMfaSetupRequired }) {
   const { t, isRtl } = useLanguage();
   const [email, setEmail] = useState("admin@mobilepos.local");
   const [password, setPassword] = useState("admin123");
@@ -11,11 +11,28 @@ export function LoginPage({ onLogin, onCompleteLogin, error, onBackToLanding }) 
   const [localError, setLocalError] = useState("");
 
   // MFA Challenge State
-  const [step, setStep] = useState("credentials"); // 'credentials' | 'mfa_verify'
+  const [step, setStep] = useState("credentials"); // 'credentials' | 'mfa_verify' | 'mfa_enroll'
   const [mfaTicket, setMfaTicket] = useState("");
   const [mfaCode, setMfaCode] = useState("");
   const [useRecoveryCode, setUseRecoveryCode] = useState(false);
   const [recoveryCode, setRecoveryCode] = useState("");
+
+  // MFA Enrollment State (forced first-login)
+  const [enrollmentToken, setEnrollmentToken] = useState("");
+  const [enrollData, setEnrollData] = useState(null); // { secret, uri, recoveryCodes, ... }
+  const [enrollCode, setEnrollCode] = useState("");
+  const [enrollDone, setEnrollDone] = useState(false);
+
+  // Load QR + recovery codes from server when entering enroll step
+  useEffect(() => {
+    if (step === "mfa_enroll" && enrollmentToken && !enrollData) {
+      setBusy(true);
+      api.mfaEnrollSetup(enrollmentToken)
+        .then((data) => setEnrollData(data))
+        .catch((err) => setLocalError(err.message || "Failed to load MFA setup. Please try again."))
+        .finally(() => setBusy(false));
+    }
+  }, [step, enrollmentToken, enrollData]);
 
   async function handleSubmit(event) {
     event?.preventDefault();
@@ -28,6 +45,17 @@ export function LoginPage({ onLogin, onCompleteLogin, error, onBackToLanding }) 
         setStep("mfa_verify");
         setMfaCode("");
         setRecoveryCode("");
+      } else if (result?.mfaSetupRequired) {
+        // Top admin hasn't enrolled MFA yet — show inline enrollment flow
+        setEnrollmentToken(result.enrollmentToken);
+        setEnrollData(null);
+        setEnrollCode("");
+        setEnrollDone(false);
+        setStep("mfa_enroll");
+        // Also notify App.jsx if it wants to open its own modal
+        if (onMfaSetupRequired) {
+          onMfaSetupRequired({ enrollmentToken: result.enrollmentToken, user: result.user });
+        }
       }
     } catch (loginError) {
       setLocalError(loginError.message);
@@ -58,6 +86,29 @@ export function LoginPage({ onLogin, onCompleteLogin, error, onBackToLanding }) 
       }
     } catch (verifyError) {
       setLocalError(verifyError.message || "Invalid verification code or recovery code");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleEnrollConfirm(event) {
+    event?.preventDefault();
+    if (!enrollData) return;
+    setBusy(true);
+    setLocalError("");
+    try {
+      const cleanCode = enrollCode.replace(/\D/g, "");
+      if (cleanCode.length !== 6) throw new Error("Please enter your full 6-digit authenticator code.");
+      await api.mfaEnrollConfirm({
+        enrollmentToken,
+        secret: enrollData.secret,
+        code: cleanCode,
+        recoveryCodes: enrollData.recoveryCodes
+      });
+      setEnrollDone(true);
+      setLocalError("");
+    } catch (err) {
+      setLocalError(err.message || "MFA enrollment failed. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -116,7 +167,82 @@ export function LoginPage({ onLogin, onCompleteLogin, error, onBackToLanding }) 
         </button>
       )}
 
-      {step === "credentials" ? (
+      {step === "mfa_enroll" ? (
+        /* ========================================================
+           STEP: FORCED MFA ENROLLMENT (top_admin first login)
+           ======================================================== */
+        <div className="login-card login-mfa-step">
+          <div className="login-mfa-icon-badge"><span>🔐</span></div>
+          <h2 style={{ fontSize: "1.3rem", margin: "0 0 4px", fontWeight: 800 }}>Set Up Two-Factor Authentication</h2>
+          <p className="muted small" style={{ margin: "0 0 1rem" }}>
+            MFA is mandatory for SaaS Top Admin accounts. Please set it up to continue.
+          </p>
+
+          {activeError && <div className="alert error" style={{ marginBottom: "1rem" }}>{activeError}</div>}
+
+          {enrollDone ? (
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>✅</div>
+              <p style={{ fontWeight: 700, color: "#22c55e", marginBottom: "0.5rem" }}>MFA Enabled Successfully!</p>
+              <p className="muted small" style={{ marginBottom: "1rem" }}>Please log in again with your authenticator app.</p>
+              <button className="primary-btn" onClick={() => { setStep("credentials"); setLocalError(""); setEnrollData(null); }}>
+                Back to Login
+              </button>
+            </div>
+          ) : busy && !enrollData ? (
+            <p className="muted small">Loading MFA setup…</p>
+          ) : enrollData ? (
+            <form onSubmit={handleEnrollConfirm} style={{ width: "100%" }}>
+              <p style={{ fontSize: "0.82rem", color: "var(--text-muted)", margin: "0 0 0.5rem" }}>
+                1. Scan this QR code in Google Authenticator, Microsoft Authenticator, or Bitwarden:
+              </p>
+              <div style={{ background: "#fff", padding: "0.75rem", borderRadius: "8px", display: "inline-block", marginBottom: "0.75rem" }}>
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(enrollData.uri)}`}
+                  alt="Authenticator QR Code"
+                  width={180} height={180}
+                />
+              </div>
+              <p style={{ fontSize: "0.78rem", color: "#94a3b8", marginBottom: "0.4rem" }}>
+                Or enter this key manually: <code style={{ background: "rgba(255,255,255,0.08)", padding: "2px 6px", borderRadius: "4px", fontSize: "0.76rem" }}>{enrollData.secret}</code>
+              </p>
+              <p style={{ fontSize: "0.82rem", color: "var(--text-muted)", margin: "0.75rem 0 0.3rem" }}>
+                2. Save your recovery codes (keep these safe — you won&apos;t see them again):
+              </p>
+              <div style={{ background: "rgba(15,23,42,0.6)", borderRadius: "6px", padding: "0.5rem 0.75rem", fontSize: "0.74rem", fontFamily: "monospace", lineHeight: 1.8, marginBottom: "0.75rem", maxHeight: "120px", overflowY: "auto" }}>
+                {enrollData.recoveryCodes.map((c) => <div key={c}>{c}</div>)}
+              </div>
+              <p style={{ fontSize: "0.82rem", color: "var(--text-muted)", margin: "0 0 0.3rem" }}>
+                3. Enter the 6-digit code from your authenticator to confirm:
+              </p>
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                value={enrollCode}
+                onChange={(e) => setEnrollCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="000 000"
+                autoFocus
+                required
+                className="login-mfa-otp-input font-mono"
+                disabled={busy}
+              />
+              <button
+                type="submit"
+                className="primary-btn"
+                disabled={busy || enrollCode.length !== 6}
+                style={{ width: "100%", marginTop: "0.5rem" }}
+              >
+                {busy ? "Enabling MFA…" : "Confirm & Enable MFA 🔐"}
+              </button>
+              <button type="button" className="btn btn-ghost" onClick={() => { setStep("credentials"); setLocalError(""); setEnrollData(null); }} style={{ marginTop: "0.6rem", fontSize: "0.82rem", color: "#94a3b8" }}>
+                ← Back to Login
+              </button>
+            </form>
+          ) : null}
+        </div>
+      ) : step === "credentials" ? (
         <form className="login-card" onSubmit={handleSubmit}>
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "0.25rem" }}>
             <LanguageSwitcher compact />
@@ -274,11 +400,6 @@ export function LoginPage({ onLogin, onCompleteLogin, error, onBackToLanding }) 
                 disabled={busy}
               />
 
-              {email.toLowerCase().includes("topadmin") && (
-                <div style={{ margin: "0.3rem 0 0.8rem", fontSize: "0.76rem", color: "#38bdf8", background: "rgba(56, 189, 248, 0.1)", padding: "4px 8px", borderRadius: "6px" }}>
-                  💡 Demo Passcode: <strong>123456</strong> or use your authenticator app
-                </div>
-              )}
 
               <button
                 type="submit"

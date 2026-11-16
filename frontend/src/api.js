@@ -85,6 +85,11 @@ export const api = {
     }),
   mfaVerify: (payload) => request("/auth/mfa/verify", { method: "POST", body: JSON.stringify(payload) }),
   mfaDisable: (payload) => request("/auth/mfa/disable", { method: "POST", body: JSON.stringify(payload) }),
+  // Unauthenticated enrollment (forced first-login MFA setup using enrollmentToken JWT)
+  mfaEnrollSetup: (enrollmentToken) =>
+    request("/auth/mfa/enroll/setup", { token: enrollmentToken }),
+  mfaEnrollConfirm: (payload) =>
+    request("/auth/mfa/enroll/confirm", { method: "POST", body: JSON.stringify(payload) }),
   branches: () => request("/branches"),
   parties: (query = "") => request(`/parties${query}`),
   createParty: (payload) => request("/parties", { method: "POST", body: JSON.stringify(payload) }),

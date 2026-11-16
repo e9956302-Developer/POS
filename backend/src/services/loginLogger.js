@@ -68,31 +68,33 @@ export async function recordLoginEvent({
       ]
     );
 
-    // 2. Also append to immutable audit_logs table
-    const auditDetails = JSON.stringify({
-      email: finalEmail,
-      status,
-      systemSummary: clientInfo.systemSummary,
-      os: clientInfo.os,
-      browser: clientInfo.browser,
-      deviceType: clientInfo.deviceType,
-      failureReason: finalReason,
-      businessName,
-      branchName
-    });
+    // 2. Also append to immutable audit_logs table (only when we have a resolved userId)
+    if (userId) {
+      const auditDetails = JSON.stringify({
+        email: finalEmail,
+        status,
+        systemSummary: clientInfo.systemSummary,
+        os: clientInfo.os,
+        browser: clientInfo.browser,
+        deviceType: clientInfo.deviceType,
+        failureReason: finalReason,
+        businessName,
+        branchName
+      });
 
-    await query(
-      `INSERT INTO audit_logs (user_id, action_type, entity_type, entity_id, details, ip_address, user_agent)
-       VALUES (?, ?, 'user', ?, ?, ?, ?)`,
-      [
-        userId,
-        status === "success" ? "user_login" : "user_login_failed",
-        userId,
-        auditDetails,
-        ipAddress,
-        userAgent.slice(0, 255)
-      ]
-    );
+      await query(
+        `INSERT INTO audit_logs (user_id, action_type, entity_type, entity_id, details, ip_address, user_agent)
+         VALUES (?, ?, 'user', ?, ?, ?, ?)`,
+        [
+          userId,
+          status === "success" ? "user_login" : "user_login_failed",
+          userId,
+          auditDetails,
+          ipAddress,
+          userAgent.slice(0, 255)
+        ]
+      );
+    }
   } catch (err) {
     // Non-blocking error logging to ensure primary auth flow never fails due to logging
     console.error("Failed to record login activity log:", err);
