@@ -993,8 +993,17 @@ export function SalesPage({ context }) {
               </div>
             </div>
 
-            {/* Unified Smart Barcode & QR Scanner Bar */}
+            {/* Universal Smart Barcode & QR Scanner Bar */}
             <div style={{ marginBottom: "1rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
+                <span style={{ fontSize: "0.82rem", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--primary)" }}>
+                  ⚡ {isUrdu ? "یونیورسل اسکینر (بارکوڈ اور کیو آر کوڈ)" : "Universal Scanner (Barcode & QR Code)"}
+                </span>
+                <span className="muted small">
+                  {isUrdu ? "فون کا IMEI، کیو آر ٹیگ یا سامان کا بارکوڈ اسکین کریں" : "Auto-detects 15-digit Phone IMEI, QR tags & Product barcodes"}
+                </span>
+              </div>
+
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -1010,8 +1019,8 @@ export function SalesPage({ context }) {
                     className="pos-scanner-input"
                     placeholder={
                       isUrdu
-                        ? "بارکوڈ یا QR کوڈ اسکین کریں (فون IMEI یا ایکسیسری) یا نام لکھیں..."
-                        : "Scan any Barcode or QR Code (Phone IMEI or Accessory), or type name/SKU..."
+                        ? "یونیورسل فیلڈ: فون کا IMEI یا سامان کا بارکوڈ / کیو آر اسکین کریں..."
+                        : "Universal Scanner: Scan any Barcode, QR Code (Handset or Accessory), or type name/SKU..."
                     }
                     value={universalScanInput}
                     onChange={(e) => setUniversalScanInput(e.target.value)}
@@ -1061,40 +1070,6 @@ export function SalesPage({ context }) {
                 </button>
               </form>
 
-              {/* View Filter Toggles */}
-              <div className="pos-mode-toggle" style={{ marginTop: "0.75rem" }}>
-                <button
-                  type="button"
-                  className={`pos-mode-btn ${salesMode === "all" ? "active" : ""}`}
-                  onClick={() => {
-                    setSalesMode("all");
-                    setTimeout(() => scannerInputRef.current?.focus(), 50);
-                  }}
-                >
-                  <span>⚡</span> {isUrdu ? "سب آئٹمز (آٹو ڈیٹیکٹ)" : "All Items (Auto-Detect)"}
-                </button>
-                <button
-                  type="button"
-                  className={`pos-mode-btn ${salesMode === "phone" ? "active" : ""}`}
-                  onClick={() => {
-                    setSalesMode("phone");
-                    setTimeout(() => scannerInputRef.current?.focus(), 50);
-                  }}
-                >
-                  <span>📱</span> {t("sales.phone_mode", "Cell Phones (IMEI)")}
-                </button>
-                <button
-                  type="button"
-                  className={`pos-mode-btn ${salesMode === "product" ? "active" : ""}`}
-                  onClick={() => {
-                    setSalesMode("product");
-                    setTimeout(() => scannerInputRef.current?.focus(), 50);
-                  }}
-                >
-                  <span>📦</span> {t("sales.product_mode", "Accessories & Products")}
-                </button>
-              </div>
-
               {/* Live Search Suggestions Dropdown (when typing in scanner bar) */}
               {universalScanInput.trim() && (
                 <div className="pos-instock-list" style={{ marginTop: "0.5rem" }}>
@@ -1105,7 +1080,7 @@ export function SalesPage({ context }) {
                   ) : (
                     <>
                       {/* Matching Handsets */}
-                      {filteredHandsets.length > 0 && (salesMode === "all" || salesMode === "phone") && (
+                      {filteredHandsets.length > 0 && (
                         <div>
                           <div style={{ padding: "0.35rem 0.75rem", fontSize: "0.75rem", fontWeight: "700", textTransform: "uppercase", color: "var(--primary)", background: "rgba(56, 189, 248, 0.08)" }}>
                             📱 {isUrdu ? "دستیاب موبائل فونز" : "In-Stock Handsets"} ({filteredHandsets.length})
@@ -1142,7 +1117,7 @@ export function SalesPage({ context }) {
                       )}
 
                       {/* Matching Products / Accessories */}
-                      {filteredProducts.length > 0 && (salesMode === "all" || salesMode === "product") && (
+                      {filteredProducts.length > 0 && (
                         <div>
                           <div style={{ padding: "0.35rem 0.75rem", fontSize: "0.75rem", fontWeight: "700", textTransform: "uppercase", color: "#a855f7", background: "rgba(168, 85, 247, 0.08)" }}>
                             📦 {isUrdu ? "ایکسیسریز اور سامان" : "Accessories & Products"} ({filteredProducts.length})
@@ -1182,58 +1157,56 @@ export function SalesPage({ context }) {
                 </div>
               )}
 
-              {/* Handset Picker Dropdown (when salesMode is 'all' or 'phone') */}
-              {(salesMode === "all" || salesMode === "phone") && (
-                <div style={{ marginTop: "0.75rem", display: "flex", flexDirection: "column", gap: "0.3rem" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span className="muted small" style={{ fontWeight: "600" }}>
-                      👇 {t("sales.pick_from_inventory", "Or pick from branch in-stock handsets")}:
-                    </span>
-                    <span className="muted small">
-                      {branchUnits.length} {isUrdu ? "دستیاب فونز" : "ready to sell"}
-                    </span>
-                  </div>
-                  <select
-                    value={selectedInStockUnitId}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (val) {
-                        const unit = branchUnits.find((u) => String(u.id) === String(val));
-                        if (unit) {
-                          addPhoneToCart(unit);
-                          setSelectedInStockUnitId("");
-                          setTimeout(() => scannerInputRef.current?.focus(), 50);
-                        }
-                      }
-                    }}
-                    style={{
-                      width: "100%",
-                      padding: "0.65rem 0.85rem",
-                      borderRadius: "8px",
-                      background: "var(--surface)",
-                      borderColor: "var(--border)"
-                    }}
-                  >
-                    <option value="">
-                      {isUrdu
-                        ? `-- برانچ کے دستیاب فونز منتخب کریں (${branchUnits.length} دستیاب) --`
-                        : `-- Choose phone from branch inventory (${branchUnits.length} available) --`}
-                    </option>
-                    {branchUnits.map((u) => {
-                      const spec = [u.variant, u.storage, u.color].filter(Boolean).join(" • ");
-                      const rate = Number(u.sale_price || u.retail_price || u.cost_price || 0);
-                      return (
-                        <option key={u.id} value={u.id}>
-                          📱 {u.company} {u.model_name} {spec ? `(${spec})` : ""} | IMEI: {u.imei} - PKR {rate.toLocaleString()}
-                        </option>
-                      );
-                    })}
-                  </select>
+              {/* Handset Picker Dropdown */}
+              <div style={{ marginTop: "0.75rem", display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span className="muted small" style={{ fontWeight: "600" }}>
+                    👇 {t("sales.pick_from_inventory", "Or pick from branch in-stock handsets")}:
+                  </span>
+                  <span className="muted small">
+                    {branchUnits.length} {isUrdu ? "دستیاب فونز" : "ready to sell"}
+                  </span>
                 </div>
-              )}
+                <select
+                  value={selectedInStockUnitId}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val) {
+                      const unit = branchUnits.find((u) => String(u.id) === String(val));
+                      if (unit) {
+                        addPhoneToCart(unit);
+                        setSelectedInStockUnitId("");
+                        setTimeout(() => scannerInputRef.current?.focus(), 50);
+                      }
+                    }
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "0.65rem 0.85rem",
+                    borderRadius: "8px",
+                    background: "var(--surface)",
+                    borderColor: "var(--border)"
+                  }}
+                >
+                  <option value="">
+                    {isUrdu
+                      ? `-- برانچ کے دستیاب فونز منتخب کریں (${branchUnits.length} دستیاب) --`
+                      : `-- Choose phone from branch inventory (${branchUnits.length} available) --`}
+                  </option>
+                  {branchUnits.map((u) => {
+                    const spec = [u.variant, u.storage, u.color].filter(Boolean).join(" • ");
+                    const rate = Number(u.sale_price || u.retail_price || u.cost_price || 0);
+                    return (
+                      <option key={u.id} value={u.id}>
+                        📱 {u.company} {u.model_name} {spec ? `(${spec})` : ""} | IMEI: {u.imei} - PKR {rate.toLocaleString()}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
 
-              {/* Quick-Add Popular Accessory Chips (when salesMode is 'all' or 'product') */}
-              {(salesMode === "all" || salesMode === "product") && popularAccessories.length > 0 && (
+              {/* Quick-Add Popular Accessory Chips */}
+              {popularAccessories.length > 0 && (
                 <div style={{ marginTop: "0.75rem" }}>
                   <span className="muted small" style={{ display: "block", marginBottom: "0.35rem", fontWeight: "600" }}>
                     ⚡ {isUrdu ? "اکثر فروخت ہونے والی ایکسیسریز" : "1-Click Fast Accessories"}:

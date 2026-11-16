@@ -41,11 +41,18 @@ app.use("/api", router);
 
 // In production or single-service Render deployment, serve built frontend SPA
 if (fs.existsSync(frontendDistPath)) {
-  app.use(express.static(frontendDistPath));
+  app.use(express.static(frontendDistPath, {
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith("index.html")) {
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      }
+    }
+  }));
   app.get("*", (req, res, next) => {
     if (req.path.startsWith("/api") || req.path === "/health") {
       return next();
     }
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     res.sendFile(path.join(frontendDistPath, "index.html"));
   });
 } else {
