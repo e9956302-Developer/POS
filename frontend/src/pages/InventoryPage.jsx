@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { api } from "../api.js";
 import { PaginationBar } from "../components/PaginationBar.jsx";
 import { SectionCard } from "../components/SectionCard.jsx";
@@ -10,8 +10,27 @@ import { SearchableSelect } from "../components/SearchableSelect.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
 import { TableActionButton } from "../components/TableActionColumn.jsx";
 
+function highlightMatch(text, query) {
+  if (!text) return "";
+  if (!query || !query.trim()) return text;
+  const q = query.trim().toLowerCase();
+  const lower = text.toLowerCase();
+  const idx = lower.indexOf(q);
+  if (idx === -1) return text;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <strong style={{ color: "var(--primary)", textDecoration: "underline" }}>
+        {text.slice(idx, idx + q.length)}
+      </strong>
+      {text.slice(idx + q.length)}
+    </>
+  );
+}
+
 export function InventoryPage({ context }) {
   const { t, isRtl, language } = useLanguage();
+  const isUrdu = language === "ur" || isRtl;
   const [activeTab, setActiveTab] = useState("imei"); // "imei" | "products" | "transfers" | "returns"
 
   // IMEI state & pagination
@@ -74,11 +93,62 @@ export function InventoryPage({ context }) {
   const [transferPageSize, setTransferPageSize] = useState(10);
   const [selectedTransfer, setSelectedTransfer] = useState(null);
   const [transferForm, setTransferForm] = useState({
-    fromBranchId: context.session.branch_id || context.session.branchId || "",
+    fromBranchId: context.session.branch_id || context.session.branchId || (context.branches && context.branches[0]?.id) || "",
     toBranchId: "",
     notes: "",
-    items: [{ itemType: "handset", imei: "", productId: "", quantity: 1 }]
+    items: []
   });
+
+  // Universal Scanner & Combobox States for Dispatch Stock Transfer
+  const [transferScanInput, setTransferScanInput] = useState("");
+  const [transferDebouncedQuery, setTransferDebouncedQuery] = useState("");
+  const [isTransferDropdownOpen, setIsTransferDropdownOpen] = useState(false);
+  const [transferHighlightedIndex, setTransferHighlightedIndex] = useState(-1);
+  const [isTransferSearching, setIsTransferSearching] = useState(false);
+  const [transferSearchFailed, setTransferSearchFailed] = useState(false);
+  const [transferAwaitingPhoneModel, setTransferAwaitingPhoneModel] = useState(null); // { modelId, name, units }
+  const [transferBranchUnits, setTransferBranchUnits] = useState([]);
+  const [isLoadingTransferUnits, setIsLoadingTransferUnits] = useState(false);
+  const transferScannerInputRef = useRef(null);
+  const transferComboboxRef = useRef(null);
+  const transferDebounceTimerRef = useRef(null);
+
+  // Close transfer dropdown on click outside
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (transferComboboxRef.current && !transferComboboxRef.current.contains(event.target)) {
+        setIsTransferDropdownOpen(false);
+        setTransferHighlightedIndex(-1);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  // Load in-stock units for source branch
+  const loadTransferBranchUnits = useCallback(async (bId) => {
+    if (!bId) {
+      setTransferBranchUnits([]);
+      return;
+    }
+    setIsLoadingTransferUnits(true);
+    try {
+      const unitsData = await api.inventory(`?branchId=${bId}&status=in_stock`);
+      setTransferBranchUnits(Array.isArray(unitsData) ? unitsData : []);
+    } catch (err) {
+      console.error("Failed to load source branch units for transfer:", err);
+    } finally {
+      setIsLoadingTransferUnits(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "transfers" && transferForm.fromBranchId) {
+      loadTransferBranchUnits(transferForm.fromBranchId);
+    }
+  }, [activeTab, transferForm.fromBranchId, loadTransferBranchUnits]);
 
   // Returns state & pagination
   const [returnsList, setReturnsList] = useState([]);
@@ -366,45 +436,508 @@ export function InventoryPage({ context }) {
     }
   }
 
+  const transferCounts = useMemo(() => {
+    let phones = 0;
+    let productsCount = 0;
+    (transferForm.items || []).forEach((it) => {
+      if (it.itemType === "handset" || it.imei) {
+        phones += 1;
+      } else {
+        productsCount += Number(it.quantity || 1);
+      }
+    });
+    return { phones, products: productsCount, total: phones + productsCount };
+  }, [transferForm.items]);
+
+  // Universal Live Search Results for Transfer: ranked per ADDENDUM specification
+  const transferSearchResults = useMemo(() => {
+    const q = (transferDebouncedQuery || "").trim().toLowerCase();
+    if (!q || q.length < 2) return [];
+
+    const results = [];
+
+    // 1. Accessories & Products (availableProducts)
+    (availableProducts || []).forEach((p) => {
+      const name = (p.name || "").trim();
+      const nameLower = name.toLowerCase();
+      const barcode = (p.barcode ? String(p.barcode) : "").trim();
+      const barcodeLower = barcode.toLowerCase();
+      const sku = (p.sku ? String(p.sku) : "").trim();
+      const skuLower = sku.toLowerCase();
+      const stock = Number(p.stock_quantity ?? 0);
+      const inStock = stock > 0;
+
+      let rank = 0;
+      let isBarcodeMatch = false;
+
+      if ((barcodeLower && barcodeLower === q) || (skuLower && skuLower === q)) {
+        rank = 100;
+        isBarcodeMatch = true;
+      } else if (nameLower.startsWith(q)) {
+        rank = 50;
+      } else if (nameLower.includes(q)) {
+        rank = 25;
+      } else if ((barcodeLower && barcodeLower.includes(q)) || (skuLower && skuLower.includes(q))) {
+        rank = 20;
+      }
+
+      if (rank > 0) {
+        results.push({
+          id: `prod-${p.id}`,
+          itemType: "product",
+          name,
+          secondaryText: [sku ? `SKU: ${sku}` : null, barcode ? `Barcode: ${barcode}` : null].filter(Boolean).join(" • "),
+          stock,
+          inStock,
+          stockLabel: inStock ? (isUrdu ? `اسٹاک: ${stock}` : `In stock: ${stock}`) : (isUrdu ? "اسٹاک ختم" : "Out of stock"),
+          isBarcodeMatch,
+          rank,
+          rawItem: p
+        });
+      }
+    });
+
+    // 2. Mobile Handset Models (from context.models + distinct models in transferBranchUnits)
+    const modelMap = new Map();
+    (context.models || []).forEach((m) => {
+      if (m && m.id) {
+        modelMap.set(String(m.id), {
+          id: m.id,
+          company: m.company || "",
+          model_name: m.model_name || "",
+          variant: m.variant || ""
+        });
+      }
+    });
+    (transferBranchUnits || []).forEach((u) => {
+      const key = u.model_id ? String(u.model_id) : `name-${u.company}-${u.model_name}`;
+      if (!modelMap.has(key)) {
+        modelMap.set(key, {
+          id: u.model_id || key,
+          company: u.company || "",
+          model_name: u.model_name || "",
+          variant: u.variant || ""
+        });
+      }
+    });
+
+    modelMap.forEach((m) => {
+      const matchingUnits = (transferBranchUnits || []).filter(
+        (u) =>
+          String(u.model_id) === String(m.id) ||
+          (!u.model_id && u.model_name && u.model_name.toLowerCase() === (m.model_name || "").toLowerCase())
+      );
+      const stock = matchingUnits.length;
+      const inStock = stock > 0;
+      const fullName = `${m.company || ""} ${m.model_name || ""}${m.variant ? ` (${m.variant})` : ""}`.trim() || m.model_name || "Phone Model";
+      const nameLower = fullName.toLowerCase();
+
+      let rank = 0;
+      if (nameLower.startsWith(q)) {
+        rank = 50;
+      } else if (nameLower.includes(q)) {
+        rank = 25;
+      }
+
+      if (rank > 0) {
+        results.push({
+          id: `phone-model-${m.id}`,
+          itemType: "phone_model",
+          name: fullName,
+          secondaryText: isUrdu ? "موبائل ہینڈ سیٹ ماڈل" : "Mobile Handset Model",
+          stock,
+          inStock,
+          stockLabel: inStock ? (isUrdu ? `اسٹاک: ${stock} فون` : `In stock: ${stock} units`) : (isUrdu ? "اسٹاک ختم" : "Out of stock"),
+          isBarcodeMatch: false,
+          rank,
+          rawItem: { ...m, units: matchingUnits }
+        });
+      }
+    });
+
+    // Sort order:
+    // 1. Exact barcode/SKU match pinned at TOP
+    // 2. In-stock before out-of-stock within same rank
+    // 3. Name comparison
+    results.sort((a, b) => {
+      if (b.rank !== a.rank) return b.rank - a.rank;
+      if (a.inStock !== b.inStock) return a.inStock ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    return results.slice(0, 10);
+  }, [transferDebouncedQuery, availableProducts, context.models, transferBranchUnits, isUrdu]);
+
+  function addTransferProduct(product) {
+    if (!product || !product.id) return;
+    setError("");
+    const existingIdx = (transferForm.items || []).findIndex(
+      (it) => it.itemType === "product" && String(it.productId) === String(product.id)
+    );
+    if (existingIdx >= 0) {
+      setTransferForm((prev) => ({
+        ...prev,
+        items: prev.items.map((it, idx) =>
+          idx === existingIdx ? { ...it, quantity: Number(it.quantity || 1) + 1 } : it
+        )
+      }));
+    } else {
+      setTransferForm((prev) => ({
+        ...prev,
+        items: [
+          ...(prev.items || []),
+          {
+            itemType: "product",
+            productId: Number(product.id),
+            name: product.name,
+            sku: product.sku || "",
+            barcode: product.barcode || "",
+            categoryName: product.category_name || "Accessory",
+            quantity: 1
+          }
+        ]
+      }));
+    }
+  }
+
+  function addTransferHandset(unit) {
+    if (!unit || !unit.imei) return;
+    const exists = (transferForm.items || []).some(
+      (it) => it.itemType === "handset" && it.imei === unit.imei
+    );
+    if (exists) {
+      setError(`IMEI ${unit.imei} is already added to the transfer list.`);
+      return;
+    }
+    setError("");
+    const name = `${unit.company || ""} ${unit.model_name || ""}${unit.variant ? ` (${unit.variant})` : ""}${unit.storage ? ` • ${unit.storage}` : ""}${unit.color ? ` • ${unit.color}` : ""}`.trim() || "Mobile Handset";
+
+    setTransferForm((prev) => ({
+      ...prev,
+      items: [
+        ...(prev.items || []),
+        {
+          itemType: "handset",
+          imei: unit.imei,
+          modelId: unit.model_id,
+          name,
+          quantity: 1
+        }
+      ]
+    }));
+  }
+
+  function handleTransferInputChange(e) {
+    const val = e.target.value;
+    setTransferScanInput(val);
+    setTransferHighlightedIndex(-1);
+    setTransferSearchFailed(false);
+
+    if (transferDebounceTimerRef.current) {
+      clearTimeout(transferDebounceTimerRef.current);
+    }
+
+    const trimmed = val.trim();
+    if (trimmed.length >= 2) {
+      setIsTransferSearching(true);
+      transferDebounceTimerRef.current = setTimeout(() => {
+        setTransferDebouncedQuery(trimmed);
+        setIsTransferDropdownOpen(true);
+        setIsTransferSearching(false);
+      }, 200);
+    } else {
+      setIsTransferSearching(false);
+      setTransferDebouncedQuery("");
+      setIsTransferDropdownOpen(false);
+    }
+  }
+
+  function handleTransferKeyDown(e) {
+    if (e.key === "ArrowDown") {
+      if (!isTransferDropdownOpen && transferSearchResults.length > 0) {
+        setIsTransferDropdownOpen(true);
+        setTransferHighlightedIndex(0);
+        e.preventDefault();
+        return;
+      }
+      if (isTransferDropdownOpen && transferSearchResults.length > 0) {
+        e.preventDefault();
+        setTransferHighlightedIndex((prev) => (prev < transferSearchResults.length - 1 ? prev + 1 : 0));
+      }
+    } else if (e.key === "ArrowUp") {
+      if (isTransferDropdownOpen && transferSearchResults.length > 0) {
+        e.preventDefault();
+        setTransferHighlightedIndex((prev) => (prev > 0 ? prev - 1 : transferSearchResults.length - 1));
+      }
+    } else if (e.key === "Escape") {
+      if (isTransferDropdownOpen) {
+        e.preventDefault();
+        setIsTransferDropdownOpen(false);
+        setTransferHighlightedIndex(-1);
+      } else if (transferAwaitingPhoneModel) {
+        e.preventDefault();
+        setTransferAwaitingPhoneModel(null);
+      }
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (isTransferDropdownOpen && transferHighlightedIndex >= 0 && transferHighlightedIndex < transferSearchResults.length) {
+        const selected = transferSearchResults[transferHighlightedIndex];
+        if (selected.inStock) {
+          handleTransferSelectItem(selected);
+        }
+        return;
+      }
+      handleTransferScan(transferScanInput);
+    }
+  }
+
+  function handleTransferSelectItem(item) {
+    if (!item || !item.inStock) return;
+
+    if (item.itemType === "product") {
+      addTransferProduct(item.rawItem);
+      setTransferScanInput("");
+      setTransferDebouncedQuery("");
+      setIsTransferDropdownOpen(false);
+      setTransferHighlightedIndex(-1);
+      setTimeout(() => transferScannerInputRef.current?.focus(), 50);
+    } else if (item.itemType === "phone_model") {
+      setTransferAwaitingPhoneModel(item);
+      setTransferScanInput("");
+      setTransferDebouncedQuery("");
+      setIsTransferDropdownOpen(false);
+      setTransferHighlightedIndex(-1);
+      setTimeout(() => transferScannerInputRef.current?.focus(), 50);
+    }
+  }
+
+  async function handleTransferScan(rawInput) {
+    const raw = (rawInput || "").trim();
+    if (!raw) return;
+
+    if (transferDebounceTimerRef.current) {
+      clearTimeout(transferDebounceTimerRef.current);
+    }
+    setIsTransferSearching(false);
+    setError("");
+
+    // Case 1: Awaiting phone model's IMEI scan
+    if (transferAwaitingPhoneModel) {
+      let imeiCandidate = null;
+      const qrMatch = raw.match(/IMEI[:=\s]+([0-9]{14,16})/i);
+      if (qrMatch) {
+        imeiCandidate = qrMatch[1];
+      } else if (/^\d{14,16}$/.test(raw.replace(/\s+/g, ""))) {
+        imeiCandidate = raw.replace(/\s+/g, "");
+      }
+
+      if (!imeiCandidate) {
+        setError(
+          isUrdu
+            ? `براہ کرم ماڈل "${transferAwaitingPhoneModel.name}" کے لیے 15 ہندسوں کا IMEI یا QR کوڈ اسکین کریں۔`
+            : `Please scan or enter a 15-digit IMEI or QR tag for "${transferAwaitingPhoneModel.name}".`
+        );
+        setTimeout(() => transferScannerInputRef.current?.focus(), 50);
+        return;
+      }
+
+      // Check local transferBranchUnits
+      const unit = (transferBranchUnits || []).find((u) => u.imei === imeiCandidate);
+      if (unit) {
+        addTransferHandset(unit);
+        setTransferAwaitingPhoneModel(null);
+        setTransferScanInput("");
+        setTransferDebouncedQuery("");
+        setIsTransferDropdownOpen(false);
+        setTransferHighlightedIndex(-1);
+        setTimeout(() => transferScannerInputRef.current?.focus(), 50);
+        return;
+      }
+
+      try {
+        const lookupUnit = await api.imeiLookup(imeiCandidate);
+        if (!lookupUnit || !lookupUnit.id) {
+          setError(isUrdu ? `آئی ایم ای آئی ${imeiCandidate} ڈیٹا بیس میں نہیں ملا۔` : `IMEI ${imeiCandidate} was not found in database.`);
+          setTimeout(() => transferScannerInputRef.current?.focus(), 50);
+          return;
+        }
+        if (lookupUnit.current_status !== "in_stock") {
+          setError(isUrdu ? `یہ فون دستیاب نہیں ہے (${lookupUnit.current_status})۔` : `IMEI ${imeiCandidate} is marked as '${lookupUnit.current_status}' and cannot be transferred.`);
+          setTimeout(() => transferScannerInputRef.current?.focus(), 50);
+          return;
+        }
+        if (String(lookupUnit.branch_id) !== String(transferForm.fromBranchId)) {
+          setError(isUrdu ? `یہ فون سورس برانچ کا نہیں ہے۔` : `IMEI ${imeiCandidate} belongs to branch #${lookupUnit.branch_id}, not the selected source branch.`);
+          setTimeout(() => transferScannerInputRef.current?.focus(), 50);
+          return;
+        }
+        addTransferHandset(lookupUnit);
+        setTransferAwaitingPhoneModel(null);
+        setTransferScanInput("");
+        setTransferDebouncedQuery("");
+        setIsTransferDropdownOpen(false);
+        setTransferHighlightedIndex(-1);
+        setTimeout(() => transferScannerInputRef.current?.focus(), 50);
+        return;
+      } catch (err) {
+        setError(err.message || `Failed to verify IMEI ${imeiCandidate}`);
+        setTimeout(() => transferScannerInputRef.current?.focus(), 50);
+        return;
+      }
+    }
+
+    // Case 2: General Detection Pipeline
+    // 1. QR Code Tag
+    let imeiCandidate = null;
+    const qrMatch = raw.match(/IMEI[:=\s]+([0-9]{14,16})/i);
+    if (qrMatch) {
+      imeiCandidate = qrMatch[1];
+    } else if (/^\d{14,16}$/.test(raw.replace(/\s+/g, ""))) {
+      // 2. Pure 14-16 digit number -> Phone IMEI
+      imeiCandidate = raw.replace(/\s+/g, "");
+    }
+
+    if (imeiCandidate) {
+      const localMatch = (transferBranchUnits || []).find((u) => u.imei === imeiCandidate);
+      if (localMatch) {
+        addTransferHandset(localMatch);
+        setTransferScanInput("");
+        setTransferDebouncedQuery("");
+        setIsTransferDropdownOpen(false);
+        setTransferHighlightedIndex(-1);
+        setTimeout(() => transferScannerInputRef.current?.focus(), 50);
+        return;
+      }
+
+      try {
+        const unit = await api.imeiLookup(imeiCandidate);
+        if (unit && unit.id) {
+          if (unit.current_status !== "in_stock") {
+            setError(isUrdu ? `یہ فون دستیاب نہیں ہے (${unit.current_status})۔` : `IMEI ${imeiCandidate} is marked as '${unit.current_status}' and cannot be transferred.`);
+            setTimeout(() => transferScannerInputRef.current?.focus(), 50);
+            return;
+          }
+          if (String(unit.branch_id) !== String(transferForm.fromBranchId)) {
+            setError(isUrdu ? `یہ فون سورس برانچ کا نہیں ہے۔` : `IMEI ${imeiCandidate} belongs to branch #${unit.branch_id}, not the selected source branch.`);
+            setTimeout(() => transferScannerInputRef.current?.focus(), 50);
+            return;
+          }
+          addTransferHandset(unit);
+          setTransferScanInput("");
+          setTransferDebouncedQuery("");
+          setIsTransferDropdownOpen(false);
+          setTransferHighlightedIndex(-1);
+          setTimeout(() => transferScannerInputRef.current?.focus(), 50);
+          return;
+        }
+      } catch (err) {
+        // Not a phone unit, continue to check barcode/SKU
+      }
+    }
+
+    // 3. Exact Accessory / Product Barcode or SKU match
+    const cleanQuery = raw.toLowerCase();
+    const cleanNoSpaces = raw.replace(/[\s-]/g, "").toLowerCase();
+
+    const matchedProduct = (availableProducts || []).find((p) => {
+      const b = p.barcode ? String(p.barcode).trim().toLowerCase() : "";
+      const s = p.sku ? String(p.sku).trim().toLowerCase() : "";
+      return b === cleanQuery || s === cleanQuery || (b && b.replace(/[\s-]/g, "") === cleanNoSpaces);
+    });
+
+    if (matchedProduct) {
+      addTransferProduct(matchedProduct);
+      setTransferScanInput("");
+      setTransferDebouncedQuery("");
+      setIsTransferDropdownOpen(false);
+      setTransferHighlightedIndex(-1);
+      setTimeout(() => transferScannerInputRef.current?.focus(), 50);
+      return;
+    }
+
+    // 4. On NO exact match: pipeline fallback is the attached dropdown
+    setTransferDebouncedQuery(raw);
+    setIsTransferDropdownOpen(true);
+    setTransferHighlightedIndex(-1);
+    setTimeout(() => transferScannerInputRef.current?.focus(), 50);
+  }
+
+  function updateTransferItemQty(index, newQty) {
+    const qty = Math.max(1, parseInt(newQty, 10) || 1);
+    setTransferForm((prev) => ({
+      ...prev,
+      items: prev.items.map((it, idx) => (idx === index ? { ...it, quantity: qty } : it))
+    }));
+  }
+
+  function removeTransferItem(index) {
+    setTransferForm((prev) => ({
+      ...prev,
+      items: prev.items.filter((_, idx) => idx !== index)
+    }));
+  }
+
   async function handleCreateTransfer(e) {
-    e.preventDefault();
+    if (e) e.preventDefault();
     if (!canCreate) {
       setError("Permission denied: You do not have permission to dispatch transfers.");
       return;
     }
     setError("");
     setMessage("");
+
+    if (!transferForm.fromBranchId) {
+      setError("Please select the Source Branch (From)");
+      return;
+    }
+    if (!transferForm.toBranchId) {
+      setError("Please select the Destination Branch (To)");
+      return;
+    }
+    if (String(transferForm.fromBranchId) === String(transferForm.toBranchId)) {
+      setError("Source Branch and Destination Branch cannot be the same");
+      return;
+    }
+
+    const items = (transferForm.items || [])
+      .filter((item) => (item.itemType === "handset" ? item.imei : item.productId))
+      .map((item) => {
+        if (item.itemType === "handset") {
+          return { imei: item.imei.trim() };
+        }
+        return { productId: Number(item.productId), quantity: Number(item.quantity || 1) };
+      });
+
+    if (!items.length) {
+      setError("Add at least one handset or accessory to the transfer order before dispatching.");
+      return;
+    }
+
     try {
-      const items = transferForm.items
-        .filter((item) => (item.itemType === "handset" ? item.imei : item.productId))
-        .map((item) => {
-          if (item.itemType === "handset") {
-            return { imei: item.imei.trim() };
-          }
-          return { productId: Number(item.productId), quantity: Number(item.quantity || 1) };
-        });
-
-      if (!items.length) {
-        setError("Add at least one handset or accessory to transfer");
-        return;
-      }
-
       const res = await api.createTransfer({
         fromBranchId: Number(transferForm.fromBranchId),
         toBranchId: Number(transferForm.toBranchId),
         notes: transferForm.notes,
         items
       });
-      setMessage(`Transfer ${res.transfer_number} dispatched successfully`);
-      setTransferForm({
-        fromBranchId: context.session.branch_id || context.session.branchId || "",
+      setMessage(`Transfer ${res.transfer_number} dispatched successfully!`);
+      setTransferForm((prev) => ({
+        ...prev,
         toBranchId: "",
         notes: "",
-        items: [{ itemType: "handset", imei: "", productId: "", quantity: 1 }]
-      });
+        items: []
+      }));
+      setTransferScanInput("");
+      setTransferDebouncedQuery("");
+      setIsTransferDropdownOpen(false);
+      setTransferAwaitingPhoneModel(null);
       loadTransfers();
+      if (transferForm.fromBranchId) {
+        loadTransferBranchUnits(transferForm.fromBranchId);
+      }
+      context?.refreshAll?.();
     } catch (err) {
-      setError(err.message);
+      setError(err.message || "Failed to dispatch stock transfer");
     }
   }
 
@@ -1318,170 +1851,500 @@ export function InventoryPage({ context }) {
       {/* --- TAB 3: INTER-BRANCH TRANSFERS --- */}
       {activeTab === "transfers" && (
         <div className="page-stack">
-          <SectionCard title="Dispatch Stock Transfer" subtitle="Safely transfer handsets and accessories between branches.">
+          <SectionCard
+            title={isUrdu ? "اسٹاک ٹرانسفر بھیجیں" : "Dispatch Stock Transfer"}
+            subtitle={isUrdu ? "برانچز کے درمیان ہینڈ سیٹس اور سامان محفوظ طریقے سے ٹرانسفر کریں۔" : "Safely transfer handsets and accessories between branches with live scanning and search."}
+          >
             <form className="form-grid" onSubmit={handleCreateTransfer}>
+              {/* Branch Selection Controls */}
               <label>
-                Source Branch (From)
+                {isUrdu ? "سورس برانچ (جہاں سے جائے گا)" : "Source Branch (From)"}
                 <select
                   value={transferForm.fromBranchId}
-                  onChange={(e) => setTransferForm({ ...transferForm, fromBranchId: e.target.value })}
+                  onChange={(e) => {
+                    const bId = e.target.value;
+                    setTransferForm((prev) => ({ ...prev, fromBranchId: bId }));
+                    if (bId) {
+                      loadTransferBranchUnits(bId);
+                    } else {
+                      setTransferBranchUnits([]);
+                    }
+                  }}
                   required
                 >
-                  <option value="">Select source branch</option>
-                  {context.branches.map((b) => (
+                  <option value="">{isUrdu ? "سورس برانچ منتخب کریں" : "Select source branch"}</option>
+                  {(context.branches || []).map((b) => (
                     <option key={b.id} value={b.id}>{b.name}</option>
                   ))}
                 </select>
               </label>
 
               <label>
-                Destination Branch (To)
+                {isUrdu ? "منزل برانچ (جہاں جائے گا)" : "Destination Branch (To)"}
                 <select
                   value={transferForm.toBranchId}
-                  onChange={(e) => setTransferForm({ ...transferForm, toBranchId: e.target.value })}
+                  onChange={(e) => setTransferForm((prev) => ({ ...prev, toBranchId: e.target.value }))}
                   required
                 >
-                  <option value="">Select destination branch</option>
-                  {context.branches.map((b) => (
-                    <option key={b.id} value={b.id}>{b.name}</option>
+                  <option value="">{isUrdu ? "منزل برانچ منتخب کریں" : "Select destination branch"}</option>
+                  {(context.branches || []).map((b) => (
+                    <option key={b.id} value={b.id} disabled={String(b.id) === String(transferForm.fromBranchId)}>
+                      {b.name} {String(b.id) === String(transferForm.fromBranchId) ? (isUrdu ? "(سورس برانچ)" : "(Source)") : ""}
+                    </option>
                   ))}
                 </select>
               </label>
 
               <label className="full-span">
-                Transfer Notes
+                {isUrdu ? "ٹرانسفر نوٹس" : "Transfer Notes"}
                 <input
                   value={transferForm.notes}
-                  onChange={(e) => setTransferForm({ ...transferForm, notes: e.target.value })}
-                  placeholder="e.g. Courier tracking # or driver name"
+                  onChange={(e) => setTransferForm((prev) => ({ ...prev, notes: e.target.value }))}
+                  placeholder={isUrdu ? "مثلاً کوریئر ٹریکنگ نمبر، گاڑی کا نمبر یا ڈرائیور کا نام" : "e.g. Courier tracking #, vehicle or driver name"}
                 />
               </label>
 
-              <div className="full-span">
-                <h4>Transfer Line Items</h4>
-                <div className="table-wrap" style={{ overflowX: "auto", width: "100%" }}>
-                  <table style={{ minWidth: "550px", width: "100%" }}>
-                    <thead>
-                      <tr>
-                        <th style={{ minWidth: "120px", whiteSpace: "nowrap" }}>Type</th>
-                        <th style={{ minWidth: "200px", whiteSpace: "nowrap" }}>Item Details</th>
-                        <th style={{ minWidth: "90px", whiteSpace: "nowrap" }}>Quantity</th>
-                        <th style={{ width: "45px" }} />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {transferForm.items.map((item, idx) => (
-                        <tr key={idx}>
-                          <td style={{ width: "120px" }}>
-                            <select
-                              value={item.itemType}
-                              onChange={(e) => {
-                                const newItems = [...transferForm.items];
-                                newItems[idx] = { itemType: e.target.value, imei: "", productId: "", quantity: 1 };
-                                setTransferForm({ ...transferForm, items: newItems });
-                              }}
-                            >
-                              <option value="handset">📱 Handset</option>
-                              <option value="product">📦 Product</option>
-                            </select>
-                          </td>
-                          <td>
-                            {item.itemType === "handset" ? (
-                              <input
-                                placeholder="Scan or enter 15-digit IMEI"
-                                value={item.imei}
-                                onChange={(e) => {
-                                  const newItems = [...transferForm.items];
-                                  newItems[idx].imei = e.target.value.replace(/\s+/g, "");
-                                  setTransferForm({ ...transferForm, items: newItems });
-                                }}
-                              />
-                            ) : (
-                              <select
-                                value={item.productId || ""}
-                                onChange={(e) => {
-                                  const newItems = [...transferForm.items];
-                                  newItems[idx].productId = e.target.value;
-                                  setTransferForm({ ...transferForm, items: newItems });
-                                }}
-                                style={{
-                                  width: "100%",
-                                  padding: "0.45rem 0.65rem",
-                                  borderRadius: "8px",
-                                  border: "1.5px solid var(--border, #cbd5e1)",
-                                  background: "var(--input-bg, var(--surface, #ffffff))",
-                                  color: "var(--text, #111827)",
-                                  fontSize: "0.88rem",
-                                  fontWeight: item.productId ? 600 : 400
-                                }}
-                              >
-                                <option value="">-- Select Product / Accessory --</option>
-                                {availableProducts.length === 0 ? (
-                                  <option value="" disabled>No products added yet</option>
-                                ) : (
-                                  availableProducts.map((p) => (
-                                    <option key={p.id} value={String(p.id)}>
-                                      {p.name} {p.sku ? `(${p.sku})` : ""} (Stock: {p.stock_quantity ?? 0})
-                                    </option>
-                                  ))
-                                )}
-                              </select>
-                            )}
-                          </td>
-                          <td style={{ width: "100px" }}>
-                            {item.itemType === "product" ? (
-                              <input
-                                type="number"
-                                min="1"
-                                value={item.quantity}
-                                onChange={(e) => {
-                                  const newItems = [...transferForm.items];
-                                  newItems[idx].quantity = Math.max(1, parseInt(e.target.value, 10) || 1);
-                                  setTransferForm({ ...transferForm, items: newItems });
-                                }}
-                              />
-                            ) : (
-                              <span className="muted">1</span>
-                            )}
-                          </td>
-                          <td style={{ width: "80px" }}>
-                            <button
-                              className="ghost-btn"
-                              type="button"
-                              onClick={() => {
-                                setTransferForm({
-                                  ...transferForm,
-                                  items: transferForm.items.filter((_, i) => i !== idx)
-                                });
-                              }}
-                            >
-                              ✕
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+              {/* Source Branch Inventory Status Badge */}
+              <div className="full-span" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem", padding: "0.5rem 0.75rem", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "8px", fontSize: "0.85rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <span>🏬</span>
+                  <span>
+                    {isUrdu ? "منتخب سورس برانچ انوینٹری:" : "Source Branch Inventory:"}
+                  </span>
+                  {isLoadingTransferUnits ? (
+                    <span className="muted">{isUrdu ? "لوڈ ہو رہا ہے..." : "Loading units..."}</span>
+                  ) : (
+                    <strong>
+                      {transferBranchUnits.length} {isUrdu ? "دستیاب فون" : "in-stock handsets"} • {availableProducts.length} {isUrdu ? "پروڈکٹس" : "products"}
+                    </strong>
+                  )}
+                </div>
+                <span className="muted small">
+                  {isUrdu ? "صرف سورس برانچ کے دستیاب فون اور اشیاء ٹرانسفر ہو سکتی ہیں" : "Only in-stock items from source branch can be dispatched"}
+                </span>
+              </div>
+
+              {/* Universal Combobox Scanner Bar (One Field for Scan + Dropdown Search) */}
+              <div className="full-span" style={{ marginTop: "0.5rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
+                  <span style={{ fontSize: "0.82rem", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--primary)" }}>
+                    ⚡ {isUrdu ? "یونیورسل اسکینر اور سرچ فیلڈ (اسٹاک ٹرانسفر)" : "Universal Scanner & Search Field (Stock Transfer)"}
+                  </span>
+                  <span className="muted small">
+                    {isUrdu ? "بارکوڈ، کیو آر کوڈ یا پروڈکٹ/ماڈل تلاش کریں" : "Auto-detects Barcodes, QR tags, Phone IMEIs & Live Product/Model Search"}
+                  </span>
                 </div>
 
-                <div className="row-actions" style={{ marginTop: "0.5rem" }}>
-                  <button
-                    className="secondary-btn"
-                    type="button"
-                    onClick={() =>
-                      setTransferForm({
-                        ...transferForm,
-                        items: [...transferForm.items, { itemType: "handset", imei: "", productId: "", quantity: 1 }]
-                      })
-                    }
+                {/* Awaiting Phone Model IMEI Scan Banner */}
+                {transferAwaitingPhoneModel && (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "0.65rem 0.95rem",
+                      marginBottom: "0.5rem",
+                      borderRadius: "8px",
+                      background: "rgba(56, 189, 248, 0.12)",
+                      border: "1px solid var(--primary)",
+                      color: "var(--text)",
+                      flexWrap: "wrap",
+                      gap: "0.5rem"
+                    }}
                   >
-                    + Add Row
-                  </button>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.88rem", flexWrap: "wrap" }}>
+                      <span style={{ fontSize: "1.1rem" }}>📱</span>
+                      <span>
+                        {isUrdu ? "ماڈل منتخب:" : "Model Selected:"} <strong>{transferAwaitingPhoneModel.name}</strong>
+                      </span>
+                      <span style={{ margin: "0 0.3rem", opacity: 0.5 }}>|</span>
+                      <span className="badge" style={{ background: "rgba(16, 185, 129, 0.15)", color: "#10b981", border: "1px solid #10b981", fontSize: "0.8rem", padding: "2px 8px", borderRadius: "4px" }}>
+                        {isUrdu ? `سورس اسٹاک: ${transferAwaitingPhoneModel.stock} فون` : `In Stock: ${transferAwaitingPhoneModel.stock} units`}
+                      </span>
+                      <span style={{ margin: "0 0.3rem", opacity: 0.5 }}>|</span>
+                      <span style={{ color: "var(--primary)", fontWeight: 600 }}>
+                        {isUrdu ? "اب اس فون کا 15 ہندسوں کا IMEI بارکوڈ یا QR اسکین کریں" : "Now scan 15-digit IMEI barcode or QR tag"}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="ghost-btn btn-sm"
+                      onClick={() => {
+                        setTransferAwaitingPhoneModel(null);
+                        setTimeout(() => transferScannerInputRef.current?.focus(), 50);
+                      }}
+                      style={{ padding: "2px 8px", fontSize: "0.8rem", color: "#ef4444" }}
+                    >
+                      ✕ {isUrdu ? "ماڈل تبدیل کریں" : "Change Model"}
+                    </button>
+                  </div>
+                )}
+
+                {/* Combobox Wrapper */}
+                <div ref={transferComboboxRef} style={{ position: "relative", width: "100%" }}>
+                  <div
+                    className="pos-scanner-bar"
+                    style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: 0 }}
+                  >
+                    <div className="pos-scanner-input-wrap" style={{ position: "relative", flex: 1 }}>
+                      <span className="pos-scanner-icon">⚡</span>
+                      <input
+                        ref={transferScannerInputRef}
+                        type="text"
+                        className="pos-scanner-input"
+                        placeholder={
+                          transferAwaitingPhoneModel
+                            ? (isUrdu
+                                ? `ماڈل "${transferAwaitingPhoneModel.name}" کے لیے فون کا IMEI یا QR کوڈ اسکین کریں...`
+                                : `Scan or type 15-digit IMEI for ${transferAwaitingPhoneModel.name}...`)
+                            : (isUrdu
+                                ? "یونیورسل فیلڈ: فون کا IMEI، سامان کا بارکوڈ / کیو آر اسکین کریں یا نام لکھیں..."
+                                : "Universal Transfer Scanner: Scan Barcode, QR Code, Phone IMEI, or search items...")
+                        }
+                        value={transferScanInput}
+                        onChange={handleTransferInputChange}
+                        onKeyDown={handleTransferKeyDown}
+                        autoFocus
+                        autoComplete="off"
+                      />
+                      {transferScanInput && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTransferScanInput("");
+                            setTransferDebouncedQuery("");
+                            setIsTransferDropdownOpen(false);
+                            setTransferHighlightedIndex(-1);
+                            transferScannerInputRef.current?.focus();
+                          }}
+                          style={{
+                            position: "absolute",
+                            right: isUrdu ? "auto" : "0.75rem",
+                            left: isUrdu ? "0.75rem" : "auto",
+                            top: "50%",
+                            transform: "translateY(-50%)",
+                            background: "none",
+                            border: "none",
+                            color: "var(--text-muted)",
+                            fontSize: "1rem",
+                            cursor: "pointer",
+                            padding: "0.25rem"
+                          }}
+                          title="Clear"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleTransferScan(transferScanInput)}
+                      className="primary-btn"
+                      style={{ padding: "0.75rem 1.25rem", whiteSpace: "nowrap" }}
+                    >
+                      ⚡ {isUrdu ? "اسکین / شامل کریں" : "Scan / Add"}
+                    </button>
+                  </div>
+
+                  {/* Attached Overlay Dropdown Panel */}
+                  {isTransferDropdownOpen && (
+                    <div
+                      className="pos-attached-dropdown"
+                      style={{
+                        position: "absolute",
+                        top: "calc(100% + 4px)",
+                        left: 0,
+                        right: 0,
+                        zIndex: 1000,
+                        background: "var(--surface, #1e293b)",
+                        border: "1px solid var(--border, #334155)",
+                        borderRadius: "8px",
+                        boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3)",
+                        maxHeight: "360px",
+                        overflowY: "auto"
+                      }}
+                    >
+                      {transferSearchFailed ? (
+                        <div style={{ padding: "0.85rem 1rem", textAlign: "center", color: "#ef4444", fontSize: "0.88rem" }}>
+                          ⚠️ {isUrdu ? "تلاش میں خرابی، دوبارہ کوشش کریں" : "Search failed, try again"}
+                        </div>
+                      ) : isTransferSearching ? (
+                        <div
+                          style={{
+                            padding: "0.85rem 1rem",
+                            textAlign: "center",
+                            color: "var(--text-muted)",
+                            fontSize: "0.88rem",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: "0.5rem"
+                          }}
+                        >
+                          <span className="spinner-border spinner-border-sm" role="status" style={{ width: "1rem", height: "1rem", borderWidth: "2px" }} />
+                          <span>{isUrdu ? "تلاش جاری ہے..." : "Searching inventory..."}</span>
+                        </div>
+                      ) : transferSearchResults.length === 0 ? (
+                        <div style={{ padding: "0.85rem 1rem", textAlign: "center", color: "var(--text-muted)", fontSize: "0.88rem" }}>
+                          {isUrdu ? `کوئی پروڈکٹ یا ماڈل "${transferDebouncedQuery}" سے مطابقت نہیں رکھتا` : `No products or models match "${transferDebouncedQuery}"`}
+                        </div>
+                      ) : (
+                        transferSearchResults.map((item, idx) => (
+                          <div
+                            key={item.id}
+                            className={`pos-combobox-row ${idx === transferHighlightedIndex ? "is-highlighted" : ""} ${!item.inStock ? "is-out-of-stock" : ""}`}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              padding: "0.6rem 0.85rem",
+                              borderBottom: idx < transferSearchResults.length - 1 ? "1px solid var(--border, rgba(255,255,255,0.06))" : "none",
+                              background: idx === transferHighlightedIndex ? "rgba(56, 189, 248, 0.15)" : "transparent",
+                              cursor: item.inStock ? "pointer" : "not-allowed",
+                              opacity: item.inStock ? 1 : 0.5,
+                              transition: "background 0.15s ease"
+                            }}
+                            onMouseEnter={() => {
+                              if (item.inStock) setTransferHighlightedIndex(idx);
+                            }}
+                            onClick={() => {
+                              if (item.inStock) handleTransferSelectItem(item);
+                            }}
+                          >
+                            <div style={{ display: "flex", flexDirection: "column", gap: "2px", overflow: "hidden", paddingRight: "0.5rem" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
+                                <span style={{ fontSize: "0.95rem" }}>{item.itemType === "phone_model" ? "📱" : "📦"}</span>
+                                <span style={{ fontWeight: 600, fontSize: "0.9rem", color: "var(--text)" }}>
+                                  {highlightMatch(item.name, transferDebouncedQuery)}
+                                </span>
+                                {item.isBarcodeMatch && (
+                                  <span
+                                    style={{
+                                      fontSize: "0.72rem",
+                                      padding: "1px 6px",
+                                      borderRadius: "4px",
+                                      background: "rgba(16, 185, 129, 0.2)",
+                                      color: "#10b981",
+                                      fontWeight: 700
+                                    }}
+                                  >
+                                    ✓ {isUrdu ? "بارکوڈ میچ" : "Barcode match"}
+                                  </span>
+                                )}
+                              </div>
+                              <div style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>
+                                {item.secondaryText}
+                              </div>
+                            </div>
+
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "2px", whiteSpace: "nowrap" }}>
+                              <span
+                                style={{
+                                  fontSize: "0.8rem",
+                                  fontWeight: 600,
+                                  color: item.inStock ? "#10b981" : "#ef4444"
+                                }}
+                              >
+                                {item.stockLabel}
+                              </span>
+                              {item.inStock && (
+                                <span style={{ fontSize: "0.72rem", color: "var(--primary)" }}>
+                                  {item.itemType === "phone_model"
+                                    ? (isUrdu ? "کلک کریں ↵" : "Click to select ↵")
+                                    : (isUrdu ? "+ شامل کریں ↵" : "+ Add ↵")}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
-              <div className="full-span row-actions">
-                <button className="primary-btn" type="submit" disabled={!canCreate} title={!canCreate ? "Permission denied: Cannot dispatch transfer" : ""}>Dispatch Transfer</button>
+              {/* Transfer Line Items Table */}
+              <div className="full-span" style={{ marginTop: "1rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.6rem", flexWrap: "wrap", gap: "0.5rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                    <h4 style={{ margin: 0, fontSize: "1rem" }}>
+                      {isUrdu ? "منتقلی اشیاء کی فہرست" : "Transfer Line Items"}
+                    </h4>
+                    <span
+                      style={{
+                        fontSize: "0.82rem",
+                        padding: "2px 8px",
+                        borderRadius: "12px",
+                        background: "var(--primary)",
+                        color: "#ffffff",
+                        fontWeight: "700"
+                      }}
+                    >
+                      {transferCounts.total}
+                    </span>
+                    <span className="muted small">
+                      ({transferCounts.phones} {isUrdu ? "فون" : "handsets"} • {transferCounts.products} {isUrdu ? "سامان" : "products"})
+                    </span>
+                  </div>
+
+                  {transferForm.items.length > 0 && (
+                    <button
+                      type="button"
+                      className="ghost-btn btn-sm"
+                      onClick={() => {
+                        if (window.confirm(isUrdu ? "کیا آپ تمام اشیاء صاف کرنا چاہتے ہیں؟" : "Clear all items from this transfer?")) {
+                          setTransferForm((prev) => ({ ...prev, items: [] }));
+                          setTransferAwaitingPhoneModel(null);
+                        }
+                      }}
+                      style={{ color: "#ef4444", fontSize: "0.8rem", padding: "2px 8px" }}
+                    >
+                      🗑️ {isUrdu ? "تمام صاف کریں" : "Clear All"}
+                    </button>
+                  )}
+                </div>
+
+                {transferForm.items.length === 0 ? (
+                  <div
+                    style={{
+                      padding: "2.5rem 1.5rem",
+                      textAlign: "center",
+                      background: "var(--surface)",
+                      border: "1.5px dashed var(--border)",
+                      borderRadius: "10px",
+                      color: "var(--text-muted)"
+                    }}
+                  >
+                    <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>📦</div>
+                    <div style={{ fontWeight: 600, fontSize: "0.95rem", color: "var(--text)", marginBottom: "0.25rem" }}>
+                      {isUrdu ? "ٹرانسفر لسٹ خالی ہے" : "No items added to transfer yet"}
+                    </div>
+                    <div className="small">
+                      {isUrdu
+                        ? "اوپر والے یونیورسل فیلڈ میں فون کا IMEI یا QR کوڈ اسکین کریں، یا پروڈکٹ کا نام لکھ کر منتخب کریں۔"
+                        : "Scan a phone IMEI, QR tag, accessory barcode, or search in the universal field above to add to this transfer."}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="table-wrap" style={{ overflowX: "auto", width: "100%", borderRadius: "8px", border: "1px solid var(--border)" }}>
+                    <table style={{ minWidth: "550px", width: "100%", margin: 0 }}>
+                      <thead>
+                        <tr>
+                          <th style={{ width: "45px", textAlign: "center" }}>#</th>
+                          <th style={{ minWidth: "220px" }}>{isUrdu ? "آئٹم کی تفصیل" : "Item Details & Identification"}</th>
+                          <th style={{ width: "110px", textAlign: "center" }}>{isUrdu ? "قسم" : "Type"}</th>
+                          <th style={{ width: "140px", textAlign: "center" }}>{isUrdu ? "تعداد" : "Quantity"}</th>
+                          <th style={{ width: "60px", textAlign: "center" }} />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {transferForm.items.map((item, idx) => {
+                          const isHandset = item.itemType === "handset" || item.imei;
+                          return (
+                            <tr key={idx} style={{ borderBottom: "1px solid var(--border)" }}>
+                              <td style={{ textAlign: "center", fontWeight: "600", color: "var(--text-muted)" }}>
+                                {idx + 1}
+                              </td>
+                              <td>
+                                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                                  <span style={{ fontSize: "1.1rem" }}>{isHandset ? "📱" : "📦"}</span>
+                                  <div>
+                                    <div style={{ fontWeight: 600, fontSize: "0.9rem" }}>
+                                      {item.name || (isHandset ? "Mobile Handset" : "Product")}
+                                    </div>
+                                    {isHandset ? (
+                                      <div style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", marginTop: "2px" }}>
+                                        <span style={{ fontSize: "0.75rem", fontFamily: "var(--font-mono, monospace)", background: "rgba(56, 189, 248, 0.12)", color: "var(--primary)", padding: "1px 6px", borderRadius: "4px", border: "1px solid rgba(56, 189, 248, 0.3)" }}>
+                                          IMEI: {item.imei}
+                                        </span>
+                                      </div>
+                                    ) : (
+                                      <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "2px" }}>
+                                        {[item.sku ? `SKU: ${item.sku}` : null, item.barcode ? `Barcode: ${item.barcode}` : null].filter(Boolean).join(" • ")}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+                              <td style={{ textAlign: "center" }}>
+                                <span
+                                  style={{
+                                    fontSize: "0.75rem",
+                                    padding: "2px 8px",
+                                    borderRadius: "10px",
+                                    fontWeight: 600,
+                                    background: isHandset ? "rgba(168, 85, 247, 0.15)" : "rgba(34, 197, 94, 0.15)",
+                                    color: isHandset ? "#a855f7" : "#22c55e"
+                                  }}
+                                >
+                                  {isHandset ? (isUrdu ? "موبائل فون" : "Handset") : (isUrdu ? "سامان" : "Product")}
+                                </span>
+                              </td>
+                              <td style={{ textAlign: "center" }}>
+                                {isHandset ? (
+                                  <span style={{ fontWeight: 600 }}>1</span>
+                                ) : (
+                                  <div style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
+                                    <button
+                                      type="button"
+                                      className="ghost-btn btn-sm"
+                                      onClick={() => updateTransferItemQty(idx, Number(item.quantity || 1) - 1)}
+                                      style={{ padding: "2px 8px", fontSize: "0.9rem", fontWeight: "bold" }}
+                                      title="Decrease quantity"
+                                    >
+                                      -
+                                    </button>
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      value={item.quantity || 1}
+                                      onChange={(e) => updateTransferItemQty(idx, e.target.value)}
+                                      style={{ width: "50px", textAlign: "center", padding: "0.2rem 0.3rem", fontSize: "0.88rem", fontWeight: 700 }}
+                                    />
+                                    <button
+                                      type="button"
+                                      className="ghost-btn btn-sm"
+                                      onClick={() => updateTransferItemQty(idx, Number(item.quantity || 1) + 1)}
+                                      style={{ padding: "2px 8px", fontSize: "0.9rem", fontWeight: "bold" }}
+                                      title="Increase quantity"
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                )}
+                              </td>
+                              <td style={{ textAlign: "center" }}>
+                                <button
+                                  className="ghost-btn btn-sm"
+                                  type="button"
+                                  onClick={() => removeTransferItem(idx)}
+                                  title="Remove item"
+                                  style={{ color: "#ef4444", fontSize: "1rem" }}
+                                >
+                                  ✕
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Submit Dispatch Action */}
+              <div className="full-span row-actions" style={{ marginTop: "1rem" }}>
+                <button
+                  className="primary-btn"
+                  type="submit"
+                  disabled={!canCreate || transferForm.items.length === 0}
+                  title={!canCreate ? "Permission denied: Cannot dispatch transfer" : ""}
+                  style={{ padding: "0.8rem 1.6rem", fontSize: "0.95rem", fontWeight: "700" }}
+                >
+                  🚀 {isUrdu ? `اسٹاک ٹرانسفر بھیجیں (${transferCounts.total} آئٹمز)` : `Dispatch Stock Transfer (${transferCounts.total} items)`}
+                </button>
               </div>
             </form>
           </SectionCard>
