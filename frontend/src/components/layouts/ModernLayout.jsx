@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { ThemeSwitcher } from "../ThemeSwitcher.jsx";
 import { LanguageSwitcher } from "../LanguageSwitcher.jsx";
 import { useLanguage } from "../../context/LanguageContext.jsx";
@@ -46,10 +46,19 @@ export function ModernLayout({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [openGroups, setOpenGroups] = useState({
     employees: true,
-    reports: true,
+    reports: false,
     admin: true
   });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const isSalesPage = activeTab === "sales";
+
+  // Auto-collapse sidebar to compact form on Sales Counter page (Pack #20)
+  useEffect(() => {
+    if (isSalesPage) {
+      setIsCollapsed(true);
+    }
+  }, [isSalesPage]);
 
   function toggleGroup(groupKey) {
     setOpenGroups((prev) => ({
@@ -196,23 +205,27 @@ export function ModernLayout({
           <div className="modern-sidebar-footer">
             {!isCollapsed ? (
               <div className="modern-footer-expanded">
-                <div className="modern-footer-theme" style={{ marginBottom: "0.5rem" }}>
-                  <LanguageSwitcher />
-                </div>
-                <div className="modern-footer-theme">
-                  <ThemeSwitcher
-                    currentTheme={theme}
-                    onSelectTheme={handleSelectTheme}
-                    isLocked={!hasThemeAccess}
-                  />
-                </div>
+                {!isSalesPage && (
+                  <>
+                    <div className="modern-footer-theme" style={{ marginBottom: "0.5rem" }}>
+                      <LanguageSwitcher />
+                    </div>
+                    <div className="modern-footer-theme">
+                      <ThemeSwitcher
+                        currentTheme={theme}
+                        onSelectTheme={handleSelectTheme}
+                        isLocked={!hasThemeAccess}
+                      />
+                    </div>
 
-                {availedPackages.length > 0 && (
-                  <div className="modern-package-chip" title={availedPackages.map((p) => p.name).join(", ")}>
-                    <span className="pkg-icon">📦</span>
-                    <span className="pkg-name">{availedPackages[0]?.name}</span>
-                    {availedPackages.length > 1 && <span className="pkg-more">+{availedPackages.length - 1}</span>}
-                  </div>
+                    {availedPackages.length > 0 && (
+                      <div className="modern-package-chip" title={availedPackages.map((p) => p.name).join(", ")}>
+                        <span className="pkg-icon">📦</span>
+                        <span className="pkg-name">{availedPackages[0]?.name}</span>
+                        {availedPackages.length > 1 && <span className="pkg-more">+{availedPackages.length - 1}</span>}
+                      </div>
+                    )}
+                  </>
                 )}
 
                 <button
@@ -227,13 +240,17 @@ export function ModernLayout({
               </div>
             ) : (
               <div className="modern-footer-collapsed">
-                <LanguageSwitcher compact />
-                <ThemeSwitcher
-                  currentTheme={theme}
-                  onSelectTheme={handleSelectTheme}
-                  collapsed
-                  isLocked={!hasThemeAccess}
-                />
+                {!isSalesPage && (
+                  <>
+                    <LanguageSwitcher compact />
+                    <ThemeSwitcher
+                      currentTheme={theme}
+                      onSelectTheme={handleSelectTheme}
+                      collapsed
+                      isLocked={!hasThemeAccess}
+                    />
+                  </>
+                )}
                 <button
                   type="button"
                   className="modern-logout-btn-icon"
