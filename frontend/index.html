@@ -3,6 +3,41 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      (function() {
+        try {
+          var mode = localStorage.getItem('dm360-theme-mode');
+          var theme = 'night';
+          if (mode === 'day' || mode === 'night') {
+            theme = mode;
+          } else {
+            try {
+              var tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+              var h = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hourCycle: 'h23' }).format(new Date()), 10);
+              if (!isNaN(h)) {
+                theme = (h >= 6 && h < 19) ? 'day' : 'night';
+              } else {
+                throw new Error('Invalid hour');
+              }
+            } catch (e1) {
+              try {
+                var localHour = new Date().getHours();
+                theme = (localHour >= 6 && localHour < 19) ? 'day' : 'night';
+              } catch (e2) {
+                if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+                  theme = 'day';
+                } else {
+                  theme = 'night';
+                }
+              }
+            }
+          }
+          document.documentElement.setAttribute('data-theme', theme);
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'night');
+        }
+      })();
+    </script>
     <title>DigitalMarkaz360 - Poora Karobar, Ek Markaz</title>
     <link rel="icon" type="image/png" href="/logo.png" />
     <meta name="description" content="DigitalMarkaz360 - Poora Karobar, Ek Markaz. Complete Cloud ERP, Inventory, and POS System." />

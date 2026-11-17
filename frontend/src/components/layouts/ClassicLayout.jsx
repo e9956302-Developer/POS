@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { ThemeSwitcher } from "../ThemeSwitcher.jsx";
 import { LanguageSwitcher } from "../LanguageSwitcher.jsx";
 import { useLanguage } from "../../context/LanguageContext.jsx";
@@ -46,8 +46,17 @@ export function ClassicLayout({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [adminMenuOpen, setAdminMenuOpen] = useState(true);
   const [employeeMenuOpen, setEmployeeMenuOpen] = useState(true);
-  const [reportMenuOpen, setReportMenuOpen] = useState(true);
+  const [reportMenuOpen, setReportMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const isSalesPage = activeTab === "sales";
+
+  // Auto-collapse sidebar to compact form on Sales Counter page (Pack #20)
+  useEffect(() => {
+    if (isSalesPage) {
+      setIsCollapsed(true);
+    }
+  }, [isSalesPage]);
 
   const isAdminActive = activeTab === "admin" || activeTab.startsWith("admin_");
   const isEmployeeActive = activeTab === "employees" || activeTab.startsWith("employees_");
@@ -233,48 +242,52 @@ export function ClassicLayout({
 
           <div className="sidebar-footer">
             <div className="sidebar-footer-expanded">
-              <div className="theme-section">
-                <label className="sidebar-section-label">
-                  🌐 Language / زبان
-                </label>
-                <LanguageSwitcher />
-              </div>
-
-              <div className="theme-section">
-                <label className="sidebar-section-label">
-                  🎨 Theme {!hasThemeAccess && <span className="small muted">(Locked)</span>}
-                </label>
-                <ThemeSwitcher
-                  currentTheme={theme}
-                  onSelectTheme={handleSelectTheme}
-                  isLocked={!hasThemeAccess}
-                />
-              </div>
-
-              {availedPackages.length > 0 && (
-                <div className="sidebar-packages-card">
-                  <div className="sidebar-packages-header">
-                    <span className="sidebar-packages-icon">📦</span>
-                    <span className="sidebar-packages-label">Availing Packages</span>
+              {!isSalesPage && (
+                <>
+                  <div className="theme-section">
+                    <label className="sidebar-section-label">
+                      🌐 Language / زبان
+                    </label>
+                    <LanguageSwitcher />
                   </div>
-                  <div className="sidebar-packages-list">
-                    {availedPackages.map((pkg, idx) => (
-                      <div key={idx} className="sidebar-package-item">
-                        <div className="sidebar-package-main">
-                          <span className="sidebar-package-name" title={pkg.name}>
-                            {pkg.name}
-                          </span>
-                          {pkg.branchCount > 1 && (
-                            <span className="sidebar-package-branches">({pkg.branchCount} br)</span>
-                          )}
-                        </div>
-                        <span className={`status-pill ${pkg.statusClass}`} style={{ fontSize: "0.68rem", padding: "1px 6px" }}>
-                          {pkg.statusLabel}
-                        </span>
+
+                  <div className="theme-section">
+                    <label className="sidebar-section-label">
+                      🎨 Theme {!hasThemeAccess && <span className="small muted">(Locked)</span>}
+                    </label>
+                    <ThemeSwitcher
+                      currentTheme={theme}
+                      onSelectTheme={handleSelectTheme}
+                      isLocked={!hasThemeAccess}
+                    />
+                  </div>
+
+                  {availedPackages.length > 0 && (
+                    <div className="sidebar-packages-card">
+                      <div className="sidebar-packages-header">
+                        <span className="sidebar-packages-icon">📦</span>
+                        <span className="sidebar-packages-label">Availing Packages</span>
                       </div>
-                    ))}
-                  </div>
-                </div>
+                      <div className="sidebar-packages-list">
+                        {availedPackages.map((pkg, idx) => (
+                          <div key={idx} className="sidebar-package-item">
+                            <div className="sidebar-package-main">
+                              <span className="sidebar-package-name" title={pkg.name}>
+                                {pkg.name}
+                              </span>
+                              {pkg.branchCount > 1 && (
+                                <span className="sidebar-package-branches">({pkg.branchCount} br)</span>
+                              )}
+                            </div>
+                            <span className={`status-pill ${pkg.statusClass}`} style={{ fontSize: "0.68rem", padding: "1px 6px" }}>
+                              {pkg.statusLabel}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
 
               <button className="secondary-btn logout-btn" onClick={() => setShowLogoutConfirm(true)} title="Logout">
@@ -283,20 +296,24 @@ export function ClassicLayout({
             </div>
 
             <div className="sidebar-footer-collapsed">
-              <LanguageSwitcher compact />
-              <ThemeSwitcher
-                currentTheme={theme}
-                onSelectTheme={handleSelectTheme}
-                collapsed
-                isLocked={!hasThemeAccess}
-              />
-              {availedPackages.length > 0 && (
-                <div
-                  className="sidebar-package-collapsed-badge"
-                  title={`Availing Packages: ${availedPackages.map((p) => p.name).join(", ")}`}
-                >
-                  📦
-                </div>
+              {!isSalesPage && (
+                <>
+                  <LanguageSwitcher compact />
+                  <ThemeSwitcher
+                    currentTheme={theme}
+                    onSelectTheme={handleSelectTheme}
+                    collapsed
+                    isLocked={!hasThemeAccess}
+                  />
+                  {availedPackages.length > 0 && (
+                    <div
+                      className="sidebar-package-collapsed-badge"
+                      title={`Availing Packages: ${availedPackages.map((p) => p.name).join(", ")}`}
+                    >
+                      📦
+                    </div>
+                  )}
+                </>
               )}
               <button
                 className="secondary-btn logout-btn-icon"

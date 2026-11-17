@@ -451,25 +451,32 @@ export function InventoryPage({ context }) {
 
   // Universal Live Search Results for Transfer: ranked per ADDENDUM specification
   const transferSearchResults = useMemo(() => {
-    const q = (transferDebouncedQuery || "").trim().toLowerCase();
-    if (!q || q.length < 2) return [];
+    const rawQ = (transferDebouncedQuery || "").trim().toLowerCase();
+    if (!rawQ || rawQ.length < 2) return [];
 
+    const q = rawQ.replace(/\s+/g, " ");
     const results = [];
 
     // 1. Accessories & Products (availableProducts)
     (availableProducts || []).forEach((p) => {
       const name = (p.name || "").trim();
-      const nameLower = name.toLowerCase();
+      const nameLower = name.toLowerCase().replace(/\s+/g, " ");
       const barcode = (p.barcode ? String(p.barcode) : "").trim();
       const barcodeLower = barcode.toLowerCase();
       const sku = (p.sku ? String(p.sku) : "").trim();
       const skuLower = sku.toLowerCase();
       const stock = Number(p.stock_quantity ?? 0);
       const inStock = stock > 0;
+      const price = Number(p.sale_price ?? p.salePrice ?? 0);
 
       let rank = 0;
       let isBarcodeMatch = false;
 
+      // Ranking:
+      // Exact barcode / SKU match -> 100
+      // Name starts with typed text -> 50
+      // Name contains typed text -> 25
+      // Barcode / SKU contains typed text -> 20
       if ((barcodeLower && barcodeLower === q) || (skuLower && skuLower === q)) {
         rank = 100;
         isBarcodeMatch = true;
@@ -487,6 +494,7 @@ export function InventoryPage({ context }) {
           itemType: "product",
           name,
           secondaryText: [sku ? `SKU: ${sku}` : null, barcode ? `Barcode: ${barcode}` : null].filter(Boolean).join(" • "),
+          salePrice: price > 0 ? `Rs. ${price.toLocaleString()}` : "",
           stock,
           inStock,
           stockLabel: inStock ? (isUrdu ? `اسٹاک: ${stock}` : `In stock: ${stock}`) : (isUrdu ? "اسٹاک ختم" : "Out of stock"),
@@ -505,7 +513,8 @@ export function InventoryPage({ context }) {
           id: m.id,
           company: m.company || "",
           model_name: m.model_name || "",
-          variant: m.variant || ""
+          variant: m.variant || "",
+          sale_price: m.sale_price || m.unit_price || 0
         });
       }
     });
@@ -516,7 +525,8 @@ export function InventoryPage({ context }) {
           id: u.model_id || key,
           company: u.company || "",
           model_name: u.model_name || "",
-          variant: u.variant || ""
+          variant: u.variant || "",
+          sale_price: u.sale_price || 0
         });
       }
     });
@@ -530,7 +540,8 @@ export function InventoryPage({ context }) {
       const stock = matchingUnits.length;
       const inStock = stock > 0;
       const fullName = `${m.company || ""} ${m.model_name || ""}${m.variant ? ` (${m.variant})` : ""}`.trim() || m.model_name || "Phone Model";
-      const nameLower = fullName.toLowerCase();
+      const nameLower = fullName.toLowerCase().replace(/\s+/g, " ");
+      const price = Number(m.sale_price || 0);
 
       let rank = 0;
       if (nameLower.startsWith(q)) {
@@ -545,6 +556,7 @@ export function InventoryPage({ context }) {
           itemType: "phone_model",
           name: fullName,
           secondaryText: isUrdu ? "موبائل ہینڈ سیٹ ماڈل" : "Mobile Handset Model",
+          salePrice: price > 0 ? `Rs. ${price.toLocaleString()}` : "",
           stock,
           inStock,
           stockLabel: inStock ? (isUrdu ? `اسٹاک: ${stock} فون` : `In stock: ${stock} units`) : (isUrdu ? "اسٹاک ختم" : "Out of stock"),
@@ -556,9 +568,10 @@ export function InventoryPage({ context }) {
     });
 
     // Sort order:
-    // 1. Exact barcode/SKU match pinned at TOP
-    // 2. In-stock before out-of-stock within same rank
-    // 3. Name comparison
+    // 1. Exact barcode/SKU match pinned at TOP (rank 100)
+    // 2. Starts-with (rank 50) before contains (rank 25)
+    // 3. In-stock before out-of-stock within same rank
+    // 4. Name alphabetical
     results.sort((a, b) => {
       if (b.rank !== a.rank) return b.rank - a.rank;
       if (a.inStock !== b.inStock) return a.inStock ? -1 : 1;
@@ -638,17 +651,21 @@ export function InventoryPage({ context }) {
     }
 
     const trimmed = val.trim();
-    if (trimmed.length >= 2) {
-      setIsTransferSearching(true);
-      transferDebounceTimerRef.current = setTimeout(() => {
-        setTransferDebouncedQuery(trimmed);
-        setIsTransferDropdownOpen(true);
-        setIsTransferSearching(false);
-      }, 200);
-    } else {
+    if (trimmed.length === 0) {
       setIsTransferSearching(false);
       setTransferDebouncedQuery("");
       setIsTransferDropdownOpen(false);
+    } else if (trimmed.length === 1) {
+      setIsTransferSearching(false);
+      setTransferDebouncedQuery(trimmed);
+      setIsTransferDropdownOpen(true);
+    } else {
+      setIsTransferSearching(true);
+      setIsTransferDropdownOpen(true);
+      transferDebounceTimerRef.current = setTimeout(() => {
+        setTransferDebouncedQuery(trimmed);
+        setIsTransferSearching(false);
+      }, 200);
     }
   }
 
@@ -721,27 +738,27 @@ export function InventoryPage({ context }) {
     setIsTransferSearching(false);
     setError("");
 
-    // Case 1: Awaiting phone model's IMEI scan
+    // Special state: If already awaiting an IMEI for a selected phone model
     if (transferAwaitingPhoneModel) {
       let imeiCandidate = null;
       const qrMatch = raw.match(/IMEI[:=\s]+([0-9]{14,16})/i);
       if (qrMatch) {
         imeiCandidate = qrMatch[1];
-      } else if (/^\d{14,16}$/.test(raw.replace(/\s+/g, ""))) {
-        imeiCandidate = raw.replace(/\s+/g, "");
+      } else if (/^\d{14,16}$/.test(raw)) {
+        imeiCandidate = raw;
       }
 
       if (!imeiCandidate) {
         setError(
           isUrdu
-            ? `براہ کرم ماڈل "${transferAwaitingPhoneModel.name}" کے لیے 15 ہندسوں کا IMEI یا QR کوڈ اسکین کریں۔`
-            : `Please scan or enter a 15-digit IMEI or QR tag for "${transferAwaitingPhoneModel.name}".`
+            ? `براہ کرم ماڈل "${transferAwaitingPhoneModel.name}" کے لیے 14-16 ہندسوں کا IMEI یا QR کوڈ اسکین کریں۔`
+            : `Please scan or enter a 14-16 digit IMEI or QR tag for "${transferAwaitingPhoneModel.name}".`
         );
         setTimeout(() => transferScannerInputRef.current?.focus(), 50);
         return;
       }
 
-      // Check local transferBranchUnits
+      // Check local source branch units
       const unit = (transferBranchUnits || []).find((u) => u.imei === imeiCandidate);
       if (unit) {
         addTransferHandset(unit);
@@ -786,19 +803,54 @@ export function InventoryPage({ context }) {
       }
     }
 
-    // Case 2: General Detection Pipeline
-    // 1. QR Code Tag
-    let imeiCandidate = null;
-    const qrMatch = raw.match(/IMEI[:=\s]+([0-9]{14,16})/i);
-    if (qrMatch) {
-      imeiCandidate = qrMatch[1];
-    } else if (/^\d{14,16}$/.test(raw.replace(/\s+/g, ""))) {
-      // 2. Pure 14-16 digit number -> Phone IMEI
-      imeiCandidate = raw.replace(/\s+/g, "");
+    // AUTO-DETECTION PIPELINE:
+    // 1. QR TAG: input contains "IMEI:" -> extract the IMEI -> phone lookup
+    if (/IMEI[:=\s]+/i.test(raw)) {
+      const qrMatch = raw.match(/IMEI[:=\s]+([0-9]{14,16})/i);
+      if (qrMatch && qrMatch[1]) {
+        const imei = qrMatch[1];
+        const localMatch = (transferBranchUnits || []).find((u) => u.imei === imei);
+        if (localMatch) {
+          addTransferHandset(localMatch);
+          setTransferScanInput("");
+          setTransferDebouncedQuery("");
+          setIsTransferDropdownOpen(false);
+          setTransferHighlightedIndex(-1);
+          setTimeout(() => transferScannerInputRef.current?.focus(), 50);
+          return;
+        }
+
+        try {
+          const unit = await api.imeiLookup(imei);
+          if (unit && unit.id) {
+            if (unit.current_status !== "in_stock") {
+              setError(isUrdu ? `یہ فون دستیاب نہیں ہے (${unit.current_status})۔` : `IMEI ${imei} is marked as '${unit.current_status}' and cannot be transferred.`);
+              setTimeout(() => transferScannerInputRef.current?.focus(), 50);
+              return;
+            }
+            if (String(unit.branch_id) !== String(transferForm.fromBranchId)) {
+              setError(isUrdu ? `یہ فون سورس برانچ کا نہیں ہے۔` : `IMEI ${imei} belongs to branch #${unit.branch_id}, not the selected source branch.`);
+              setTimeout(() => transferScannerInputRef.current?.focus(), 50);
+              return;
+            }
+            addTransferHandset(unit);
+            setTransferScanInput("");
+            setTransferDebouncedQuery("");
+            setIsTransferDropdownOpen(false);
+            setTransferHighlightedIndex(-1);
+            setTimeout(() => transferScannerInputRef.current?.focus(), 50);
+            return;
+          }
+        } catch (err) {
+          // not found in lookup, falls through to Step 4
+        }
+      }
     }
 
-    if (imeiCandidate) {
-      const localMatch = (transferBranchUnits || []).find((u) => u.imei === imeiCandidate);
+    // 2. IMEI: the ENTIRE input is digits only AND length is inside IMEI range (14 to 16 digits)
+    if (/^\d{14,16}$/.test(raw)) {
+      const imei = raw;
+      const localMatch = (transferBranchUnits || []).find((u) => u.imei === imei);
       if (localMatch) {
         addTransferHandset(localMatch);
         setTransferScanInput("");
@@ -810,15 +862,15 @@ export function InventoryPage({ context }) {
       }
 
       try {
-        const unit = await api.imeiLookup(imeiCandidate);
+        const unit = await api.imeiLookup(imei);
         if (unit && unit.id) {
           if (unit.current_status !== "in_stock") {
-            setError(isUrdu ? `یہ فون دستیاب نہیں ہے (${unit.current_status})۔` : `IMEI ${imeiCandidate} is marked as '${unit.current_status}' and cannot be transferred.`);
+            setError(isUrdu ? `یہ فون دستیاب نہیں ہے (${unit.current_status})۔` : `IMEI ${imei} is marked as '${unit.current_status}' and cannot be transferred.`);
             setTimeout(() => transferScannerInputRef.current?.focus(), 50);
             return;
           }
           if (String(unit.branch_id) !== String(transferForm.fromBranchId)) {
-            setError(isUrdu ? `یہ فون سورس برانچ کا نہیں ہے۔` : `IMEI ${imeiCandidate} belongs to branch #${unit.branch_id}, not the selected source branch.`);
+            setError(isUrdu ? `یہ فون سورس برانچ کا نہیں ہے۔` : `IMEI ${imei} belongs to branch #${unit.branch_id}, not the selected source branch.`);
             setTimeout(() => transferScannerInputRef.current?.focus(), 50);
             return;
           }
@@ -831,18 +883,16 @@ export function InventoryPage({ context }) {
           return;
         }
       } catch (err) {
-        // Not a phone unit, continue to check barcode/SKU
+        // Not a phone unit or not found, continue to check barcode/SKU
       }
     }
 
-    // 3. Exact Accessory / Product Barcode or SKU match
-    const cleanQuery = raw.toLowerCase();
-    const cleanNoSpaces = raw.replace(/[\s-]/g, "").toLowerCase();
-
+    // 3. BARCODE / SKU: the ENTIRE input exactly matches a product's barcode or SKU (case-insensitive)
+    const cleanRaw = raw.toLowerCase();
     const matchedProduct = (availableProducts || []).find((p) => {
       const b = p.barcode ? String(p.barcode).trim().toLowerCase() : "";
       const s = p.sku ? String(p.sku).trim().toLowerCase() : "";
-      return b === cleanQuery || s === cleanQuery || (b && b.replace(/[\s-]/g, "") === cleanNoSpaces);
+      return (b && b === cleanRaw) || (s && s === cleanRaw);
     });
 
     if (matchedProduct) {
@@ -855,7 +905,11 @@ export function InventoryPage({ context }) {
       return;
     }
 
-    // 4. On NO exact match: pipeline fallback is the attached dropdown
+    // 4. NAME SEARCH: everything else -> treat the input as a product NAME search
+    // Catches: inputs with letters or spaces ("iPhone 13", "charger cable"),
+    // digit inputs outside IMEI range, and codes that matched nothing in steps 1-3.
+    // Rule: "Enter with no selection and no exact code match adds NOTHING (never guess)."
+    // Dropdown shows whatever it matches as search text.
     setTransferDebouncedQuery(raw);
     setIsTransferDropdownOpen(true);
     setTransferHighlightedIndex(-1);
@@ -2065,7 +2119,11 @@ export function InventoryPage({ context }) {
                         overflowY: "auto"
                       }}
                     >
-                      {transferSearchFailed ? (
+                      {transferDebouncedQuery.length === 1 ? (
+                        <div style={{ padding: "0.85rem 1rem", textAlign: "center", color: "var(--text-muted)", fontSize: "0.88rem" }}>
+                          ℹ️ {isUrdu ? "تلاش کے لیے کم از کم 2 حروف درج کریں" : "Type at least 2 characters to search"}
+                        </div>
+                      ) : transferSearchFailed ? (
                         <div style={{ padding: "0.85rem 1rem", textAlign: "center", color: "#ef4444", fontSize: "0.88rem" }}>
                           ⚠️ {isUrdu ? "تلاش میں خرابی، دوبارہ کوشش کریں" : "Search failed, try again"}
                         </div>
@@ -2083,11 +2141,11 @@ export function InventoryPage({ context }) {
                           }}
                         >
                           <span className="spinner-border spinner-border-sm" role="status" style={{ width: "1rem", height: "1rem", borderWidth: "2px" }} />
-                          <span>{isUrdu ? "تلاش جاری ہے..." : "Searching inventory..."}</span>
+                          <span>{isUrdu ? "تلاش جاری ہے..." : "Searching products..."}</span>
                         </div>
                       ) : transferSearchResults.length === 0 ? (
                         <div style={{ padding: "0.85rem 1rem", textAlign: "center", color: "var(--text-muted)", fontSize: "0.88rem" }}>
-                          {isUrdu ? `کوئی پروڈکٹ یا ماڈل "${transferDebouncedQuery}" سے مطابقت نہیں رکھتا` : `No products or models match "${transferDebouncedQuery}"`}
+                          {isUrdu ? `کوئی پروڈکٹ '${transferDebouncedQuery}' سے مطابقت نہیں رکھتا` : `No products match '${transferDebouncedQuery}'`}
                         </div>
                       ) : (
                         transferSearchResults.map((item, idx) => (
@@ -2115,7 +2173,7 @@ export function InventoryPage({ context }) {
                             <div style={{ display: "flex", flexDirection: "column", gap: "2px", overflow: "hidden", paddingRight: "0.5rem" }}>
                               <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
                                 <span style={{ fontSize: "0.95rem" }}>{item.itemType === "phone_model" ? "📱" : "📦"}</span>
-                                <span style={{ fontWeight: 600, fontSize: "0.9rem", color: "var(--text)" }}>
+                                <span style={{ fontWeight: 600, fontSize: "0.9rem", color: item.inStock ? "var(--text)" : "var(--text-muted)" }}>
                                   {highlightMatch(item.name, transferDebouncedQuery)}
                                 </span>
                                 {item.isBarcodeMatch && (
@@ -2139,9 +2197,14 @@ export function InventoryPage({ context }) {
                             </div>
 
                             <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "2px", whiteSpace: "nowrap" }}>
+                              {item.salePrice && (
+                                <span style={{ fontSize: "0.88rem", fontWeight: 700, color: "var(--primary)" }}>
+                                  {item.salePrice}
+                                </span>
+                              )}
                               <span
                                 style={{
-                                  fontSize: "0.8rem",
+                                  fontSize: "0.78rem",
                                   fontWeight: 600,
                                   color: item.inStock ? "#10b981" : "#ef4444"
                                 }}
