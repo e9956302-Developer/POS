@@ -5,6 +5,7 @@ import { SectionCard } from "../components/SectionCard.jsx";
 import { exportToCSV } from "../utils/export.js";
 import { openWhatsAppReminder } from "../utils/whatsapp.js";
 import { useLanguage } from "../context/LanguageContext.jsx";
+import { TableActionButton } from "../components/TableActionColumn.jsx";
 
 export function PartiesPage({ context }) {
   const { t, isRtl, language } = useLanguage();
@@ -538,7 +539,7 @@ export function PartiesPage({ context }) {
             </div>
           ) : (
             <div className="table-responsive" style={{ overflowX: "auto", width: "100%" }}>
-              <table className="data-table" style={{ width: "100%", minWidth: "960px", borderCollapse: "collapse" }}>
+              <table className="data-table" style={{ width: "100%", minWidth: "870px", borderCollapse: "collapse" }}>
                 <thead>
                   <tr>
                     <th style={{ minWidth: "160px", whiteSpace: "nowrap" }}>{t("parties.party_name_label", "Party Name")}</th>
@@ -548,7 +549,7 @@ export function PartiesPage({ context }) {
                     <th style={{ minWidth: "110px", whiteSpace: "nowrap" }}>{t("common.branch", "Branch")}</th>
                     <th style={{ minWidth: "140px", whiteSpace: "nowrap" }}>{t("parties.opening_balance", "Opening Balance")}</th>
                     <th style={{ minWidth: "160px" }}>{t("parties.address", "Address")}</th>
-                    <th style={{ minWidth: "180px", textAlign: isRtl ? "left" : "right", whiteSpace: "nowrap" }}>{t("common.actions", "Actions")}</th>
+                    <th style={{ width: "90px", minWidth: "90px", maxWidth: "96px", textAlign: isRtl ? "left" : "right", whiteSpace: "nowrap" }}>{t("common.actions", "Actions")}</th>
                   </tr>
                 </thead>
               <tbody>
@@ -648,13 +649,17 @@ export function PartiesPage({ context }) {
                           {party.address || "—"}
                         </span>
                       </td>
-                      <td style={{ textAlign: "right" }}>
-                        <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.35rem" }}>
+                      <td style={{ textAlign: isRtl ? "left" : "right", verticalAlign: "middle", width: "90px", minWidth: "90px", maxWidth: "96px" }}>
+                        <div
+                          className="table-actions-vertical"
+                          style={isRtl ? { marginLeft: 0, marginRight: "auto" } : {}}
+                        >
                           {/* Edit Button - guarded by canEdit */}
                           {canEdit ? (
-                            <button
-                              type="button"
-                              className="ghost-btn btn-sm"
+                            <TableActionButton
+                              variant="edit"
+                              icon="✏️"
+                              label="Edit"
                               onClick={() => {
                                 setEditingParty(party);
                                 setEditForm({
@@ -671,54 +676,46 @@ export function PartiesPage({ context }) {
                                 });
                               }}
                               title="Edit party details & opening balance"
-                            >
-                              ✏️ Edit
-                            </button>
+                            />
                           ) : (
-                            <button
-                              type="button"
+                            <TableActionButton
+                              variant="edit"
+                              icon="🔒"
+                              label="Edit"
                               disabled
-                              className="ghost-btn btn-sm"
-                              style={{ opacity: 0.45, cursor: "not-allowed" }}
                               title="Edit permission required for your role"
-                            >
-                              🔒 Edit
-                            </button>
+                            />
                           )}
 
-                          <button
-                            type="button"
-                            className="secondary-btn btn-sm"
+                          {/* Details Button */}
+                          <TableActionButton
+                            variant="details"
+                            icon="👁️"
+                            label="Details"
                             onClick={() => setSelectedParty(party)}
                             title="View full party profile & contact details"
-                          >
-                            👁️ Details
-                          </button>
+                          />
 
                           {/* Delete Button - guarded by canDelete */}
                           {canDelete ? (
-                            <button
-                              type="button"
-                              className="ghost-btn btn-sm"
-                              style={{ color: "var(--danger, #ef4444)" }}
+                            <TableActionButton
+                              variant="delete"
+                              icon="🗑️"
+                              label="Delete"
                               onClick={() => {
                                 setDeleteError("");
                                 setDeleteTarget(party);
                               }}
                               title="Delete party profile"
-                            >
-                              🗑️ Delete
-                            </button>
+                            />
                           ) : (
-                            <button
-                              type="button"
+                            <TableActionButton
+                              variant="delete"
+                              icon="🔒"
+                              label="Delete"
                               disabled
-                              className="ghost-btn btn-sm"
-                              style={{ opacity: 0.45, cursor: "not-allowed" }}
                               title="Delete permission required for your role"
-                            >
-                              🔒 Delete
-                            </button>
+                            />
                           )}
                         </div>
                       </td>

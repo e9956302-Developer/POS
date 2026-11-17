@@ -53,7 +53,8 @@ export function TableActionButton({
   onClick,
   title,
   disabled = false,
-  className = ""
+  className = "",
+  style = {}
 }) {
   return (
     <button
@@ -63,6 +64,7 @@ export function TableActionButton({
       title={title || label}
       disabled={disabled}
       aria-label={label}
+      style={style}
     >
       {icon && <span className="action-btn-icon" aria-hidden="true">{icon}</span>}
       <span className="action-btn-label">{label}</span>

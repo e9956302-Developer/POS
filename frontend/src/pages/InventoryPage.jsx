@@ -8,6 +8,7 @@ import { smoothScrollTo } from "../utils/scroll.js";
 import { AdaptiveTable } from "../components/AdaptiveTable.jsx";
 import { SearchableSelect } from "../components/SearchableSelect.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
+import { TableActionButton } from "../components/TableActionColumn.jsx";
 
 export function InventoryPage({ context }) {
   const { t, isRtl, language } = useLanguage();
@@ -1098,12 +1099,17 @@ export function InventoryPage({ context }) {
                     data={paginated}
                     keyField="id"
                     emptyMessage="No products found."
+                    actionsWidth="90px"
                     actions={(p) => (
-                      <div style={{ display: "flex", gap: "0.4rem", justifyContent: "flex-end" }}>
+                      <div
+                        className="table-actions-vertical"
+                        style={isRtl ? { marginLeft: 0, marginRight: "auto" } : {}}
+                      >
                         {canEdit ? (
-                          <button
-                            type="button"
-                            className="ghost-btn btn-sm"
+                          <TableActionButton
+                            variant="edit"
+                            icon="✏️"
+                            label="Edit"
                             onClick={() => {
                               setEditingProduct(p);
                               setEditProductForm({
@@ -1117,40 +1123,32 @@ export function InventoryPage({ context }) {
                               });
                             }}
                             title="Edit product details & opening stock"
-                          >
-                            ✏️ Edit
-                          </button>
+                          />
                         ) : (
-                          <button
-                            type="button"
+                          <TableActionButton
+                            variant="edit"
+                            icon="🔒"
+                            label="Edit"
                             disabled
-                            className="ghost-btn btn-sm"
-                            style={{ opacity: 0.45, cursor: "not-allowed" }}
                             title="Edit permission required for your role"
-                          >
-                            🔒 Edit
-                          </button>
+                          />
                         )}
                         {canDelete ? (
-                          <button
-                            type="button"
-                            className="secondary-btn btn-sm"
-                            style={{ color: "var(--danger, #ef4444)", borderColor: "rgba(239, 68, 68, 0.3)" }}
+                          <TableActionButton
+                            variant="delete"
+                            icon="🗑️"
+                            label="Delete"
                             onClick={() => handleDeleteProduct(p)}
                             title={`Delete ${p.name}`}
-                          >
-                            🗑️ Delete
-                          </button>
+                          />
                         ) : (
-                          <button
-                            type="button"
+                          <TableActionButton
+                            variant="delete"
+                            icon="🔒"
+                            label="Delete"
                             disabled
-                            className="secondary-btn btn-sm"
-                            style={{ opacity: 0.45, cursor: "not-allowed" }}
                             title="Delete permission required for your role"
-                          >
-                            🔒 Delete
-                          </button>
+                          />
                         )}
                       </div>
                     )}

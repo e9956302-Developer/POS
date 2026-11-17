@@ -7,6 +7,55 @@ export function LandingPage({ onGoToLogin, onQuickDemoLogin }) {
   const [billingCycle, setBillingCycle] = useState("monthly"); // 'monthly' | 'annual'
   const [openFaq, setOpenFaq] = useState(null);
   const [showDemoModal, setShowDemoModal] = useState(false);
+  const [activeVideoId, setActiveVideoId] = useState("product-overview");
+
+  // 3 Distinct Product Videos Showcase
+  const showcaseVideos = [
+    {
+      id: "product-overview",
+      optionNumber: 1,
+      title: "Full HD 1080p Product Overview",
+      subtitle: "Official Launch & Feature Walkthrough",
+      badge: "Option 1 • 1080p 60FPS",
+      aspectRatio: "16:9",
+      duration: "0:18",
+      src: "/videos/digitalmarkaz360_product_intro.webm",
+      icon: "💎",
+      tagColor: "#38bdf8",
+      description: "High-framerate animated product trailer with electronic synth audio, live dashboard metrics, POS checkout, IMEI laser barcode scan, and security vault.",
+      highlights: ["Live Sales Analytics", "IMEI Laser Scanner", "Instant Receipt Generation", "Executive Obsidian Theme"]
+    },
+    {
+      id: "mobile-reel",
+      optionNumber: 2,
+      title: "Mobile POS & Retail Handset Scanner",
+      subtitle: "Vertical Reel • Smartphone Experience",
+      badge: "Option 2 • Mobile 9:16 Reel",
+      aspectRatio: "9:16",
+      duration: "0:12",
+      src: "/videos/digitalmarkaz360_mobile_reel.webm",
+      icon: "📱",
+      tagColor: "#10b981",
+      description: "High-speed retail workflow optimized for smartphones and handheld tablets. Real-time customer khata ledger updates, instant IMEI verification, and WhatsApp receipts.",
+      highlights: ["Pocket POS Interface", "Camera Barcode Intake", "WhatsApp Claim Slips", "Handset PTA Check"]
+    },
+    {
+      id: "enterprise-security",
+      optionNumber: 3,
+      title: "Top Admin Security Vault & Multi-Branch",
+      subtitle: "Zero-Trust Architecture & Accounting",
+      badge: "Option 3 • Enterprise Deep Dive",
+      aspectRatio: "16:9",
+      duration: "0:14",
+      src: "/videos/digitalmarkaz360_enterprise_security.webm",
+      icon: "🛡️",
+      tagColor: "#f59e0b",
+      description: "Military-grade authentication vault deep dive: 2FA TOTP hardware sync, session theft mitigation, break-glass admin, and 100% partner dividend split math.",
+      highlights: ["Hardware-Grade 2FA (TOTP)", "Emergency Lock Token", "Inter-Branch Stock Transfer", "100% Partner Dividend Math"]
+    }
+  ];
+
+  const activeVideo = showcaseVideos.find((v) => v.id === activeVideoId) || showcaseVideos[0];
 
   // Interactive Live POS Terminal Simulator State
   const [cartItems, setCartItems] = useState([
@@ -241,6 +290,7 @@ export function LandingPage({ onGoToLogin, onQuickDemoLogin }) {
           </div>
 
           <nav className="landing-nav-links">
+            <a href="#video-tour" style={{ color: "#38bdf8", fontWeight: 700 }}>🎬 Videos</a>
             <a href="#features">Features</a>
             <a href="#pos-demo">Live POS Demo</a>
             <a href="#imei-workshop">IMEI & Repairs</a>
@@ -283,6 +333,7 @@ export function LandingPage({ onGoToLogin, onQuickDemoLogin }) {
         {/* Mobile dropdown menu */}
         {mobileMenuOpen && (
           <div className="landing-mobile-dropdown">
+            <a href="#video-tour" onClick={() => setMobileMenuOpen(false)} style={{ color: "#38bdf8", fontWeight: 700 }}>🎬 Videos</a>
             <a href="#features" onClick={() => setMobileMenuOpen(false)}>Features</a>
             <a href="#pos-demo" onClick={() => setMobileMenuOpen(false)}>Live POS Demo</a>
             <a href="#imei-workshop" onClick={() => setMobileMenuOpen(false)}>IMEI & Repairs</a>
@@ -338,6 +389,10 @@ export function LandingPage({ onGoToLogin, onQuickDemoLogin }) {
             <a href="#pos-demo" className="hero-btn-cta secondary">
               <span>🎮</span>
               <span>Try Live POS Terminal Below</span>
+            </a>
+            <a href="#video-tour" className="hero-btn-cta outline" style={{ borderColor: "rgba(56, 189, 248, 0.4)", color: "#38bdf8" }}>
+              <span>🎬</span>
+              <span>Watch Video Tour</span>
             </a>
             <button
               type="button"
@@ -419,6 +474,152 @@ export function LandingPage({ onGoToLogin, onQuickDemoLogin }) {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* =========================================================================
+          2.5 VIDEO SHOWCASE THEATER (3 SEPARATE PRODUCT INTRO VIDEOS)
+          ========================================================================= */}
+      <section className="landing-section video-showcase-section" id="video-tour">
+        <div className="section-container">
+          <div className="section-header text-center">
+            <div className="section-eyebrow">🎬 Product Video Showcase</div>
+            <h2 className="section-title">See DigitalMarkaz360 in Action</h2>
+            <p className="section-subtitle">
+              Watch our 3 official product walkthroughs. Explore high-speed point-of-sale checkout,
+              serialized IMEI tracking, vertical smartphone mobile POS, and bank-grade security architecture.
+            </p>
+          </div>
+
+          {/* Video Selection Tabs */}
+          <div className="video-tabs-wrapper">
+            {showcaseVideos.map((vid) => {
+              const isActive = vid.id === activeVideo.id;
+              return (
+                <button
+                  key={vid.id}
+                  type="button"
+                  className={`video-tab-btn ${isActive ? "active" : ""}`}
+                  onClick={() => setActiveVideoId(vid.id)}
+                >
+                  <span style={{ fontSize: "1.1rem" }}>{vid.icon}</span>
+                  <span>{vid.title}</span>
+                  <span className="video-tab-badge">{vid.duration}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Theater Screen Frame */}
+          <div className="video-theater-wrapper">
+            <div className={`video-player-container ${activeVideo.aspectRatio === "9:16" ? "portrait" : "landscape"}`}>
+              <video
+                key={activeVideo.id}
+                src={activeVideo.src}
+                controls
+                playsInline
+                autoPlay
+                loop
+                title={activeVideo.title}
+              >
+                Your browser does not support HTML5 video preview.
+              </video>
+            </div>
+
+            {/* Video Meta Info Bar */}
+            <div className="video-meta-bar">
+              <div className="video-meta-details">
+                <div className="video-meta-title-row">
+                  <h3 className="video-meta-title">{activeVideo.icon} {activeVideo.title}</h3>
+                  <span className="video-tab-badge" style={{ background: "rgba(56, 189, 248, 0.15)", color: activeVideo.tagColor, border: `1px solid ${activeVideo.tagColor}` }}>
+                    {activeVideo.badge}
+                  </span>
+                </div>
+                <p className="video-meta-desc">{activeVideo.description}</p>
+                <div className="video-meta-pills">
+                  {activeVideo.highlights.map((h, idx) => (
+                    <span key={idx} className="video-feature-pill">✓ {h}</span>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <a
+                  href={activeVideo.src}
+                  download
+                  className="video-download-btn"
+                  title="Download Video File"
+                >
+                  <span>⬇</span>
+                  <span>Download Video ({activeVideo.aspectRatio})</span>
+                </a>
+              </div>
+            </div>
+          </div>
+
+          {/* 3-Video Gallery Grid */}
+          <div className="video-card-grid">
+            {showcaseVideos.map((vid) => {
+              const isSelected = vid.id === activeVideo.id;
+              return (
+                <div
+                  key={vid.id}
+                  className={`video-grid-card ${isSelected ? "active-card" : ""}`}
+                  onClick={() => {
+                    setActiveVideoId(vid.id);
+                    const el = document.getElementById("video-tour");
+                    if (el) el.scrollIntoView({ behavior: "smooth" });
+                  }}
+                >
+                  <div className={`video-card-preview-thumb ${vid.aspectRatio === "9:16" ? "portrait-thumb" : ""}`}>
+                    <div className="video-card-play-icon">▶</div>
+                    <span
+                      style={{
+                        position: "absolute",
+                        top: "10px",
+                        right: "10px",
+                        fontSize: "0.7rem",
+                        padding: "2px 8px",
+                        borderRadius: "9999px",
+                        background: "rgba(0,0,0,0.75)",
+                        color: "#f8fafc",
+                        fontWeight: 700,
+                        border: "1px solid rgba(255,255,255,0.15)"
+                      }}
+                    >
+                      {vid.duration}
+                    </span>
+                    <span
+                      style={{
+                        position: "absolute",
+                        bottom: "10px",
+                        left: "10px",
+                        fontSize: "0.68rem",
+                        padding: "2px 8px",
+                        borderRadius: "6px",
+                        background: vid.tagColor,
+                        color: "#020617",
+                        fontWeight: 800
+                      }}
+                    >
+                      {vid.badge.split("•")[0].trim()}
+                    </span>
+                  </div>
+
+                  <div>
+                    <h4 className="video-card-title">{vid.icon} {vid.title}</h4>
+                    <p className="video-card-desc">{vid.subtitle}</p>
+                  </div>
+
+                  <div className="video-card-footer">
+                    <span style={{ color: "#38bdf8", fontWeight: 700 }}>
+                      {isSelected ? "● Currently Playing" : "▶ Click to Watch"}
+                    </span>
+                    <span style={{ color: "#64748b" }}>{vid.aspectRatio} Aspect</span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>
