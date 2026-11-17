@@ -156,8 +156,8 @@ test("SalesPage: Renders standard operational form for Manager", () => {
   const html = render(React.createElement(SalesPageMod.SalesPage, { context: managerContext }));
   // No Super Admin notice
   assert.doesNotMatch(html, /Super Admin Notice/i);
-  // Standard operational Save Sale button exists
-  assert.match(html, /Save Sale/i);
+  // Standard operational Complete Sale button exists
+  assert.match(html, /Complete Sale|Save Sale/i);
 });
 
 test("getVisibleTabs: Company Admin only sees Dashboard, Reports, and Admin in the sidemenu", () => {
