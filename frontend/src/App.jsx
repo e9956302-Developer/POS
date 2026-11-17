@@ -605,6 +605,10 @@ function AppContent() {
   // Load user's scoped theme whenever session changes (login or app load)
   useEffect(() => {
     if (!session) {
+      if (guestView === "landing") {
+        // Landing page manages its own day/night data-theme tokens
+        return;
+      }
       try {
         const guestTheme = localStorage.getItem("mp_theme_guest") || "dark";
         setTheme(guestTheme);
@@ -626,10 +630,14 @@ function AppContent() {
       setTheme("dark");
       document.documentElement.setAttribute("data-theme", "dark");
     }
-  }, [session?.id, session?.business_id, session?.businessId, session?.branch_id, session?.branchId]);
+  }, [session?.id, session?.business_id, session?.businessId, session?.branch_id, session?.branchId, guestView]);
 
   // Persist theme changes to this specific user's scoped storage key
   useEffect(() => {
+    if (!session && guestView === "landing") {
+      // Landing page manages its own day/night data-theme tokens
+      return;
+    }
     document.documentElement.setAttribute("data-theme", theme);
     if (!session) {
       try {
@@ -643,7 +651,7 @@ function AppContent() {
     } catch {
       // ignore
     }
-  }, [theme, session?.id]);
+  }, [theme, session?.id, guestView]);
 
   useEffect(() => {
     if (!getToken()) return;
