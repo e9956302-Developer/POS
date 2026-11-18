@@ -686,7 +686,7 @@ export async function migrateBusinessAdmin() {
   // Set default package entitlements for existing plans if null
   const starterFeatures = ["dashboard", "sales", "purchases", "inventory", "cash_register", "parties", "invoices"];
   const proFeatures = ["dashboard", "sales", "sale_returns", "purchases", "purchase_returns", "inventory", "cash_register", "parties", "expenses", "invoices", "reports_inventory", "stock_transfers", "theme_selection"];
-  const enterpriseFeatures = ["dashboard", "sales", "sale_returns", "purchases", "purchase_returns", "inventory", "cash_register", "parties", "expenses", "invoices", "admin", "reports_inventory", "reports_receivables", "reports_payables", "stock_transfers", "partner_shares", "theme_selection"];
+  const enterpriseFeatures = ["dashboard", "sales", "sale_returns", "purchases", "purchase_returns", "inventory", "cash_register", "parties", "expenses", "invoices", "admin", "reports_inventory", "reports_receivables", "reports_payables", "stock_transfers", "partner_shares", "theme_selection", "dual_language"];
 
   await query(`UPDATE subscription_plans SET allowed_pages = ? WHERE id = 1 AND (allowed_pages IS NULL OR allowed_pages = '')`, [JSON.stringify(starterFeatures)]);
   await query(`UPDATE subscription_plans SET allowed_pages = ? WHERE id = 2 AND (allowed_pages IS NULL OR allowed_pages = '')`, [JSON.stringify(proFeatures)]);
@@ -699,7 +699,8 @@ export async function migrateBusinessAdmin() {
       "dashboard", "sales", "sale_returns", "purchases", "purchase_returns",
       "inventory", "cash_register", "parties", "expenses", "invoices",
       "employees", "repairs", "admin", "reports_inventory", "reports_receivables",
-      "reports_payables", "stock_transfers", "partner_shares", "theme_selection"
+      "reports_payables", "stock_transfers", "partner_shares", "theme_selection",
+      "dual_language"
     ];
     const existingPlans = await query(`SELECT id, allowed_pages FROM subscription_plans WHERE allowed_pages IS NOT NULL AND allowed_pages != ''`);
     for (const plan of existingPlans) {

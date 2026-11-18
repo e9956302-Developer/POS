@@ -23,6 +23,7 @@ export function ClassicLayout({
   pageBreadcrumb,
   theme,
   hasThemeAccess,
+  hasLanguageAccess = true,
   handleCycleTheme,
   handleSelectTheme,
   THEMES,
@@ -82,7 +83,7 @@ export function ClassicLayout({
           <img src="/logo.png" alt="DigitalMarkaz360" className="mobile-logo-img" />
           <span>{session.business_name || session.businessName || (isTopAdmin ? "SaaS Top Admin" : "DigitalMarkaz360")}</span>
         </div>
-        <LanguageSwitcher compact />
+        {hasLanguageAccess && <LanguageSwitcher compact />}
         <button
           className="ghost-btn"
           type="button"
@@ -245,10 +246,14 @@ export function ClassicLayout({
               {!isSalesPage && (
                 <>
                   <div className="theme-section">
-                    <label className="sidebar-section-label">
-                      🌐 Language / زبان
-                    </label>
-                    <LanguageSwitcher />
+                    {hasLanguageAccess && (
+                      <>
+                        <label className="sidebar-section-label">
+                          🌐 Language / زبان
+                        </label>
+                        <LanguageSwitcher hasAccess={hasLanguageAccess} />
+                      </>
+                    )}
                   </div>
 
                   <div className="theme-section">
@@ -298,7 +303,7 @@ export function ClassicLayout({
             <div className="sidebar-footer-collapsed">
               {!isSalesPage && (
                 <>
-                  <LanguageSwitcher compact />
+                  {hasLanguageAccess && <LanguageSwitcher compact />}
                   <ThemeSwitcher
                     currentTheme={theme}
                     onSelectTheme={handleSelectTheme}
@@ -402,7 +407,7 @@ export function ClassicLayout({
           </div>
 
           <div className="top-navbar-right">
-            <LanguageSwitcher />
+            {hasLanguageAccess && <LanguageSwitcher />}
             <button
               className="top-theme-btn"
               type="button"

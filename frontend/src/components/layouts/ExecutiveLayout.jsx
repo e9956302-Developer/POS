@@ -23,6 +23,7 @@ export function ExecutiveLayout({
   pageBreadcrumb = null,
   theme = "dark",
   hasThemeAccess = true,
+  hasLanguageAccess = true,
   handleCycleTheme = () => {},
   handleSelectTheme = () => {},
   THEMES = [],
@@ -222,7 +223,7 @@ export function ExecutiveLayout({
                 {!isSalesPage && (
                   <>
                     <div className="executive-footer-theme" style={{ marginBottom: "0.5rem" }}>
-                      <LanguageSwitcher />
+                      {hasLanguageAccess && <LanguageSwitcher hasAccess={hasLanguageAccess} />}
                     </div>
                     <div className="executive-footer-theme">
                       <ThemeSwitcher
@@ -256,7 +257,7 @@ export function ExecutiveLayout({
               <div className="executive-footer-collapsed">
                 {!isSalesPage && (
                   <>
-                    <LanguageSwitcher compact />
+                    {hasLanguageAccess && <LanguageSwitcher compact />}
                     <ThemeSwitcher
                       currentTheme={theme}
                       onSelectTheme={handleSelectTheme}
@@ -360,7 +361,7 @@ export function ExecutiveLayout({
 
           <div className="executive-header-right">
             {/* Header Language Switcher */}
-            <LanguageSwitcher />
+            {hasLanguageAccess && <LanguageSwitcher />}
 
             {/* Theme Toggle Button */}
             <button

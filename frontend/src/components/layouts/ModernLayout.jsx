@@ -23,6 +23,7 @@ export function ModernLayout({
   pageBreadcrumb,
   theme,
   hasThemeAccess,
+  hasLanguageAccess = true,
   handleCycleTheme,
   handleSelectTheme,
   THEMES,
@@ -208,7 +209,7 @@ export function ModernLayout({
                 {!isSalesPage && (
                   <>
                     <div className="modern-footer-theme" style={{ marginBottom: "0.5rem" }}>
-                      <LanguageSwitcher />
+                      {hasLanguageAccess && <LanguageSwitcher hasAccess={hasLanguageAccess} />}
                     </div>
                     <div className="modern-footer-theme">
                       <ThemeSwitcher
@@ -242,7 +243,7 @@ export function ModernLayout({
               <div className="modern-footer-collapsed">
                 {!isSalesPage && (
                   <>
-                    <LanguageSwitcher compact />
+                    {hasLanguageAccess && <LanguageSwitcher compact />}
                     <ThemeSwitcher
                       currentTheme={theme}
                       onSelectTheme={handleSelectTheme}
@@ -348,7 +349,7 @@ export function ModernLayout({
           </div>
 
           <div className="modern-row1-right">
-            <LanguageSwitcher />
+            {hasLanguageAccess && <LanguageSwitcher />}
             {/* Theme Toggle Button */}
             <button
               type="button"

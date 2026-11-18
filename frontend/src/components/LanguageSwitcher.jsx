@@ -4,10 +4,16 @@ import { useLanguage } from "../context/LanguageContext.jsx";
 export function LanguageSwitcher({
   variant = "pill", // "pill" | "compact" | "badge" | "icon"
   className = "",
-  style = {}
+  style = {},
+  isLocked = false,
+  hasAccess = true
 }) {
   const { language, toggleLanguage, setLanguage } = useLanguage();
   const isUrdu = language === "ur";
+
+  if (isLocked || hasAccess === false) {
+    return null;
+  }
 
   if (variant === "compact" || variant === "icon") {
     return (

@@ -23,7 +23,8 @@ export const SYSTEM_MODULES = [
   { key: "reports_payables", label: "Payables & Supplier Outflow", category: "Reports & Audits", icon: "📑", description: "Vendor liabilities, purchase order payables" },
   { key: "stock_transfers", label: "Inter-Branch Stock Transfers", category: "Advanced Operations", icon: "🔄", description: "Dispatch, transfer, and receive inventory across stores" },
   { key: "partner_shares", label: "Partner Equity & Dividends", category: "Advanced Operations", icon: "🤝", description: "Branch equity shares, profit margins, distribution" },
-  { key: "theme_selection", label: "Theme Customization & Colors", category: "Appearance & Branding", icon: "🎨", description: "Allow users to customize UI color themes" }
+  { key: "theme_selection", label: "Theme Customization & Colors", category: "Appearance & Branding", icon: "🎨", description: "Allow users to customize UI color themes" },
+  { key: "dual_language", label: "Dual Language Support (Urdu / English)", category: "Appearance & Branding", icon: "🌐", description: "Allow users and company staff to switch between English and Urdu language interface" }
 ];
 
 export const FORM_TO_MODULE_MAP = {
@@ -77,7 +78,10 @@ export const FORM_TO_MODULE_MAP = {
   support_tickets: "admin",
   subscriptions: "admin",
   backups: "admin",
-  integrations: "admin"
+  integrations: "admin",
+  theme_selection: "theme_selection",
+  dual_language: "dual_language",
+  language: "dual_language"
 };
 
 /**
@@ -170,12 +174,79 @@ export function isPackagePageAllowed(pageKey, allowedPages) {
       allowedPages.includes("admin")
     );
   }
+  if (pageKey === "theme_selection") {
+    return allowedPages.includes("theme_selection");
+  }
+  if (pageKey === "dual_language") {
+    return allowedPages.includes("dual_language");
+  }
   // Check form-to-module mapping
   const mappedModule = FORM_TO_MODULE_MAP[pageKey];
   if (mappedModule && mappedModule !== pageKey) {
     return isPackagePageAllowed(mappedModule, allowedPages);
   }
   return false;
+}
+
+export function roleName(user) {
+  if (!user) return "";
+  return (user.role_name || user.roleName || user.role || "").toLowerCase();
+}
+
+export function canUseTheme(user) {
+  if (!user) return true;
+  const role = roleName(user);
+  if (role === "top_admin") return true;
+
+  let allowedPages =
+    user?.allowedPages ||
+    user?.allowed_pages ||
+    user?.subscriptionPlan?.allowedPages ||
+    user?.subscription_plan?.allowed_pages;
+  if (typeof allowedPages === "string") {
+    try {
+      allowedPages = JSON.parse(allowedPages);
+    } catch {
+      allowedPages = null;
+    }
+  }
+  if (Array.isArray(allowedPages)) {
+    return allowedPages.includes("theme_selection");
+  }
+  return true;
+}
+
+export function canUseLanguage(user) {
+  if (!user) return true;
+  const role = roleName(user);
+  if (role === "top_admin") return true;
+
+  let allowedPages =
+    user?.allowedPages ||
+    user?.allowed_pages ||
+    user?.subscriptionPlan?.allowedPages ||
+    user?.subscription_plan?.allowed_pages;
+  if (typeof allowedPages === "string") {
+    try {
+      allowedPages = JSON.parse(allowedPages);
+    } catch {
+      allowedPages = null;
+    }
+  }
+  if (Array.isArray(allowedPages)) {
+    if (!allowedPages.includes("dual_language")) {
+      return false;
+    }
+  }
+
+  if (Array.isArray(user?.permissions)) {
+    const denied = user.permissions.find(
+      (p) => (p.page_key || p.pageKey) === "dual_language" && Number(p.is_allowed ?? p.isAllowed) === 0
+    );
+    if (denied) return false;
+  }
+
+  return true;
 }
 
 /**

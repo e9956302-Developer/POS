@@ -1620,6 +1620,12 @@ tbody tr.row-highlight-danger td.saas-actions-col {
   box-sizing: border-box;
 }
 
+.theme-section:empty,
+.modern-footer-theme:empty,
+.executive-footer-theme:empty {
+  display: none !important;
+}
+
 /* Theme Switcher Widget - Wrapped and Contained */
 .theme-switcher {
   display: flex;

@@ -230,6 +230,9 @@ export function isPackagePageAllowed(pageKey, allowedPages) {
   if (pageKey === "theme_selection") {
     return allowedPages.includes("theme_selection");
   }
+  if (pageKey === "dual_language") {
+    return allowedPages.includes("dual_language");
+  }
   return false;
 }
 
@@ -709,6 +712,8 @@ export function hasPermission(user, pageKey, actionKey = "view") {
         isPackageAllowed = true;
       } else if (pageKey === "theme_selection") {
         isPackageAllowed = user.allowedPages.includes("theme_selection");
+      } else if (pageKey === "dual_language") {
+        isPackageAllowed = user.allowedPages.includes("dual_language");
       } else if (["business_super_admin", "admin"].includes(user.role_name)) {
         isPackageAllowed = true;
       }

@@ -344,7 +344,7 @@ export function canUse(user, pageKey, actionKey = "view") {
 export function canUseTheme(user) {
   if (!user) return true;
   const role = roleName(user);
-  if (role === "top_admin" || ["business_super_admin", "admin"].includes(role)) return true;
+  if (role === "top_admin") return true;
 
   // Enforce branch subscription plan package entitlements if configured
   let allowedPages =
@@ -362,6 +362,41 @@ export function canUseTheme(user) {
   if (Array.isArray(allowedPages)) {
     return allowedPages.includes("theme_selection");
   }
+  return true;
+}
+
+export function canUseLanguage(user) {
+  if (!user) return true;
+  const role = roleName(user);
+  if (role === "top_admin") return true;
+
+  // Enforce company / branch subscription plan package entitlements if configured
+  let allowedPages =
+    user?.allowedPages ||
+    user?.allowed_pages ||
+    user?.subscriptionPlan?.allowedPages ||
+    user?.subscription_plan?.allowed_pages;
+  if (typeof allowedPages === "string") {
+    try {
+      allowedPages = JSON.parse(allowedPages);
+    } catch {
+      allowedPages = null;
+    }
+  }
+  if (Array.isArray(allowedPages)) {
+    if (!allowedPages.includes("dual_language")) {
+      return false;
+    }
+  }
+
+  // Check if role/user permission explicitly denies dual_language
+  if (Array.isArray(user?.permissions)) {
+    const denied = user.permissions.find(
+      (p) => (p.page_key || p.pageKey) === "dual_language" && Number(p.is_allowed ?? p.isAllowed) === 0
+    );
+    if (denied) return false;
+  }
+
   return true;
 }
 
@@ -689,6 +724,14 @@ function AppContent() {
   }, [session, refreshKey]);
 
   const hasThemeAccess = canUseTheme(session);
+  const hasLanguageAccess = canUseLanguage(session);
+
+  // If active user lacks dual language module access, reset and enforce English
+  useEffect(() => {
+    if (session && !hasLanguageAccess && language !== "en") {
+      setLanguage("en");
+    }
+  }, [session, hasLanguageAccess, language, setLanguage]);
 
   const handleSelectTheme = (newTheme) => {
     if (!hasThemeAccess) {
@@ -800,6 +843,8 @@ function AppContent() {
       theme,
       setTheme: handleSelectTheme,
       hasThemeAccess,
+      hasLanguageAccess,
+      canUseLanguage: () => hasLanguageAccess,
       language,
       isRtl,
       t,
@@ -812,7 +857,7 @@ function AppContent() {
       setError,
       clearError: () => setError("")
     }),
-    [session, companyName, companyLogo, allocatedBranches, models, parties, products, setProducts, theme, hasThemeAccess, error, language]
+    [session, companyName, companyLogo, allocatedBranches, models, parties, products, setProducts, theme, hasThemeAccess, hasLanguageAccess, error, language]
   );
 
   const [topNavParams, setTopNavParams] = useState({});
@@ -1391,6 +1436,7 @@ function AppContent() {
         pageBreadcrumb={pageBreadcrumb}
         theme={theme}
         hasThemeAccess={hasThemeAccess}
+        hasLanguageAccess={hasLanguageAccess}
         handleCycleTheme={handleCycleTheme}
         handleSelectTheme={handleSelectTheme}
         THEMES={THEMES}

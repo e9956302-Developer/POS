@@ -1277,7 +1277,8 @@ export const SYSTEM_MODULES_LIST = [
   { key: "sale_returns", label: "Customer Sale Returns", category: "Advanced Operations", description: "Return processing, restock IMEIs, and handle refund cash", icon: "↩️" },
   { key: "purchase_returns", label: "Vendor Purchase Returns", category: "Advanced Operations", description: "Defective stock returns, vendor credit adjustments, and restock reconciliation", icon: "🔄" },
   { key: "partner_shares", label: "Partner Equity & Dividends", category: "Advanced Operations", description: "Branch equity shares, profit margins, and distribution", icon: "🤝" },
-  { key: "theme_selection", label: "Theme Customization & Colors", category: "Appearance & Branding", description: "Allow users to customize UI color themes (Dark, Emerald, Cobalt, Crimson, High Contrast)", icon: "🎨" }
+  { key: "theme_selection", label: "Theme Customization & Colors", category: "Appearance & Branding", description: "Allow users to customize UI color themes (Dark, Emerald, Cobalt, Crimson, High Contrast)", icon: "🎨" },
+  { key: "dual_language", label: "Dual Language Support (Urdu / English)", category: "Appearance & Branding", description: "Enable Urdu & English dual language interface and switching across the application", icon: "🌐" }
 ];
 
 async function syncPlanFeatures(planId, allowedPages) {
@@ -1285,7 +1286,7 @@ async function syncPlanFeatures(planId, allowedPages) {
   await query("DELETE FROM subscription_plan_features WHERE plan_id = ?", [planId]);
   for (const pageKey of allowedPages) {
     const isReport = pageKey.startsWith("reports_");
-    const featureType = pageKey === "theme_selection" ? "feature" : (isReport ? "report" : "page");
+    const featureType = (pageKey === "theme_selection" || pageKey === "dual_language") ? "feature" : (isReport ? "report" : "page");
     await query(
       `INSERT INTO subscription_plan_features (plan_id, feature_key, feature_type, is_allowed)
        VALUES (?, ?, ?, 1)
