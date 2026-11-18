@@ -6890,6 +6890,21 @@ tr.highlight-pulse > td {
   cursor: pointer;
 }
 
+.mobile-theme-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.25rem 0.75rem;
+  border-bottom: 1px solid var(--dm-border-subtle);
+  margin-bottom: 0.25rem;
+}
+
+.mobile-theme-label {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--dm-text-heading);
+}
+
 .landing-mobile-dropdown {
   display: flex;
   flex-direction: column;
@@ -8941,6 +8956,14 @@ tr.highlight-pulse > td {
   .landing-nav-links,
   .landing-nav-actions {
     display: none;
+  }
+
+  .landing-nav-right .theme-toggle-segmented .theme-mode-text {
+    display: none;
+  }
+
+  .landing-nav-right .theme-mode-btn {
+    padding: 0.35rem 0.55rem;
   }
 
   .landing-mobile-menu-btn {

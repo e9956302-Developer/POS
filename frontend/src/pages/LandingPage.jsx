@@ -579,6 +579,41 @@ export function LandingPage({ onGoToLogin, onQuickDemoLogin }) {
         {/* Mobile dropdown menu */}
         {mobileMenuOpen && (
           <div className="landing-mobile-dropdown">
+            <div className="mobile-theme-row">
+              <span className="mobile-theme-label">Appearance:</span>
+              <div className="theme-toggle-segmented" role="radiogroup" aria-label="Theme mode selection">
+                <button
+                  type="button"
+                  className={`theme-mode-btn ${themeMode === "auto" ? "active" : ""}`}
+                  onClick={() => handleSelectThemeMode("auto")}
+                  title="Auto theme (Switches by your timezone)"
+                  aria-label="Auto theme mode"
+                >
+                  <Clock size={14} />
+                  <span>Auto</span>
+                </button>
+                <button
+                  type="button"
+                  className={`theme-mode-btn ${themeMode === "day" ? "active" : ""}`}
+                  onClick={() => handleSelectThemeMode("day")}
+                  title="Day theme (Light)"
+                  aria-label="Day theme mode"
+                >
+                  <Sun size={14} />
+                  <span>Day</span>
+                </button>
+                <button
+                  type="button"
+                  className={`theme-mode-btn ${themeMode === "night" ? "active" : ""}`}
+                  onClick={() => handleSelectThemeMode("night")}
+                  title="Night theme (Dark)"
+                  aria-label="Night theme mode"
+                >
+                  <Moon size={14} />
+                  <span>Night</span>
+                </button>
+              </div>
+            </div>
             <a href="#video-tour" onClick={() => setMobileMenuOpen(false)} style={{ color: "var(--dm-accent)", fontWeight: 700 }}>🎬 Videos</a>
             <a href="#features" onClick={() => setMobileMenuOpen(false)}>Features</a>
             <a href="#pos-demo" onClick={() => setMobileMenuOpen(false)}>Live POS Demo</a>
