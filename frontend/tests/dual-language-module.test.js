@@ -92,3 +92,13 @@ test("Dual Language Module: LanguageSwitcher component source handles isLocked a
   assert.ok(switcherSrc.includes("hasAccess"), "LanguageSwitcher accepts hasAccess");
   assert.ok(switcherSrc.includes("if (isLocked || hasAccess === false)"), "LanguageSwitcher returns null when locked or access denied");
 });
+
+test("Dual Language Module: Landing Page does NOT provide language switcher and enforces English LTR", () => {
+  const landingSrc = fs.readFileSync(path.resolve(__dirname, "../src/pages/LandingPage.jsx"), "utf8");
+  assert.equal(landingSrc.includes("LanguageSwitcher"), false, "LandingPage must NOT include LanguageSwitcher component");
+  assert.ok(landingSrc.includes('document.documentElement.lang = "en"'), "LandingPage must lock language to English");
+  assert.ok(landingSrc.includes('document.documentElement.dir = "ltr"'), "LandingPage must lock orientation to LTR");
+
+  const appSrc = fs.readFileSync(path.resolve(__dirname, "../src/App.jsx"), "utf8");
+  assert.ok(appSrc.includes('guestView === "landing" && language !== "en"'), "App must enforce English when guest is on Landing Page");
+});
