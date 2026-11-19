@@ -54,13 +54,6 @@ export function ModernLayout({
 
   const isSalesPage = activeTab === "sales";
 
-  // Auto-collapse sidebar to compact form on Sales Counter page (Pack #20)
-  useEffect(() => {
-    if (isSalesPage) {
-      setIsCollapsed(true);
-    }
-  }, [isSalesPage]);
-
   function toggleGroup(groupKey) {
     setOpenGroups((prev) => ({
       ...prev,

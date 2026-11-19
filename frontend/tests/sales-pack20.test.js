@@ -155,17 +155,17 @@ test("PACK #20 - Part 6: Sidebar auto-collapse, no duplicate controls, single ze
   const modernSource = fs.readFileSync(modernLayoutPath, "utf8");
   const executiveSource = fs.readFileSync(executiveLayoutPath, "utf8");
 
-  // 1. Sidebar auto-collapse and reports collapsed by default
+  // 1. Sidebar reports collapsed by default, no unwanted auto-collapse on sales page
   assert.match(classicSource, /const \[reportMenuOpen, setReportMenuOpen\] = useState\(false\);/, "ClassicLayout reports collapsed by default");
-  assert.match(classicSource, /if \(isSalesPage\) \{\s*setIsCollapsed\(true\);\s*\}/, "ClassicLayout auto-collapses on sales page");
+  assert.doesNotMatch(classicSource, /if \(isSalesPage\) \{\s*setIsCollapsed\(true\);\s*\}/, "ClassicLayout does not auto-collapse on sales page");
   assert.match(classicSource, /\{!isSalesPage && \(\s*<>\s*<div className="theme-section">/, "ClassicLayout hides theme and language controls in sidebar on sales page");
 
   assert.match(modernSource, /reports:\s*false/, "ModernLayout reports collapsed by default");
-  assert.match(modernSource, /if \(isSalesPage\) \{\s*setIsCollapsed\(true\);\s*\}/, "ModernLayout auto-collapses on sales page");
+  assert.doesNotMatch(modernSource, /if \(isSalesPage\) \{\s*setIsCollapsed\(true\);\s*\}/, "ModernLayout does not auto-collapse on sales page");
   assert.match(modernSource, /\{!isSalesPage && \(\s*<>\s*<div className="modern-footer-theme"/, "ModernLayout hides duplicate theme controls in sidebar on sales page");
 
   assert.match(executiveSource, /reports:\s*false/, "ExecutiveLayout reports collapsed by default");
-  assert.match(executiveSource, /if \(isSalesPage\) \{\s*setIsCollapsed\(true\);\s*\}/, "ExecutiveLayout auto-collapses on sales page");
+  assert.doesNotMatch(executiveSource, /if \(isSalesPage\) \{\s*setIsCollapsed\(true\);\s*\}/, "ExecutiveLayout does not auto-collapse on sales page");
 
   // 2. Heading shortened to "Universal Scanner" without subtext
   assert.match(salesSource, /⚡ \{isUrdu \? "یونیورسل اسکینر" : "Universal Scanner"\}/, "Scanner heading shortened");
