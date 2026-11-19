@@ -528,7 +528,7 @@ export function BranchSubscriptionExpiredScreen({ branch, expiredOn, onLogout })
 }
 
 function AppContent() {
-  const { language, isRtl, t, formatCurrency } = useLanguage();
+  const { language, setLanguage, isRtl, t, formatCurrency } = useLanguage();
   const { isModernCompact, isMidnightExecutive, activeLayout } = useLayout();
   const [session, setSession] = useState(null);
   const [guestView, setGuestView] = useState(() => {
