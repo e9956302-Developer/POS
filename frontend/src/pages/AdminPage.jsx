@@ -75,6 +75,22 @@ export function AdminPage({ context, activeSubPage = "branches", onNavigateSubPa
     return permissionMatrix.filter((page) => isPageInSubscription(page.pageKey, allowedPages));
   }, [allowedPages]);
 
+  const maxBranchesAllowed = useMemo(() => {
+    const branchWithPlan = branches.find((b) => b.max_branches !== undefined && b.max_branches !== null);
+    if (branchWithPlan) {
+      return Number(branchWithPlan.max_branches);
+    }
+    if (context.session?.subscriptionPlan?.max_branches !== undefined && context.session?.subscriptionPlan?.max_branches !== null) {
+      return Number(context.session.subscriptionPlan.max_branches);
+    }
+    if (context.session?.subscriptionPlan?.maxBranches !== undefined && context.session?.subscriptionPlan?.maxBranches !== null) {
+      return Number(context.session.subscriptionPlan.maxBranches);
+    }
+    return 1;
+  }, [branches, context.session]);
+
+  const isBranchLimitReached = maxBranchesAllowed > 0 && branches.length >= maxBranchesAllowed;
+
   const [currentSubPage, setCurrentSubPage] = useState(activeSubPage || "branches");
 
   useEffect(() => {
@@ -589,6 +605,14 @@ export function AdminPage({ context, activeSubPage = "branches", onNavigateSubPa
     event.preventDefault();
     setError("");
     setMessage("");
+
+    if (isBranchLimitReached) {
+      setError(
+        `Branch creation limit reached. Your subscription package allows a maximum of ${maxBranchesAllowed} branch${maxBranchesAllowed === 1 ? "" : "es"} (currently ${branches.length} created). Please upgrade your subscription package to create more branches.`
+      );
+      return;
+    }
+
     try {
       const created = await api.createBranch(branchForm);
       setMessage(`Branch ${created.name} (${created.code}) created successfully`);
@@ -1078,13 +1102,52 @@ export function AdminPage({ context, activeSubPage = "branches", onNavigateSubPa
       {/* ======================================================== */}
       {isBusinessAdmin && currentSubPage === "branches" ? (
         <div className="branches-admin-grid">
-          <SectionCard title="Add Branch" subtitle="Open a new store outlet or warehouse under your company.">
+          <SectionCard
+            title={
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem" }}>
+                <span>Add Branch</span>
+                <span
+                  className={`status-pill ${isBranchLimitReached ? "status-warning" : "status-success"}`}
+                  style={{ fontSize: "0.78rem", fontWeight: 600, padding: "0.2rem 0.6rem" }}
+                  title="Subscription package branch limit"
+                >
+                  🏢 {branches.length} / {maxBranchesAllowed === 0 ? "Unlimited" : `${maxBranchesAllowed} allowed`}
+                </span>
+              </div>
+            }
+            subtitle="Open a new store outlet or warehouse under your company."
+          >
+            {isBranchLimitReached && (
+              <div
+                className="alert alert-warning"
+                style={{
+                  marginBottom: "1rem",
+                  padding: "0.75rem 1rem",
+                  borderRadius: "8px",
+                  border: "1px solid #f59e0b",
+                  background: "rgba(245, 158, 11, 0.1)",
+                  color: "#b45309",
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: "0.75rem"
+                }}
+              >
+                <span style={{ fontSize: "1.25rem", lineHeight: 1 }}>⚠️</span>
+                <div>
+                  <strong>Branch Limit Reached ({branches.length} of {maxBranchesAllowed} allowed)</strong>
+                  <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.85rem", color: "inherit" }}>
+                    Your current subscription package (<strong>{branches[0]?.plan_name || context.session?.subscriptionPlan?.name || "Standard"}</strong>) allows a maximum of {maxBranchesAllowed} store branch{maxBranchesAllowed === 1 ? "" : "es"}. You have reached this limit ({branches.length} branch{branches.length === 1 ? "" : "es"} created). To open additional branches, please upgrade your subscription package or contact SaaS Administration.
+                  </p>
+                </div>
+              </div>
+            )}
             <form className="form-grid" onSubmit={createBranch}>
               <label>
                 <span>Branch Name</span>
                 <input
                   placeholder="e.g. Liberty Market Branch"
                   value={branchForm.name}
+                  disabled={isBranchLimitReached}
                   onChange={(e) => {
                     const bName = e.target.value;
                     const bizPrefix = branches[0]?.code?.split("-")[0] || "BR";
@@ -1104,6 +1167,7 @@ export function AdminPage({ context, activeSubPage = "branches", onNavigateSubPa
                   <button
                     type="button"
                     className="btn-sm ghost-btn"
+                    disabled={isBranchLimitReached}
                     style={{ padding: "0 0.35rem", fontSize: "0.72rem", height: "18px" }}
                     onClick={() => {
                       const bizPrefix = branches[0]?.code?.split("-")[0] || "BR";
@@ -1120,6 +1184,7 @@ export function AdminPage({ context, activeSubPage = "branches", onNavigateSubPa
                 <input
                   placeholder="e.g. LBT-02"
                   value={branchForm.code}
+                  disabled={isBranchLimitReached}
                   onChange={(e) => setBranchForm({ ...branchForm, code: e.target.value.toUpperCase() })}
                   required
                 />
@@ -1129,11 +1194,20 @@ export function AdminPage({ context, activeSubPage = "branches", onNavigateSubPa
                 <input
                   placeholder="Shop #, Plaza, City"
                   value={branchForm.address}
+                  disabled={isBranchLimitReached}
                   onChange={(e) => setBranchForm({ ...branchForm, address: e.target.value })}
                 />
               </label>
               <div className="full-span row-actions">
-                <button className="primary-btn">Create Branch</button>
+                <button
+                  type="submit"
+                  className="primary-btn"
+                  disabled={isBranchLimitReached}
+                  title={isBranchLimitReached ? "Branch limit reached. Upgrade package to create more branches." : "Create Branch"}
+                  style={isBranchLimitReached ? { opacity: 0.6, cursor: "not-allowed" } : {}}
+                >
+                  {isBranchLimitReached ? "Branch Limit Reached" : "Create Branch"}
+                </button>
               </div>
             </form>
           </SectionCard>

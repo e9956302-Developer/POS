@@ -240,7 +240,7 @@ export async function fetchUserSubscription(businessId, branchId) {
   if (!businessId && !branchId) return { allowedPages: null, subscriptionPlan: null };
 
   const subRows = await query(
-    `SELECT sp.id, COALESCE(sp.name, 'Starter Monthly') AS name, sp.allowed_pages, bs.id AS subscription_id, bs.status AS subscription_status,
+    `SELECT sp.id, COALESCE(sp.name, 'Starter Monthly') AS name, COALESCE(sp.max_branches, 1) AS max_branches, sp.allowed_pages, bs.id AS subscription_id, bs.status AS subscription_status,
             bs.subscription_starts_on, bs.current_period_ends_on, bs.trial_ends_on, bs.grace_ends_on,
             b.id AS branch_id, b.name AS branch_name, b.code AS branch_code
      FROM branch_subscriptions bs
@@ -375,6 +375,8 @@ export async function fetchUserSubscription(businessId, branchId) {
     subscriptionPlan: {
       id: sub.id,
       name: sub.name,
+      max_branches: sub.max_branches !== undefined && sub.max_branches !== null ? Number(sub.max_branches) : 1,
+      maxBranches: sub.max_branches !== undefined && sub.max_branches !== null ? Number(sub.max_branches) : 1,
       status: effectiveStatus,
       isExpired,
       expiredOn: isExpired ? targetDateStr : null,

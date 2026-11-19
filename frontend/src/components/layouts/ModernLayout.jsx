@@ -398,7 +398,7 @@ export function ModernLayout({
                           onClick={() => handleMarkNotifRead(notif)}
                         >
                           <span className="notif-icon">
-                            {notif.type === "low_stock" ? "📦" : notif.type === "due_date" ? "📅" : "🔔"}
+                            {notif.notification_type === "package_changed" || notif.type === "package_changed" || notif.reference_type === "subscription" ? "📦" : notif.type === "low_stock" || notif.notification_type === "low_stock" ? "⚠️" : notif.type === "due_date" || notif.notification_type === "due_date" ? "📅" : "🔔"}
                           </span>
                           <div className="notif-content">
                             <p className="notif-title">{notif.title}</p>
