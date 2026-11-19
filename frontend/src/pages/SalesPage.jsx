@@ -6,7 +6,6 @@ import { SearchableSelect } from "../components/SearchableSelect.jsx";
 import { AdaptiveTable } from "../components/AdaptiveTable.jsx";
 import { PaginationBar } from "../components/PaginationBar.jsx";
 import { QuickAddProductModal } from "../components/QuickAddProductModal.jsx";
-import { QuickAddModelModal } from "../components/QuickAddModelModal.jsx";
 import { ReturnOrderModal } from "../components/ReturnOrderModal.jsx";
 import { TableActionButton } from "../components/TableActionColumn.jsx";
 import { exportToCSV } from "../utils/export.js";
@@ -99,7 +98,6 @@ export function SalesPage({ context }) {
   const [isLoadingBranchUnits, setIsLoadingBranchUnits] = useState(false);
   const [showCustomerDetails, setShowCustomerDetails] = useState(false);
   const [showQuickProductModal, setShowQuickProductModal] = useState(false);
-  const [showQuickModelModal, setShowQuickModelModal] = useState(false);
   const [showWalkInDetails, setShowWalkInDetails] = useState(false);
   const isBranchFixed = Boolean(context.session?.is_branch_locked || context.session?.branchLocked);
 
@@ -1746,37 +1744,6 @@ export function SalesPage({ context }) {
                 )}
               </div>
 
-              {/* ROW 3: Quick-create buttons (Quick Add New Model, Add Product/Accessories) */}
-              <div
-                className="pos-sale-row-3 pos-purchase-row-3"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  marginBottom: "0.75rem",
-                  flexWrap: "wrap"
-                }}
-              >
-                <button
-                  type="button"
-                  className="secondary-btn btn-sm"
-                  onClick={() => setShowQuickModelModal(true)}
-                  style={{ padding: "0.4rem 0.8rem", fontSize: "0.82rem", whiteSpace: "nowrap" }}
-                  title={isUrdu ? "نیا فون ماڈل شامل کریں" : "Quick add new phone model"}
-                >
-                  📱 {isUrdu ? "نیا ماڈل شامل کریں" : "Quick Add New Model"}
-                </button>
-                <button
-                  type="button"
-                  className="secondary-btn btn-sm"
-                  onClick={() => setShowQuickProductModal(true)}
-                  style={{ padding: "0.4rem 0.8rem", fontSize: "0.82rem", whiteSpace: "nowrap" }}
-                  title={isUrdu ? "نیا پروڈکٹ شامل کریں" : "Quick add new accessory/product"}
-                >
-                  📦 {isUrdu ? "سامان شامل کریں" : "Add Product/Accessories"}
-                </button>
-              </div>
-
               {/* Persistent Scanner Error Alert (Pack #20 Part 2) */}
               {scannerError && (
                 <div
@@ -2275,26 +2242,6 @@ export function SalesPage({ context }) {
               setTimeout(() => scannerInputRef.current?.focus(), 50);
             }}
             branchId={form.branchId}
-          />
-
-          {/* Quick Add Phone Model Modal */}
-          <QuickAddModelModal
-            isOpen={showQuickModelModal}
-            onClose={() => setShowQuickModelModal(false)}
-            onCreated={(newModel) => {
-              const modelTitle = `${newModel.company} ${newModel.model_name}${newModel.variant ? ` (${newModel.variant})` : ""}${newModel.storage ? ` • ${newModel.storage}` : ""}${newModel.color ? ` • ${newModel.color}` : ""}`.trim() || "Mobile Handset";
-              setAwaitingPhoneModel({
-                id: newModel.id,
-                modelId: newModel.id,
-                name: modelTitle,
-                stock: 0,
-                itemType: "phone_model"
-              });
-              if (context.setModels) {
-                context.setModels([...(context.models || []), newModel]);
-              }
-              setTimeout(() => scannerInputRef.current?.focus(), 50);
-            }}
           />
         </div>
       )}
