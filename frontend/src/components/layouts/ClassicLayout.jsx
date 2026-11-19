@@ -52,13 +52,6 @@ export function ClassicLayout({
 
   const isSalesPage = activeTab === "sales";
 
-  // Auto-collapse sidebar to compact form on Sales Counter page (Pack #20)
-  useEffect(() => {
-    if (isSalesPage) {
-      setIsCollapsed(true);
-    }
-  }, [isSalesPage]);
-
   const isAdminActive = activeTab === "admin" || activeTab.startsWith("admin_");
   const isEmployeeActive = activeTab === "employees" || activeTab.startsWith("employees_");
   const isReportActive = activeTab === "reports" || activeTab.startsWith("reports_");
