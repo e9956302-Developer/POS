@@ -733,6 +733,13 @@ function AppContent() {
     }
   }, [session, hasLanguageAccess, language, setLanguage]);
 
+  // On Landing Page, strictly enforce English with no language switching
+  useEffect(() => {
+    if (!session && guestView === "landing" && language !== "en") {
+      setLanguage("en");
+    }
+  }, [session, guestView, language, setLanguage]);
+
   const handleSelectTheme = (newTheme) => {
     if (!hasThemeAccess) {
       setError("Theme selection is restricted to subscription packages with Theme Customization. Please upgrade your package.");

@@ -44,6 +44,23 @@ export function LandingPage({ onGoToLogin, onQuickDemoLogin }) {
   const [activeVideoId, setActiveVideoId] = useState("product-overview");
 
   // ---------------------------------------------------------------------------
+  // LANGUAGE & ORIENTATION: Landing page operates strictly in English (LTR)
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    try {
+      document.documentElement.lang = "en";
+      document.documentElement.dir = "ltr";
+      document.documentElement.setAttribute("data-lang", "en");
+      if (typeof document !== "undefined" && document.body) {
+        document.body.classList.add("lang-en");
+        document.body.classList.remove("lang-ur");
+      }
+    } catch {
+      // Safe fallback
+    }
+  }, []);
+
+  // ---------------------------------------------------------------------------
   // THEME MANAGEMENT: Auto (Timezone) / Day / Night
   // ---------------------------------------------------------------------------
   const [themeMode, setThemeMode] = useState(() => {
