@@ -6,6 +6,7 @@ import { badRequest, isValidEmail } from "../../utils/http.js";
 import { createAuditLog } from "../../services/audit.js";
 import { getLoginLogs, getLoginLogsSummary } from "../../services/loginLogger.js";
 import { DEFAULT_ROLE_PERMISSIONS, isPackagePageAllowed, resolveUserPermissions, fetchUserSubscription, isBusinessAdmin } from "../../middleware/auth.js";
+import { notifyCompanyAdminsOfPackageChange } from "../../services/subscriptionNotifier.js";
 
 export const adminRouter = Router();
 
@@ -403,7 +404,8 @@ adminRouter.get(
         p.id AS plan_id,
         p.name AS plan_name,
         p.price AS plan_price,
-        p.billing_period
+        p.billing_period,
+        COALESCE(p.max_branches, 1) AS max_branches
        FROM branches b
        LEFT JOIN branch_subscriptions bs ON bs.branch_id = b.id
        LEFT JOIN subscription_plans p ON p.id = bs.plan_id
@@ -994,6 +996,7 @@ adminRouter.get(
         plan.name AS plan_name,
         plan.price AS plan_price,
         plan.billing_period,
+        COALESCE(plan.max_branches, 1) AS max_branches,
         CASE
           WHEN bs.status = 'suspended' THEN 'suspended'
           WHEN (bs.status = 'active' AND bs.current_period_ends_on < CURDATE()) THEN 'expired'
@@ -1054,7 +1057,7 @@ adminRouter.post(
   "/branches",
   requireRole("top_admin"),
   asyncHandler(async (req, res) => {
-    const { businessId, name, code, address, planId = 1 } = req.body;
+    const { businessId, name, code, address, planId = 1, force = false } = req.body;
     if (!businessId || !name || !name.trim()) {
       throw badRequest("businessId and branch name are required");
     }
@@ -1062,6 +1065,39 @@ adminRouter.post(
     const [biz] = await query("SELECT id, code FROM businesses WHERE id = ?", [businessId]);
     if (!biz) {
       throw badRequest("Selected business does not exist");
+    }
+
+    if (!force) {
+      const [branchCountRow] = await query(
+        "SELECT COUNT(*) AS total FROM branches WHERE business_id = ?",
+        [businessId]
+      );
+      const currentBranchCount = Number(branchCountRow?.total || 0);
+
+      let plan = null;
+      if (planId) {
+        const [p] = await query("SELECT id, name, max_branches FROM subscription_plans WHERE id = ?", [planId]);
+        plan = p;
+      }
+      if (!plan) {
+        const [existingSub] = await query(
+          `SELECT sp.id, sp.name, sp.max_branches
+           FROM branch_subscriptions bs
+           JOIN subscription_plans sp ON sp.id = bs.plan_id
+           WHERE bs.business_id = ?
+           ORDER BY (bs.status = 'active') DESC, (bs.status = 'trialing') DESC, bs.id ASC
+           LIMIT 1`,
+          [businessId]
+        );
+        plan = existingSub;
+      }
+
+      const maxBranches = plan?.max_branches !== undefined && plan?.max_branches !== null ? Number(plan.max_branches) : 1;
+      if (maxBranches > 0 && currentBranchCount >= maxBranches) {
+        throw badRequest(
+          `Branch creation limit reached for this company. The subscription package "${plan?.name || "Standard"}" allows a maximum of ${maxBranches} branch${maxBranches === 1 ? "" : "es"} (currently ${currentBranchCount} created). Use force override or upgrade the company package to provision additional branches.`
+        );
+      }
     }
 
     const cleanCode = await generateUniqueBranchCode(businessId, biz.code, code);
@@ -1183,6 +1219,15 @@ adminRouter.put(
        WHERE b.id = ?`,
       [req.params.id]
     );
+
+    if (planId) {
+      await notifyCompanyAdminsOfPackageChange({
+        branchId: req.params.id,
+        planId,
+        endDate: updated?.current_period_ends_on,
+        actionType: "plan_changed"
+      }).catch((err) => console.warn("[admin] Package notification warning:", err.message));
+    }
 
     res.json(updated);
   })
@@ -1400,6 +1445,19 @@ adminRouter.put(
       const pagesJson = JSON.stringify(pagesArray);
       await query("UPDATE subscription_plans SET allowed_pages = ? WHERE id = ?", [pagesJson, planId]);
       await syncPlanFeatures(planId, pagesArray);
+
+      // Notify company admins of all branches subscribed to this package
+      query("SELECT DISTINCT branch_id FROM branch_subscriptions WHERE plan_id = ?", [planId])
+        .then((subscribers) => {
+          for (const sub of subscribers) {
+            notifyCompanyAdminsOfPackageChange({
+              branchId: sub.branch_id,
+              planId,
+              actionType: "modules_updated"
+            }).catch(() => {});
+          }
+        })
+        .catch(() => {});
     }
 
     const [updated] = await query(
@@ -1762,7 +1820,7 @@ adminRouter.post(
   "/branch-subscriptions/assign",
   requireRole("top_admin", "business_super_admin", "admin"),
   asyncHandler(async (req, res) => {
-    const { branchId, planId, startDate, isBackdated } = req.body;
+    const { branchId, planId, startDate, isBackdated, applyToAllBranches } = req.body;
     if (!branchId || !planId) {
       throw badRequest("Customer/Branch and Package are required");
     }
@@ -1803,27 +1861,43 @@ adminRouter.post(
     );
     const endDate = calc.end_date;
 
-    const [existingSub] = await query("SELECT id FROM branch_subscriptions WHERE branch_id = ?", [branchId]);
-    if (existingSub) {
-      await query(
-        `UPDATE branch_subscriptions
-         SET plan_id = :planId,
-             status = 'active',
-             subscription_starts_on = :start,
-             current_period_ends_on = :endDate,
-             trial_ends_on = NULL,
-             grace_ends_on = NULL
-         WHERE branch_id = :branchId`,
-        { planId, start, endDate, branchId }
-      );
-    } else {
-      await query(
-        `INSERT INTO branch_subscriptions
-         (business_id, branch_id, plan_id, status, subscription_starts_on, current_period_ends_on)
-         VALUES (:businessId, :branchId, :planId, 'active', :start, :endDate)`,
-        { businessId: branch.business_id, branchId, planId, start, endDate }
-      );
+    const branchesToUpdate = applyToAllBranches
+      ? await query("SELECT id, name FROM branches WHERE business_id = ?", [branch.business_id])
+      : [{ id: branchId, name: branch.name }];
+
+    for (const b of branchesToUpdate) {
+      const [existingSub] = await query("SELECT id FROM branch_subscriptions WHERE branch_id = ?", [b.id]);
+      if (existingSub) {
+        await query(
+          `UPDATE branch_subscriptions
+           SET plan_id = :planId,
+               status = 'active',
+               subscription_starts_on = :start,
+               current_period_ends_on = :endDate,
+               trial_ends_on = NULL,
+               grace_ends_on = NULL
+           WHERE branch_id = :branchId`,
+          { planId, start, endDate, branchId: b.id }
+        );
+      } else {
+        await query(
+          `INSERT INTO branch_subscriptions
+           (business_id, branch_id, plan_id, status, subscription_starts_on, current_period_ends_on)
+           VALUES (:businessId, :branchId, :planId, 'active', :start, :endDate)`,
+          { businessId: branch.business_id, branchId: b.id, planId, start, endDate }
+        );
+      }
     }
+
+    // Trigger notification to Company Admin account(s)
+    await notifyCompanyAdminsOfPackageChange({
+      branchId,
+      planId,
+      startDate: start,
+      endDate,
+      actionType: "assigned",
+      applyToAllBranches: Boolean(applyToAllBranches)
+    }).catch((err) => console.warn("[admin] Package notification warning:", err.message));
 
     const [sub] = await query(
       `SELECT bs.*, b.name AS branch_name, b.code AS branch_code, biz.name AS business_name,
@@ -1885,6 +1959,16 @@ adminRouter.post(
     const [subscription] = await query(`SELECT * FROM branch_subscriptions WHERE branch_id = :branchId`, {
       branchId: req.params.branchId
     });
+
+    if (subscription?.plan_id) {
+      await notifyCompanyAdminsOfPackageChange({
+        branchId: req.params.branchId,
+        planId: subscription.plan_id,
+        endDate: currentPeriodEndsOn,
+        actionType: "extended"
+      }).catch((err) => console.warn("[admin] Package notification warning:", err.message));
+    }
+
     res.json(subscription);
   })
 );
@@ -1932,6 +2016,14 @@ adminRouter.post(
        WHERE bs.branch_id = :branchId`,
       { branchId: req.params.branchId }
     );
+
+    await notifyCompanyAdminsOfPackageChange({
+      branchId: req.params.branchId,
+      planId,
+      endDate: subscription?.current_period_ends_on,
+      actionType: "plan_changed"
+    }).catch((err) => console.warn("[admin] Package notification warning:", err.message));
+
     res.json(subscription);
   })
 );
@@ -2262,6 +2354,16 @@ adminRouter.post(
        WHERE sp.id = ?`,
       [paymentId]
     );
+
+    if (updatedPayment?.branch_id && updatedPayment?.plan_id) {
+      await notifyCompanyAdminsOfPackageChange({
+        branchId: updatedPayment.branch_id,
+        planId: updatedPayment.plan_id,
+        startDate: approved.startDate,
+        endDate: approved.endDate,
+        actionType: "payment_verified"
+      }).catch((err) => console.warn("[admin] Package notification warning:", err.message));
+    }
 
     res.json({
       message: "Payment verified and subscription successfully extended",

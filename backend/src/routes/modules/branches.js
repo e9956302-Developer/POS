@@ -17,7 +17,8 @@ branchesRouter.get(
               bs.trial_ends_on,
               bs.grace_ends_on,
               sp.id AS plan_id,
-              COALESCE(sp.name, 'Starter Monthly') AS plan_name
+              COALESCE(sp.name, 'Starter Monthly') AS plan_name,
+              COALESCE(sp.max_branches, 1) AS max_branches
        FROM branches b
        LEFT JOIN branch_subscriptions bs ON bs.branch_id = b.id
        LEFT JOIN subscription_plans sp ON sp.id = bs.plan_id
@@ -129,19 +130,46 @@ branchesRouter.post(
     }
 
     const created = await withTransaction(async (connection) => {
+      // Lock the business row to prevent concurrent requests from bypassing max_branches limit
+      await connection.execute(`SELECT id FROM businesses WHERE id = ? FOR UPDATE`, [req.user.business_id]);
+
+      // Count existing branches for this business
+      const [countResult] = await connection.execute(
+        `SELECT COUNT(*) AS total FROM branches WHERE business_id = ?`,
+        [req.user.business_id]
+      );
+      const activeBranchCount = Number(countResult[0]?.total || 0);
+
+      // Fetch company's active subscription plan
+      const [subs] = await connection.execute(
+        `SELECT sp.id, sp.name, sp.max_branches
+         FROM branch_subscriptions bs
+         JOIN subscription_plans sp ON sp.id = bs.plan_id
+         WHERE bs.business_id = ?
+         ORDER BY (bs.status = 'active') DESC, (bs.status = 'trialing') DESC, bs.id ASC
+         LIMIT 1`,
+        [req.user.business_id]
+      );
+
+      const activePlan = subs[0];
+      const maxAllowed = activePlan?.max_branches !== undefined && activePlan?.max_branches !== null
+        ? Number(activePlan.max_branches)
+        : 1;
+
+      // max_branches === 0 indicates Unlimited branches
+      if (maxAllowed > 0 && activeBranchCount >= maxAllowed) {
+        throw badRequest(
+          `Branch creation limit reached. Your subscription package "${activePlan?.name || "Standard"}" allows a maximum of ${maxAllowed} branch${maxAllowed === 1 ? "" : "es"} (currently ${activeBranchCount} created). Please upgrade your subscription package to create more branches.`
+        );
+      }
+
       const [branchResult] = await connection.execute(
         `INSERT INTO branches (business_id, name, code, address) VALUES (?, ?, ?, ?)`,
         [req.user.business_id, name.trim(), cleanCode, address || null]
       );
 
       const branchId = branchResult.insertId;
-
-      // Find standard plan for this business
-      const [existingSubs] = await connection.execute(
-        `SELECT plan_id FROM branch_subscriptions WHERE business_id = ? ORDER BY id ASC LIMIT 1`,
-        [req.user.business_id]
-      );
-      const planId = existingSubs[0]?.plan_id || 1;
+      const planId = activePlan?.id || 1;
 
       await connection.execute(
         `INSERT INTO branch_subscriptions

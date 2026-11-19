@@ -220,34 +220,94 @@ partiesRouter.delete(
   "/:id",
   requirePermission("parties", "delete"),
   asyncHandler(async (req, res) => {
+    const partyId = req.params.id;
+    const businessId = req.user.business_id;
+
     const [existing] = await query(
       "SELECT id, name FROM parties WHERE id = :id AND business_id = :businessId",
-      { id: req.params.id, businessId: req.user.business_id }
+      { id: partyId, businessId }
     );
     if (!existing) {
       throw badRequest("Party not found");
     }
 
     const [sales] = await query(
-      "SELECT COUNT(*) AS count FROM sale_orders WHERE party_id = :id AND business_id = :businessId",
-      { id: req.params.id, businessId: req.user.business_id }
+      "SELECT COUNT(*) AS count FROM sale_orders WHERE customer_id = :id",
+      { id: partyId }
     );
     if (sales && sales.count > 0) {
       throw badRequest("Cannot delete party with associated sale orders.");
     }
 
     const [purchases] = await query(
-      "SELECT COUNT(*) AS count FROM purchase_orders WHERE party_id = :id AND business_id = :businessId",
-      { id: req.params.id, businessId: req.user.business_id }
+      "SELECT COUNT(*) AS count FROM purchase_orders WHERE vendor_id = :id",
+      { id: partyId }
     );
     if (purchases && purchases.count > 0) {
       throw badRequest("Cannot delete party with associated purchase orders.");
     }
 
-    await query(
-      "DELETE FROM parties WHERE id = :id AND business_id = :businessId",
-      { id: req.params.id, businessId: req.user.business_id }
+    const [payments] = await query(
+      "SELECT COUNT(*) AS count FROM payments WHERE party_id = :id",
+      { id: partyId }
     );
+    if (payments && payments.count > 0) {
+      throw badRequest("Cannot delete party with associated payment records.");
+    }
+
+    const [receivables] = await query(
+      "SELECT COUNT(*) AS count FROM receivables WHERE party_id = :id",
+      { id: partyId }
+    );
+    if (receivables && receivables.count > 0) {
+      throw badRequest("Cannot delete party with associated receivables.");
+    }
+
+    const [payables] = await query(
+      "SELECT COUNT(*) AS count FROM payables WHERE party_id = :id",
+      { id: partyId }
+    );
+    if (payables && payables.count > 0) {
+      throw badRequest("Cannot delete party with associated payables.");
+    }
+
+    try {
+      const [repairs] = await query(
+        "SELECT COUNT(*) AS count FROM repair_tickets WHERE customer_id = :id",
+        { id: partyId }
+      );
+      if (repairs && repairs.count > 0) {
+        throw badRequest("Cannot delete party with associated repair tickets.");
+      }
+    } catch (err) {
+      if (err.status) throw err;
+      if (err.code !== "ER_NO_SUCH_TABLE") throw err;
+    }
+
+    try {
+      const [returns] = await query(
+        "SELECT COUNT(*) AS count FROM order_returns WHERE party_id = :id",
+        { id: partyId }
+      );
+      if (returns && returns.count > 0) {
+        throw badRequest("Cannot delete party with associated return records.");
+      }
+    } catch (err) {
+      if (err.status) throw err;
+      if (err.code !== "ER_NO_SUCH_TABLE") throw err;
+    }
+
+    try {
+      await query(
+        "DELETE FROM parties WHERE id = :id AND business_id = :businessId",
+        { id: partyId, businessId }
+      );
+    } catch (err) {
+      if (err.code === "ER_ROW_IS_REFERENCED_2" || err.errno === 1451) {
+        throw badRequest("Cannot delete party: this party is linked to existing transactions or records.");
+      }
+      throw err;
+    }
 
     res.json({ success: true, message: "Party deleted successfully" });
   })

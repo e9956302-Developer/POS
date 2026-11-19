@@ -148,7 +148,8 @@ export function TopPackagesPage({ initialView = "packages" }) {
     branchId: "",
     planId: "",
     startDate: new Date().toISOString().slice(0, 10),
-    isBackdated: false
+    isBackdated: false,
+    applyToAllBranches: false
   });
 
   useEffect(() => {
@@ -571,7 +572,8 @@ export function TopPackagesPage({ initialView = "packages" }) {
       branchId: prefillSub ? String(prefillSub.branch_id) : (customers[0]?.id ? String(customers[0].id) : ""),
       planId: prefillSub?.plan_id ? String(prefillSub.plan_id) : (defaultPlan ? String(defaultPlan.id) : ""),
       startDate: today,
-      isBackdated: false
+      isBackdated: false,
+      applyToAllBranches: false
     });
 
     setError("");
@@ -606,7 +608,8 @@ export function TopPackagesPage({ initialView = "packages" }) {
         branchId: Number(assignForm.branchId),
         planId: Number(assignForm.planId),
         startDate: assignForm.startDate,
-        isBackdated: assignForm.isBackdated
+        isBackdated: assignForm.isBackdated,
+        applyToAllBranches: Boolean(assignForm.applyToAllBranches)
       });
 
       setMessage(res.message || "Package assigned successfully!");
@@ -1583,6 +1586,16 @@ export function TopPackagesPage({ initialView = "packages" }) {
                       <span>Backdate this subscription (allow past start date)</span>
                     </label>
                   </div>
+                  <div style={{ marginTop: "0.35rem" }}>
+                    <label style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", fontSize: "0.82rem", cursor: "pointer", color: "var(--primary)", fontWeight: 600 }}>
+                      <input
+                        type="checkbox"
+                        checked={assignForm.applyToAllBranches}
+                        onChange={(e) => setAssignForm({ ...assignForm, applyToAllBranches: e.target.checked })}
+                      />
+                      <span>🏢 Apply this package to all branches of this company</span>
+                    </label>
+                  </div>
                 </label>
 
                 {/* 4. End Date (Auto-computes from package duration — admin never types it) */}
@@ -1598,6 +1611,10 @@ export function TopPackagesPage({ initialView = "packages" }) {
 
                 <div className="full-span small muted">
                   ℹ️ <strong>Rule:</strong> A customer has exactly ONE active package at a time. Changing package replaces the old one immediately (prorating is out of scope).
+                </div>
+
+                <div className="full-span small" style={{ background: "rgba(14, 165, 233, 0.08)", border: "1px solid rgba(14, 165, 233, 0.25)", borderRadius: "8px", padding: "0.6rem 0.85rem", color: "var(--primary)", fontWeight: 600 }}>
+                  🔔 <strong>Automatic Notification:</strong> Company Administrator account(s) will instantly receive an in-app alert, notification badge, and audit entry upon package update.
                 </div>
               </div>
 

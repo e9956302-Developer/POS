@@ -102,6 +102,7 @@ export function TopBusinessesPage({ initialView = "companies", initialStatus = "
 
   // Create Branch Modal
   const [showCreateBranchModal, setShowCreateBranchModal] = useState(false);
+  const [branchForceOverride, setBranchForceOverride] = useState(false);
   const [branchForm, setBranchForm] = useState({
     businessId: "",
     name: "",
@@ -312,10 +313,12 @@ export function TopBusinessesPage({ initialView = "companies", initialStatus = "
       await api.topCreateBranch({
         ...branchForm,
         businessId: Number(branchForm.businessId),
-        planId: Number(branchForm.planId)
+        planId: Number(branchForm.planId),
+        force: branchForceOverride
       });
       setMessage(`Branch '${branchForm.name}' created successfully`);
       setShowCreateBranchModal(false);
+      setBranchForceOverride(false);
       setBranchForm({
         businessId: "",
         name: "",
@@ -1654,6 +1657,46 @@ export function TopBusinessesPage({ initialView = "companies", initialStatus = "
                     ))}
                   </SearchableSelect>
                 </label>
+
+                {branchForm.businessId && (() => {
+                  const existingCount = branches.filter((b) => String(b.business_id) === String(branchForm.businessId)).length;
+                  const selectedPlanObj = plansList.find((p) => String(p.id) === String(branchForm.planId));
+                  const limitVal = selectedPlanObj ? (selectedPlanObj.max_branches !== undefined ? Number(selectedPlanObj.max_branches) : 1) : 1;
+                  const isLimitReached = limitVal > 0 && existingCount >= limitVal;
+
+                  return (
+                    <div
+                      className="full-span"
+                      style={{
+                        padding: "0.6rem 0.8rem",
+                        background: isLimitReached ? "rgba(245, 158, 11, 0.08)" : "rgba(59, 130, 246, 0.05)",
+                        borderRadius: "6px",
+                        border: `1px solid ${isLimitReached ? "#f59e0b" : "rgba(59, 130, 246, 0.2)"}`
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ fontSize: "0.85rem", fontWeight: 600, color: isLimitReached ? "#b45309" : "#1e40af" }}>
+                          🏢 Branch Allocation: {existingCount} / {limitVal === 0 ? "Unlimited" : `${limitVal} allowed`}
+                        </span>
+                        {isLimitReached && (
+                          <span className="status-pill status-warning" style={{ fontSize: "0.72rem" }}>Limit Reached</span>
+                        )}
+                      </div>
+                      {isLimitReached && (
+                        <div style={{ marginTop: "0.4rem" }}>
+                          <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.82rem", color: "#b45309", cursor: "pointer" }}>
+                            <input
+                              type="checkbox"
+                              checked={branchForceOverride}
+                              onChange={(e) => setBranchForceOverride(e.target.checked)}
+                            />
+                            <span><strong>Force Override:</strong> Provision extra branch beyond package limit (Top Admin Override)</span>
+                          </label>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
 
               <div className="modal-footer">
