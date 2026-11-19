@@ -42,6 +42,11 @@ export const ADMIN_SUB_PAGES = [
   { key: "admin_themes", subKey: "themes", label: "Brand Themes", icon: "🎨" }
 ];
 
+export const PURCHASE_SUB_PAGES = [
+  { key: "purchases_new", subKey: "new", label: "Create Purchase (Inward Counter)", icon: "📥", permissionAction: "create" },
+  { key: "purchases_history", subKey: "history", label: "Purchases Directory & History", icon: "📜", permissionAction: "view" }
+];
+
 export const EMPLOYEE_SUB_PAGES = [
   { key: "employees_attendance", subKey: "attendance", label: "Monthly Attendance", icon: "📅" },
   { key: "employees_advances", subKey: "advances", label: "Advances & Loans", icon: "💸" },
@@ -64,7 +69,13 @@ export const REPORT_SUB_PAGES = [
 
 export const tabs = [
   { key: "dashboard", label: "Dashboard", pageKey: "dashboard", icon: "📊" },
-  { key: "purchases", label: "Purchases", pageKey: "purchases", icon: "🛒" },
+  {
+    key: "purchases",
+    label: "Purchases",
+    pageKey: "purchases",
+    icon: "🛒",
+    subItems: PURCHASE_SUB_PAGES
+  },
   { key: "sales", label: "Sales", pageKey: "sales", icon: "💰" },
   { key: "cash_register", label: "Cash Register", pageKey: "cash_register", icon: "💵" },
   { key: "inventory", label: "Inventory", pageKey: "inventory", icon: "📦" },
@@ -124,15 +135,34 @@ export function getVisibleTabs(user) {
   if (isCompanyAdmin) {
     return tabs.filter((tab) => ["dashboard", "reports", "admin"].includes(tab.key));
   }
-  return tabs.filter((tab) => {
-    if (tab.key === "admin") {
-      return ["business_super_admin", "admin"].includes(roleName(user));
-    }
-    return canUse(user, tab.pageKey);
-  });
+  return tabs
+    .filter((tab) => {
+      if (tab.key === "admin") {
+        return ["business_super_admin", "admin"].includes(roleName(user));
+      }
+      if (tab.key === "purchases") {
+        return canUse(user, "purchases", "view") || canUse(user, "purchases", "create");
+      }
+      return canUse(user, tab.pageKey);
+    })
+    .map((tab) => {
+      if (tab.key === "purchases" && tab.subItems) {
+        const canCreate = canUse(user, "purchases", "create");
+        const canView = canUse(user, "purchases", "view");
+        const filteredSubs = tab.subItems.filter((sub) => {
+          if (sub.key === "purchases_new") return canCreate;
+          if (sub.key === "purchases_history") return canView;
+          return true;
+        });
+        return { ...tab, subItems: filteredSubs };
+      }
+      return tab;
+    });
 }
 
 export const SUB_ENTITY_MAP = {
+  purchases_new: "purchases",
+  purchases_history: "purchases",
   models: "inventory",
   products: "inventory",
   categories: "inventory",
@@ -173,8 +203,18 @@ export function canUse(user, pageKey, actionKey = "view") {
   if (!user) return false;
   const role = roleName(user);
 
+  let targetPage = pageKey;
+  let targetAction = actionKey;
+  if (pageKey === "purchases_new") {
+    targetPage = "purchases";
+    if (actionKey === "view") targetAction = "create";
+  } else if (pageKey === "purchases_history") {
+    targetPage = "purchases";
+    if (actionKey === "view") targetAction = "view";
+  }
+
   if (role === "top_admin") {
-    return pageKey.startsWith("top_") || pageKey === "admin";
+    return targetPage.startsWith("top_") || targetPage === "admin";
   }
 
   // Enforce branch subscription plan package entitlements if configured
@@ -191,20 +231,20 @@ export function canUse(user, pageKey, actionKey = "view") {
     }
   }
   if (Array.isArray(allowedPages) && allowedPages.length > 0) {
-    let isPackageAllowed = allowedPages.includes(pageKey);
+    let isPackageAllowed = allowedPages.includes(targetPage);
     if (!isPackageAllowed) {
-      if (pageKey === "reports" || pageKey.startsWith("reports_")) {
+      if (targetPage === "reports" || targetPage.startsWith("reports_")) {
         isPackageAllowed =
           allowedPages.includes("reports") ||
-          allowedPages.includes(pageKey) ||
+          allowedPages.includes(targetPage) ||
           allowedPages.includes("reports_inventory") ||
           allowedPages.includes("reports_receivables") ||
           allowedPages.includes("reports_payables") ||
           allowedPages.includes("admin") ||
           ["business_super_admin", "admin"].includes(role);
-      } else if (pageKey === "branches") {
+      } else if (targetPage === "branches") {
         isPackageAllowed = allowedPages.includes("admin") || ["business_super_admin", "admin"].includes(role);
-      } else if (pageKey === "employees") {
+      } else if (targetPage === "employees") {
         isPackageAllowed =
           allowedPages.includes("employees") ||
           allowedPages.includes("salaries") ||
@@ -212,12 +252,12 @@ export function canUse(user, pageKey, actionKey = "view") {
           allowedPages.includes("staff") ||
           allowedPages.includes("admin") ||
           ["business_super_admin", "admin"].includes(role);
-      } else if (pageKey === "repairs") {
+      } else if (targetPage === "repairs") {
         isPackageAllowed =
           allowedPages.includes("repairs") ||
           allowedPages.includes("admin") ||
           ["business_super_admin", "admin"].includes(role);
-      } else if (pageKey === "products" || pageKey === "categories" || pageKey === "models") {
+      } else if (targetPage === "products" || targetPage === "categories" || targetPage === "models") {
         isPackageAllowed =
           allowedPages.includes("inventory") ||
           allowedPages.includes("sales") ||
@@ -252,32 +292,32 @@ export function canUse(user, pageKey, actionKey = "view") {
   // Company Admins govern the business and only access Dashboard, Reports, and Admin Management.
   // All operational pages are branch-only operations and cannot be directly executed by Company Admin.
   if (["business_super_admin", "admin"].includes(role)) {
-    if (["create", "close", "reopen", "verify"].includes(actionKey) && (BRANCH_OPERATIONAL_PAGES.includes(pageKey) || pageKey.startsWith("employees_") || pageKey === "returns")) {
+    if (["create", "close", "reopen", "verify"].includes(targetAction) && (BRANCH_OPERATIONAL_PAGES.includes(targetPage) || targetPage.startsWith("employees_") || targetPage === "returns")) {
       return false;
     }
     return true;
   }
 
   // Global view allowances:
-  if (pageKey === "notifications" && actionKey === "view") {
+  if (targetPage === "notifications" && targetAction === "view") {
     return true;
   }
-  if (pageKey === "branches" && actionKey === "view") {
+  if (targetPage === "branches" && targetAction === "view") {
     return true;
   }
 
   // Staff roles (manager, cashier, etc.):
   // 1. Direct permission check in user.permissions
-  const effectivePageKey = (pageKey.startsWith("reports_") && !user?.permissions?.some(r => (r.page_key || r.pageKey) === pageKey)) ? "reports" : pageKey;
+  const effectivePageKey = (targetPage.startsWith("reports_") && !user?.permissions?.some(r => (r.page_key || r.pageKey) === targetPage)) ? "reports" : targetPage;
   const directPermission = user?.permissions?.find(
-    (row) => (row.page_key || row.pageKey) === effectivePageKey && (row.action_key || row.actionKey) === actionKey
+    (row) => (row.page_key || row.pageKey) === effectivePageKey && (row.action_key || row.actionKey) === targetAction
   );
   if (directPermission !== undefined) {
     return Boolean(directPermission.is_allowed ?? directPermission.isAllowed);
   }
 
   // 2. Catalog viewing allowance for operational staff
-  if ((pageKey === "products" || pageKey === "categories" || pageKey === "models") && actionKey === "view") {
+  if ((targetPage === "products" || targetPage === "categories" || targetPage === "models") && targetAction === "view") {
     const hasAnyOps = user?.permissions?.some(
       (p) => ["inventory", "sales", "purchases", "invoices", "repairs", "cash_register"].includes(p.page_key || p.pageKey) && Boolean(p.is_allowed ?? p.isAllowed)
     );
@@ -287,10 +327,10 @@ export function canUse(user, pageKey, actionKey = "view") {
   }
 
   // 3. Parent module mapped permission check in user.permissions
-  const parentModule = SUB_ENTITY_MAP[pageKey];
+  const parentModule = SUB_ENTITY_MAP[targetPage];
   if (parentModule) {
     const parentPermission = user?.permissions?.find(
-      (row) => (row.page_key || row.pageKey) === parentModule && (row.action_key || row.actionKey) === actionKey
+      (row) => (row.page_key || row.pageKey) === parentModule && (row.action_key || row.actionKey) === targetAction
     );
     if (parentPermission !== undefined) {
       return Boolean(parentPermission.is_allowed ?? parentPermission.isAllowed);
@@ -304,20 +344,20 @@ export function canUse(user, pageKey, actionKey = "view") {
       "inventory", "parties", "expenses", "invoices",
       "repairs", "employees", "reports"
     ];
-    const targetModule = parentModule || pageKey;
-    if (actionKey === "view") {
-      return managerDefaultPages.includes(targetModule) || pageKey.startsWith("reports_");
+    const targetModule = parentModule || targetPage;
+    if (targetAction === "view") {
+      return managerDefaultPages.includes(targetModule) || targetPage.startsWith("reports_");
     }
-    if (actionKey === "create" || actionKey === "edit") {
+    if (targetAction === "create" || targetAction === "edit") {
       return managerDefaultPages.includes(targetModule);
     }
-    if (actionKey === "delete") {
+    if (targetAction === "delete") {
       return ["sales", "purchases", "inventory", "parties", "expenses", "invoices", "repairs"].includes(targetModule);
     }
-    if (actionKey === "close" || actionKey === "verify") {
+    if (targetAction === "close" || targetAction === "verify") {
       return targetModule === "cash_register";
     }
-    if (actionKey === "payment") {
+    if (targetAction === "payment") {
       return targetModule === "invoices";
     }
     return false;
@@ -328,11 +368,11 @@ export function canUse(user, pageKey, actionKey = "view") {
       "dashboard", "sales", "cash_register", "invoices",
       "parties", "repairs", "employees", "inventory"
     ];
-    const targetModule = parentModule || pageKey;
-    if (actionKey === "view") {
+    const targetModule = parentModule || targetPage;
+    if (targetAction === "view") {
       return cashierDefaultPages.includes(targetModule);
     }
-    if (actionKey === "create" || actionKey === "payment" || actionKey === "close") {
+    if (targetAction === "create" || targetAction === "payment" || targetAction === "close") {
       return ["sales", "cash_register", "invoices", "parties", "repairs"].includes(targetModule);
     }
     return false;
@@ -539,9 +579,10 @@ function AppContent() {
         if (hash.includes("login") || path === "/login" || path.endsWith("/login")) {
           return "login";
         }
+        return "landing";
       }
     } catch {}
-    return "landing";
+    return "login";
   });
 
   useEffect(() => {
@@ -553,6 +594,11 @@ function AppContent() {
           setGuestView("login");
         } else if (hash.includes("landing") || hash === "" || hash === "#") {
           setGuestView("landing");
+        } else if (session) {
+          const h = window.location.hash.replace(/^#\/?/, "").toLowerCase().trim();
+          if (h && h !== "login" && h !== "landing") {
+            setActiveTab(h);
+          }
         }
       } catch {}
     }
@@ -562,10 +608,20 @@ function AppContent() {
       window.removeEventListener("hashchange", handleHashChange);
       window.removeEventListener("popstate", handleHashChange);
     };
-  }, []);
+  }, [session]);
   const [subscriptionExpiredData, setSubscriptionExpiredData] = useState(null);
   const [sessionExpiredData, setSessionExpiredData] = useState(null);
-  const [activeTab, setActiveTab] = useState("dashboard");
+  const [activeTab, setActiveTab] = useState(() => {
+    try {
+      if (typeof window !== "undefined" && window.location.hash) {
+        const h = window.location.hash.replace(/^#\/?/, "").toLowerCase().trim();
+        if (h && h !== "login" && h !== "landing") {
+          return h;
+        }
+      }
+    } catch {}
+    return "dashboard";
+  });
   const [branches, setBranches] = useState([]);
   const [models, setModels] = useState([]);
   const [parties, setParties] = useState([]);
@@ -594,6 +650,17 @@ function AppContent() {
   };
 
   const [theme, setTheme] = useState("dark");
+
+  useEffect(() => {
+    if (session && activeTab) {
+      try {
+        const currentHash = window.location.hash.replace(/^#\/?/, "").toLowerCase().trim();
+        if (currentHash !== activeTab && currentHash !== "login" && currentHash !== "landing") {
+          window.location.hash = activeTab;
+        }
+      } catch {}
+    }
+  }, [session, activeTab]);
 
   useEffect(() => {
     function handleSubExpired(e) {
@@ -1092,6 +1159,23 @@ function AppContent() {
     setActiveTab(tabKey);
   }
 
+  const [purchaseMenuOpen, setPurchaseMenuOpen] = useState(() => {
+    return activeTab === "purchases" || activeTab.startsWith("purchases_");
+  });
+
+  const isPurchaseActive = activeTab === "purchases" || activeTab.startsWith("purchases_");
+  const activePurchaseSub = activeTab === "purchases_history"
+    ? "history"
+    : activeTab === "purchases_new"
+    ? "new"
+    : (canUse(session, "purchases", "create") ? "new" : "history");
+
+  useEffect(() => {
+    if (isPurchaseActive) {
+      setPurchaseMenuOpen(true);
+    }
+  }, [isPurchaseActive]);
+
   const [adminMenuOpen, setAdminMenuOpen] = useState(() => {
     return activeTab === "admin" || activeTab.startsWith("admin_");
   });
@@ -1174,7 +1258,10 @@ function AppContent() {
           (tab.key === "admin" && activeTab.startsWith("admin_")) ||
           (!isCompanyAdmin && tab.key === "employees" && activeTab.startsWith("employees_")) ||
           (tab.key === "reports" && activeTab.startsWith("reports_")) ||
-          (["purchases", "sales", "expenses"].includes(activeTab) && canUse(session, activeTab))
+          (tab.key === "purchases" &&
+            (activeTab === "purchases" ||
+              tab.subItems?.some((sub) => sub.key === activeTab))) ||
+          (["sales", "expenses"].includes(activeTab) && canUse(session, activeTab))
       )
     ) {
       setActiveTab(visibleTabs[0].key);
@@ -1183,16 +1270,33 @@ function AppContent() {
 
   // When a parent menu key is selected directly, land on its first sub-page
   useEffect(() => {
-    if (activeTab === "admin") {
+    if (activeTab === "purchases") {
+      const purchasesTab = visibleTabs.find((t) => t.key === "purchases");
+      const firstSubKey = purchasesTab?.subItems?.[0]?.key;
+      if (firstSubKey) {
+        setActiveTab(firstSubKey);
+      } else if (canUse(session, "purchases", "create")) {
+        setActiveTab("purchases_new");
+      } else if (canUse(session, "purchases", "view")) {
+        setActiveTab("purchases_history");
+      }
+    } else if (activeTab === "admin") {
       setActiveTab("admin_branches");
     } else if (activeTab === "reports") {
       setActiveTab("reports_pnl");
     } else if (activeTab === "employees") {
       setActiveTab("employees_attendance");
     }
-  }, [activeTab]);
+  }, [activeTab, visibleTabs, session]);
 
   const activeTabItem = useMemo(() => {
+    if (activeTab === "purchases" || activeTab.startsWith("purchases_")) {
+      const subKey = activeTab.startsWith("purchases_")
+        ? activeTab
+        : `purchases_${activePurchaseSub || "new"}`;
+      const sub = PURCHASE_SUB_PAGES.find((s) => s.key === subKey) || PURCHASE_SUB_PAGES[0];
+      return { key: sub.key, label: `${t("nav.purchases", "Purchases")}: ${t(`nav.${sub.key}`, sub.label)}`, icon: sub.icon };
+    }
     if (activeTab.startsWith("admin_")) {
       const sub = ADMIN_SUB_PAGES.find((s) => s.key === activeTab);
       if (sub) {
@@ -1213,9 +1317,24 @@ function AppContent() {
     }
     const found = visibleTabs.find((t) => t.key === activeTab) || visibleTabs[0] || tabs[0];
     return { ...found, label: t(`nav.${found.key}`, found.label) };
-  }, [activeTab, visibleTabs, t, language]);
+  }, [activeTab, activePurchaseSub, visibleTabs, t, language]);
 
   const pageBreadcrumb = useMemo(() => {
+    // 0. Purchases subpages
+    if (activeTab === "purchases" || activeTab.startsWith("purchases_")) {
+      const subKey = activeTab.startsWith("purchases_")
+        ? activeTab
+        : `purchases_${activePurchaseSub || "new"}`;
+      const sub = PURCHASE_SUB_PAGES.find((s) => s.key === subKey) || PURCHASE_SUB_PAGES[0];
+      return {
+        parent: t("nav.purchases", "Purchases"),
+        parentIcon: "🛒",
+        current: t(`nav.${sub.key}`, sub.label),
+        currentIcon: sub.icon,
+        isNested: true
+      };
+    }
+
     // 1. Admin subpages
     if (activeTab === "admin" || activeTab.startsWith("admin_")) {
       const subKey = activeTab.startsWith("admin_") ? activeTab : `admin_${activeAdminSub || "branches"}`;
@@ -1278,7 +1397,7 @@ function AppContent() {
       currentIcon: currentTab?.icon || "📄",
       isNested: false
     };
-  }, [activeTab, activeAdminSub, activeEmployeeSub, activeReportSub, isTopAdmin, t, language]);
+  }, [activeTab, activePurchaseSub, activeAdminSub, activeEmployeeSub, activeReportSub, isTopAdmin, t, language]);
 
   async function handleLogin(credentials) {
     setError("");
@@ -1641,7 +1760,19 @@ function AppContent() {
             <TopSettingsPage context={context} />
           ) : null}
           {activeTab === "dashboard" ? <DashboardPage context={context} /> : null}
-          {activeTab === "purchases" && canUse(session, "purchases") ? <PurchasesPage context={context} /> : null}
+          {(isPurchaseActive || activeTab === "purchases") &&
+          (canUse(session, "purchases", activePurchaseSub === "history" ? "view" : "create") ||
+           canUse(session, "purchases", "view") ||
+           canUse(session, "purchases", "create")) ? (
+            <PurchasesPage
+              context={context}
+              activeSubPage={activePurchaseSub}
+              onNavigateSubPage={(subKey) => {
+                setError("");
+                setActiveTab(`purchases_${subKey}`);
+              }}
+            />
+          ) : null}
           {activeTab === "sales" && canUse(session, "sales") ? <SalesPage context={context} /> : null}
           {activeTab === "cash_register" && !isCompanyAdmin && canUse(session, "cash_register") ? <CashRegisterPage context={context} /> : null}
           {activeTab === "inventory" && !isCompanyAdmin && canUse(session, "inventory") ? <InventoryPage context={context} /> : null}

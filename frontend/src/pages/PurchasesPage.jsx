@@ -55,7 +55,7 @@ function highlightMatch(text, query) {
   );
 }
 
-export function PurchasesPage({ context = {} }) {
+export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }) {
   const { t, isRtl, language, formatCurrency } = useLanguage();
   const isUrdu = language === "ur";
   const defaultBranchId = context?.session?.branch_id || context?.session?.branchId || "";
@@ -66,7 +66,10 @@ export function PurchasesPage({ context = {} }) {
   const [error, setError] = useState("");
   const [showQRModal, setShowQRModal] = useState(false);
   const [qrItems, setQrItems] = useState([]);
-  const [activeTab, setActiveTab] = useState("new"); // "new" | "history"
+  const [activeTab, setActiveTab] = useState(() => {
+    if (activeSubPage === "history") return "history";
+    return "new";
+  }); // "new" | "history"
 
   // Universal Combobox Scanner & Intake States (matching SalesPage)
   const [universalScanInput, setUniversalScanInput] = useState("");
@@ -316,6 +319,17 @@ export function PurchasesPage({ context = {} }) {
   useEffect(() => {
     loadPurchases();
   }, [loadPurchases, context?.session?.branch_id]);
+
+  // Keep activeTab in sync with activeSubPage from sidebar navigation
+  useEffect(() => {
+    if (activeSubPage) {
+      const target = activeSubPage === "history" ? "history" : "new";
+      setActiveTab(target);
+      if (target === "history") {
+        loadPurchases();
+      }
+    }
+  }, [activeSubPage, loadPurchases]);
 
   const shopName = context?.companyName || context?.session?.business_name || context?.session?.businessName || "DigitalMarkaz360";
   const companyLogo = context?.companyLogo || context?.session?.business_logo || context?.session?.logo_url || context?.session?.businessLogo || (typeof window !== "undefined" && window.__POS_COMPANY_LOGO__) || null;
@@ -1261,57 +1275,7 @@ export function PurchasesPage({ context = {} }) {
 
   return (
     <>
-      {/* VIEW SELECTION TABS */}
-      <div className="nav-tabs" style={{ display: "flex", gap: "0.5rem", borderBottom: "1px solid var(--border)", paddingBottom: "0.6rem", marginBottom: "1rem" }}>
-        <button
-          type="button"
-          className={`tab-btn ${activeTab === "new" ? "active" : ""}`}
-          onClick={() => {
-            setActiveTab("new");
-            setError("");
-          }}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "0.45rem",
-            padding: "0.55rem 1.1rem",
-            borderRadius: "8px",
-            fontWeight: "600",
-            fontSize: "0.9rem",
-            border: activeTab === "new" ? "1px solid var(--primary)" : "1px solid var(--border)",
-            background: activeTab === "new" ? "var(--primary)" : "var(--surface)",
-            color: activeTab === "new" ? "#ffffff" : "var(--text)"
-          }}
-        >
-          <span>📥</span> {t("purchases.create_purchase", "Create Purchase (Inward Counter)")}
-        </button>
-        {canView && (
-          <button
-            type="button"
-            className={`tab-btn ${activeTab === "history" ? "active" : ""}`}
-            onClick={() => {
-              setActiveTab("history");
-              setError("");
-              loadPurchases();
-            }}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.45rem",
-              padding: "0.55rem 1.1rem",
-              borderRadius: "8px",
-              fontWeight: "600",
-              fontSize: "0.9rem",
-              border: activeTab === "history" ? "1px solid var(--primary)" : "1px solid var(--border)",
-              background: activeTab === "history" ? "var(--primary)" : "var(--surface)",
-              color: activeTab === "history" ? "#ffffff" : "var(--text)"
-            }}
-          >
-            <span>📜</span> {t("purchases.history", "Purchases Directory & History")} ({purchasesList.length})
-          </button>
-        )}
-      </div>
-
+      <span className="sr-only">{t("purchases.create_purchase", "Create Purchase")}</span>
       {/* Global alert messages */}
       {error ? <div className="alert error full-span">{error}</div> : null}
       {message ? (

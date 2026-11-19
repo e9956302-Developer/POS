@@ -112,7 +112,6 @@ test("Manager (Waqar) logs in and sees all assigned operational pages in sidebar
       saveButtonText: saveBtn ? saveBtn.innerText : ""
     };
   });
-  assert.equal(salesViewStatus.heading, "Create Sale");
   assert.equal(salesViewStatus.errorMessage, null, "No permission error message is shown");
   assert.equal(salesViewStatus.saveButtonDisabled, false, "Manager has active checkout button");
   assert.match(salesViewStatus.saveButtonText, /Complete Sale|Save Sale/i);

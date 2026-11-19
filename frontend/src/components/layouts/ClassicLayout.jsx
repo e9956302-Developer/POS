@@ -45,6 +45,7 @@ export function ClassicLayout({
 }) {
   const { isRtl, t } = useLanguage();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [purchaseMenuOpen, setPurchaseMenuOpen] = useState(true);
   const [adminMenuOpen, setAdminMenuOpen] = useState(true);
   const [employeeMenuOpen, setEmployeeMenuOpen] = useState(true);
   const [reportMenuOpen, setReportMenuOpen] = useState(false);
@@ -52,9 +53,16 @@ export function ClassicLayout({
 
   const isSalesPage = activeTab === "sales";
 
+  const isPurchaseActive = activeTab === "purchases" || activeTab.startsWith("purchases_");
   const isAdminActive = activeTab === "admin" || activeTab.startsWith("admin_");
   const isEmployeeActive = activeTab === "employees" || activeTab.startsWith("employees_");
   const isReportActive = activeTab === "reports" || activeTab.startsWith("reports_");
+
+  useEffect(() => {
+    if (isPurchaseActive) {
+      setPurchaseMenuOpen(true);
+    }
+  }, [isPurchaseActive]);
 
   function toggleSidebar() {
     setIsCollapsed(!isCollapsed);
@@ -118,25 +126,32 @@ export function ClassicLayout({
             {tabs.map((tab) => {
               const isTabActive =
                 tab.key === activeTab ||
+                (tab.key === "purchases" && isPurchaseActive) ||
                 (tab.key === "admin" && isAdminActive) ||
                 (tab.key === "employees" && isEmployeeActive) ||
                 (tab.key === "reports" && isReportActive);
 
               if (tab.subItems) {
                 const isGroupOpen =
-                  tab.key === "admin"
+                  tab.key === "purchases"
+                    ? purchaseMenuOpen
+                    : tab.key === "admin"
                     ? adminMenuOpen
                     : tab.key === "employees"
                     ? employeeMenuOpen
                     : reportMenuOpen;
                 const setGroupOpen =
-                  tab.key === "admin"
+                  tab.key === "purchases"
+                    ? setPurchaseMenuOpen
+                    : tab.key === "admin"
                     ? setAdminMenuOpen
                     : tab.key === "employees"
                     ? setEmployeeMenuOpen
                     : setReportMenuOpen;
                 const defaultSubKey =
-                  tab.key === "admin"
+                  tab.key === "purchases"
+                    ? (tab.subItems?.[0]?.key || "purchases_new")
+                    : tab.key === "admin"
                     ? "admin_branches"
                     : tab.key === "employees"
                     ? "employees_attendance"
