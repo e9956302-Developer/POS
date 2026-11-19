@@ -6,6 +6,7 @@ import { SearchableSelect } from "../components/SearchableSelect.jsx";
 import { AdaptiveTable } from "../components/AdaptiveTable.jsx";
 import { PaginationBar } from "../components/PaginationBar.jsx";
 import { QuickAddProductModal } from "../components/QuickAddProductModal.jsx";
+import { QuickAddModelModal } from "../components/QuickAddModelModal.jsx";
 import { ReturnOrderModal } from "../components/ReturnOrderModal.jsx";
 import { TableActionButton } from "../components/TableActionColumn.jsx";
 import { exportToCSV } from "../utils/export.js";
@@ -98,6 +99,9 @@ export function SalesPage({ context }) {
   const [isLoadingBranchUnits, setIsLoadingBranchUnits] = useState(false);
   const [showCustomerDetails, setShowCustomerDetails] = useState(false);
   const [showQuickProductModal, setShowQuickProductModal] = useState(false);
+  const [showQuickModelModal, setShowQuickModelModal] = useState(false);
+  const [showWalkInDetails, setShowWalkInDetails] = useState(false);
+  const isBranchFixed = Boolean(context.session?.is_branch_locked || context.session?.branchLocked);
 
   // Close attached dropdown on click outside
   useEffect(() => {
@@ -845,6 +849,20 @@ export function SalesPage({ context }) {
     setTimeout(() => scannerInputRef.current?.focus(), 50);
   }
 
+  // Unified Add Action: identical behavior for Enter key in input and clicking the Add button
+  const handleAddAction = () => {
+    if (isDropdownOpen && highlightedIndex >= 0 && highlightedIndex < searchResults.length) {
+      const selected = searchResults[highlightedIndex];
+      if (selected.inStock) {
+        isAddInFlightRef.current = true;
+        frozenResultsRef.current = searchResults;
+        handleSelectItem(selected);
+        return;
+      }
+    }
+    handleUniversalScan(universalScanInput);
+  };
+
   function updateCartItemQty(index, newQty) {
     const qty = Math.max(1, parseInt(newQty, 10) || 1);
     const nextItems = form.items.map((it, idx) => (idx === index ? { ...it, quantity: qty } : it));
@@ -1310,225 +1328,234 @@ export function SalesPage({ context }) {
         <div className="pos-layout">
           {/* LEFT COLUMN: SCANNER, PICKER & LIVE CART */}
           <div className="pos-main-column">
-            {/* Top Bar: Compact Inline Branch Selector & Summary (Pack #20 Part 6.6) */}
+            {/* ROW 1: Sale info (Customer info, Sale Date, Outlet / Branch) */}
             <div
-              className="pos-branch-inline-bar"
+              className="pos-sale-row-1 pos-purchase-row-1 pos-branch-inline-bar"
               style={{
                 display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                flexWrap: "wrap",
+                alignItems: "flex-end",
                 gap: "0.5rem",
-                marginBottom: "0.5rem",
-                padding: "0.25rem 0",
-                borderBottom: "1px solid var(--border, rgba(255, 255, 255, 0.08))"
+                flexWrap: "wrap",
+                marginBottom: "0.5rem"
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                <span style={{ fontSize: "0.95rem" }}>🏪</span>
-                <span style={{ fontSize: "0.85rem", fontWeight: "600", color: "var(--text-muted)" }}>
-                  {t("app.store_outlet", "Store Outlet")}:
-                </span>
-                <select
-                  value={form.branchId}
-                  onChange={(e) => setForm({ ...form, branchId: e.target.value })}
-                  style={{ padding: "0.3rem 0.55rem", borderRadius: "6px", fontSize: "0.85rem", border: "1px solid var(--border)" }}
+              {/* 1. Customer info */}
+              <label style={{ flex: "1.5 1 200px", minWidth: 0, margin: 0 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.2rem" }}>
+                  <span className="muted small" style={{ fontSize: "0.8rem", fontWeight: "600" }}>
+                    {t("sales.customer_box_title", "Customer")} <span style={{ color: "var(--danger, #ef4444)" }}>*</span>
+                  </span>
+                  {!form.customerId && (
+                    <button
+                      type="button"
+                      className="ghost-btn btn-sm"
+                      onClick={() => setShowWalkInDetails(!showWalkInDetails)}
+                      style={{ padding: "0 4px", fontSize: "0.72rem", color: "var(--primary)" }}
+                      title="Toggle walk-in customer details"
+                    >
+                      {showWalkInDetails ? (isUrdu ? "چھپائیں" : "Hide") : (form.quickCustomerName ? `📝 ${form.quickCustomerName}` : (isUrdu ? "+ نام/فون" : "+ Name/Phone"))}
+                    </button>
+                  )}
+                </div>
+                <SearchableSelect
+                  value={form.customerId}
+                  onChange={(e) => setForm({ ...form, customerId: e.target.value })}
+                  placeholder={isUrdu ? "گاہک تلاش کریں..." : "Search customer..."}
                 >
-                  <option value="">{isUrdu ? "برانچ منتخب کریں" : "Select Branch"}</option>
-                  {(context?.branches || []).map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name}
+                  <option value="">{t("sales.walk_in", "Walk in / new customer (Cash)")}</option>
+                  {customerOptions.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} {c.phone ? `(${c.phone})` : ""}
                     </option>
                   ))}
-                </select>
-              </div>
+                </SearchableSelect>
+              </label>
 
-              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                <span className="muted small" style={{ fontSize: "0.8rem" }}>
-                  {isUrdu ? (
-                    <>برانچ اسٹاک: <strong>{branchUnits.length}</strong> فونز • <strong>{availableProducts.length}</strong> سامان</>
-                  ) : (
-                    <>Branch Stock: <strong>{branchUnits.length}</strong> handsets • <strong>{availableProducts.length}</strong> products</>
-                  )}
+              {/* Optional Walk-in Customer Name & Phone */}
+              {showWalkInDetails && !form.customerId && (
+                <>
+                  <label style={{ flex: "1.2 1 150px", minWidth: 0, margin: 0 }}>
+                    <span className="muted small" style={{ display: "block", marginBottom: "0.2rem", fontSize: "0.8rem", fontWeight: "600" }}>
+                      {t("sales.customer_name", "Customer Name")}
+                    </span>
+                    <input
+                      type="text"
+                      placeholder={isUrdu ? "عام خریدار کا نام" : "Walk-in name"}
+                      value={form.quickCustomerName}
+                      onChange={(e) => setForm({ ...form, quickCustomerName: e.target.value })}
+                      style={{ width: "100%", padding: "0.4rem 0.6rem", fontSize: "0.88rem", borderRadius: "10px", border: "1px solid var(--border)", background: "var(--input-bg, var(--surface))", color: "var(--text)", boxSizing: "border-box", minHeight: "42px" }}
+                    />
+                  </label>
+                  <label style={{ flex: "1.2 1 150px", minWidth: 0, margin: 0 }}>
+                    <span className="muted small" style={{ display: "block", marginBottom: "0.2rem", fontSize: "0.8rem", fontWeight: "600" }}>
+                      {t("sales.customer_phone", "Customer Phone")}
+                    </span>
+                    <input
+                      type="text"
+                      placeholder="e.g. 03001234567"
+                      value={form.quickCustomerPhone}
+                      onChange={(e) => setForm({ ...form, quickCustomerPhone: e.target.value })}
+                      style={{ width: "100%", padding: "0.4rem 0.6rem", fontSize: "0.88rem", borderRadius: "10px", border: "1px solid var(--border)", background: "var(--input-bg, var(--surface))", color: "var(--text)", boxSizing: "border-box", minHeight: "42px" }}
+                    />
+                  </label>
+                </>
+              )}
+
+              {/* 2. Sale Date */}
+              <label style={{ flex: "1 1 140px", minWidth: 0, margin: 0 }}>
+                <span className="muted small" style={{ display: "block", marginBottom: "0.2rem", fontSize: "0.8rem", fontWeight: "600" }}>
+                  {t("sales.sale_date", "Sale Date")} <span style={{ color: "var(--danger, #ef4444)" }}>*</span>
                 </span>
-                <button
-                  type="button"
-                  className="ghost-btn btn-sm"
-                  onClick={() => loadBranchUnits(form.branchId)}
-                  disabled={isLoadingBranchUnits}
-                  title="Reload branch stock"
-                  style={{ padding: "0.15rem 0.35rem", fontSize: "0.78rem" }}
-                >
-                  🔄
-                </button>
-              </div>
+                <input
+                  type="date"
+                  value={form.saleDate}
+                  onChange={(event) => setForm({ ...form, saleDate: event.target.value })}
+                  required
+                  style={{ width: "100%", padding: "0.4rem 0.6rem", fontSize: "0.88rem", borderRadius: "10px", border: "1px solid var(--border)", background: "var(--input-bg, var(--surface))", color: "var(--text)", boxSizing: "border-box", minHeight: "42px" }}
+                />
+              </label>
+
+              {/* 3. Outlet / Branch */}
+              <label style={{ flex: "1.2 1 170px", minWidth: 0, margin: 0 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.2rem" }}>
+                  <span className="muted small" style={{ fontSize: "0.8rem", fontWeight: "600" }}>
+                    {t("app.store_outlet", "Store Outlet")} <span style={{ color: "var(--danger, #ef4444)" }}>*</span>
+                  </span>
+                  <span className="muted small" style={{ fontSize: "0.75rem", display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
+                    <span>📱{branchUnits.length} 📦{availableProducts.length}</span>
+                    <button
+                      type="button"
+                      className="ghost-btn btn-sm"
+                      onClick={() => loadBranchUnits(form.branchId)}
+                      disabled={isLoadingBranchUnits}
+                      title="Reload branch stock"
+                      style={{ padding: "0 2px", fontSize: "0.75rem" }}
+                    >
+                      🔄
+                    </button>
+                  </span>
+                </div>
+                {isBranchFixed ? (
+                  <input
+                    ref={firstFieldRef}
+                    type="text"
+                    readOnly
+                    value={(context?.branches || []).find((b) => String(b.id) === String(form.branchId))?.name || context.session?.branch_name || `Branch #${form.branchId}`}
+                    style={{
+                      width: "100%",
+                      padding: "0.4rem 0.6rem",
+                      fontSize: "0.88rem",
+                      borderRadius: "10px",
+                      border: "1px solid var(--border)",
+                      background: "var(--input-bg, var(--surface))",
+                      color: "var(--text-muted)",
+                      boxSizing: "border-box",
+                      minHeight: "42px",
+                      cursor: "not-allowed"
+                    }}
+                  />
+                ) : (
+                  <select
+                    ref={firstFieldRef}
+                    value={form.branchId}
+                    onChange={(e) => setForm({ ...form, branchId: e.target.value })}
+                    required
+                    style={{
+                      width: "100%",
+                      padding: "0.4rem 0.6rem",
+                      borderRadius: "10px",
+                      fontSize: "0.88rem",
+                      border: "1px solid var(--border)",
+                      background: "var(--input-bg, var(--surface))",
+                      color: "var(--text)",
+                      boxSizing: "border-box",
+                      minHeight: "42px"
+                    }}
+                  >
+                    <option value="">{isUrdu ? "برانچ منتخب کریں" : "Select Branch"}</option>
+                    {(context?.branches || []).map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </label>
             </div>
 
-            {/* Universal Smart Barcode & QR Scanner Bar (Pack #20) */}
-            <div style={{ marginBottom: "0.75rem" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.35rem" }}>
-                <span style={{ fontSize: "0.82rem", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--primary)" }}>
-                  ⚡ {isUrdu ? "یونیورسل اسکینر" : "Universal Scanner"}
-                </span>
-              </div>
-
-              {/* Persistent Scanner Error Alert (Pack #20 Part 2) */}
-              {scannerError && (
-                <div
-                  className="pos-scanner-error-alert"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "0.55rem 0.85rem",
-                    marginBottom: "0.5rem",
-                    borderRadius: "8px",
-                    background: "rgba(239, 68, 68, 0.12)",
-                    border: "1px solid #ef4444",
-                    color: "#ef4444",
-                    fontSize: "0.88rem"
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                    <span>⚠️</span>
-                    <span>{scannerError}</span>
-                  </div>
-                  <button
-                    type="button"
-                    className="ghost-btn btn-sm"
-                    onClick={() => setScannerError("")}
-                    style={{ color: "#ef4444", fontWeight: 700, padding: "2px 6px" }}
-                  >
-                    ✕
-                  </button>
-                </div>
-              )}
-
-              {/* Awaiting Phone IMEI Banner (Scenario S3) */}
-              {awaitingPhoneModel && (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "0.6rem 0.9rem",
-                    marginBottom: "0.5rem",
-                    borderRadius: "8px",
-                    background: "rgba(56, 189, 248, 0.12)",
-                    border: "1px solid var(--primary)",
-                    color: "var(--text)"
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.88rem" }}>
-                    <span style={{ fontSize: "1.1rem" }}>📱</span>
-                    <span>
-                      {isUrdu ? "ماڈل منتخب:" : "Model Selected:"} <strong>{awaitingPhoneModel.name}</strong> ({awaitingPhoneModel.stock} {isUrdu ? "دستیاب" : "in stock"}) —{" "}
-                      <span style={{ color: "var(--primary)", fontWeight: 600 }}>
-                        {isUrdu ? "اب اس فون کا 15 ہندسوں کا IMEI اسکین یا درج کریں" : "Now scan or enter this phone's 15-digit IMEI barcode or QR tag"}
-                      </span>
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    className="ghost-btn btn-sm"
-                    onClick={() => {
-                      setAwaitingPhoneModel(null);
-                      setTimeout(() => scannerInputRef.current?.focus(), 50);
-                    }}
-                    style={{ padding: "2px 8px", fontSize: "0.8rem", color: "#ef4444" }}
-                  >
-                    ✕ {isUrdu ? "منسوخ" : "Cancel"}
-                  </button>
-                </div>
-              )}
-
-              {/* Combobox with Attached Dropdown */}
-              <div ref={comboboxContainerRef} style={{ position: "relative", width: "100%" }}>
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (isDropdownOpen && highlightedIndex >= 0 && highlightedIndex < searchResults.length) {
-                      const selected = searchResults[highlightedIndex];
-                      if (selected.inStock) {
-                        isAddInFlightRef.current = true;
-                        frozenResultsRef.current = searchResults;
-                        handleSelectItem(selected);
-                        return;
-                      }
+            {/* ROW 2: Scanner row (universal scanner field + Add button) */}
+            <div ref={comboboxContainerRef} style={{ position: "relative", width: "100%", marginBottom: "0.5rem" }}>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleAddAction();
+                }}
+                className="pos-scanner-bar"
+                style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: 0, width: "100%" }}
+              >
+                <div className="pos-scanner-input-wrap" style={{ position: "relative", flex: 1, minWidth: 0 }}>
+                  <span className="pos-scanner-icon">⚡</span>
+                  <input
+                    ref={scannerInputRef}
+                    type="text"
+                    className="pos-scanner-input"
+                    placeholder={
+                      awaitingPhoneModel
+                        ? (isUrdu
+                            ? `ماڈل "${awaitingPhoneModel.name}" کے لیے فون کا IMEI یا QR کوڈ اسکین کریں...`
+                            : `Scan or type 15-digit IMEI for ${awaitingPhoneModel.name}...`)
+                        : (isUrdu
+                            ? "فون کا IMEI، سامان کا بارکوڈ اسکین کریں یا نام لکھیں..."
+                            : "Scan IMEI, barcode or type name/SKU to add items...")
                     }
-                    handleUniversalScan(universalScanInput);
+                    value={universalScanInput}
+                    onChange={handleInputChange}
+                    onKeyDown={handleKeyDown}
+                    autoFocus
+                    autoComplete="off"
+                  />
+                  {universalScanInput && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUniversalScanInput("");
+                        setDebouncedQuery("");
+                        setIsDropdownOpen(false);
+                        setHighlightedIndex(-1);
+                        scannerInputRef.current?.focus();
+                      }}
+                      style={{
+                        position: "absolute",
+                        right: isUrdu ? "auto" : "0.75rem",
+                        left: isUrdu ? "0.75rem" : "auto",
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        background: "none",
+                        border: "none",
+                        color: "var(--text-muted)",
+                        fontSize: "1rem",
+                        cursor: "pointer",
+                        padding: "0.25rem"
+                      }}
+                      title="Clear"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+                <button
+                  type="submit"
+                  className="primary-btn"
+                  style={{
+                    padding: "0.75rem 1.25rem",
+                    whiteSpace: "nowrap",
+                    flexShrink: 0
                   }}
-                  className="pos-scanner-bar"
-                  style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: 0 }}
+                  title="Scan / Add"
                 >
-                  <div className="pos-scanner-input-wrap" style={{ position: "relative", flex: 1 }}>
-                    <span className="pos-scanner-icon">⚡</span>
-                    <input
-                      ref={scannerInputRef}
-                      type="text"
-                      className="pos-scanner-input"
-                      placeholder={
-                        awaitingPhoneModel
-                          ? (isUrdu
-                              ? `ماڈل "${awaitingPhoneModel.name}" کے لیے فون کا IMEI یا QR کوڈ اسکین کریں...`
-                              : `Scan or type 15-digit IMEI for ${awaitingPhoneModel.name}...`)
-                          : (isUrdu
-                              ? "فون کا IMEI، سامان کا بارکوڈ اسکین کریں یا نام لکھیں..."
-                              : "Scan IMEI, barcode or type name/SKU to add items...")
-                      }
-                      value={universalScanInput}
-                      onChange={handleInputChange}
-                      onKeyDown={handleKeyDown}
-                      autoFocus
-                      autoComplete="off"
-                    />
-                    {universalScanInput && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setUniversalScanInput("");
-                          setDebouncedQuery("");
-                          setIsDropdownOpen(false);
-                          setHighlightedIndex(-1);
-                          scannerInputRef.current?.focus();
-                        }}
-                        style={{
-                          position: "absolute",
-                          right: isUrdu ? "auto" : "0.75rem",
-                          left: isUrdu ? "0.75rem" : "auto",
-                          top: "50%",
-                          transform: "translateY(-50%)",
-                          background: "none",
-                          border: "none",
-                          color: "var(--text-muted)",
-                          fontSize: "1rem",
-                          cursor: "pointer",
-                          padding: "0.25rem"
-                        }}
-                        title="Clear"
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </div>
-                  <button
-                    type="submit"
-                    className="primary-btn"
-                    style={{ padding: "0.75rem 1.25rem", whiteSpace: "nowrap" }}
-                    title="Scan / Enter (Equivalent to pressing Enter in scanner)"
-                  >
-                    ⚡ {isUrdu ? "اسکین / شامل کریں" : "Scan / Add"}
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary-btn"
-                    onClick={() => setShowQuickProductModal(true)}
-                    style={{ padding: "0.75rem 1rem", whiteSpace: "nowrap" }}
-                    title={isUrdu ? "نیا پروڈکٹ کیٹلاگ میں شامل کریں" : "Quick add new product if not in catalog"}
-                  >
-                    ➕ {t("inventory.add_product", "New Item")}
-                  </button>
-                </form>
+                  {isUrdu ? "شامل کریں" : "Add"}
+                </button>
+              </form>
 
                 {/* 1-Character Search Hint (Pack #20 Part 3) */}
                 {universalScanInput.trim().length === 1 && !awaitingPhoneModel && !isDropdownOpen && (
@@ -1718,7 +1745,107 @@ export function SalesPage({ context }) {
                   </div>
                 )}
               </div>
-            </div>
+
+              {/* ROW 3: Quick-create buttons (Quick Add New Model, Add Product/Accessories) */}
+              <div
+                className="pos-sale-row-3 pos-purchase-row-3"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  marginBottom: "0.75rem",
+                  flexWrap: "wrap"
+                }}
+              >
+                <button
+                  type="button"
+                  className="secondary-btn btn-sm"
+                  onClick={() => setShowQuickModelModal(true)}
+                  style={{ padding: "0.4rem 0.8rem", fontSize: "0.82rem", whiteSpace: "nowrap" }}
+                  title={isUrdu ? "نیا فون ماڈل شامل کریں" : "Quick add new phone model"}
+                >
+                  📱 {isUrdu ? "نیا ماڈل شامل کریں" : "Quick Add New Model"}
+                </button>
+                <button
+                  type="button"
+                  className="secondary-btn btn-sm"
+                  onClick={() => setShowQuickProductModal(true)}
+                  style={{ padding: "0.4rem 0.8rem", fontSize: "0.82rem", whiteSpace: "nowrap" }}
+                  title={isUrdu ? "نیا پروڈکٹ شامل کریں" : "Quick add new accessory/product"}
+                >
+                  📦 {isUrdu ? "سامان شامل کریں" : "Add Product/Accessories"}
+                </button>
+              </div>
+
+              {/* Persistent Scanner Error Alert (Pack #20 Part 2) */}
+              {scannerError && (
+                <div
+                  className="pos-scanner-error-alert"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "0.55rem 0.85rem",
+                    marginBottom: "0.5rem",
+                    borderRadius: "8px",
+                    background: "rgba(239, 68, 68, 0.12)",
+                    border: "1px solid #ef4444",
+                    color: "#ef4444",
+                    fontSize: "0.88rem"
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <span>⚠️</span>
+                    <span>{scannerError}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="ghost-btn btn-sm"
+                    onClick={() => setScannerError("")}
+                    style={{ color: "#ef4444", fontWeight: 700, padding: "2px 6px" }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+
+              {/* Awaiting Phone IMEI Banner (Scenario S3) */}
+              {awaitingPhoneModel && (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "0.6rem 0.9rem",
+                    marginBottom: "0.5rem",
+                    borderRadius: "8px",
+                    background: "rgba(56, 189, 248, 0.12)",
+                    border: "1px solid var(--primary)",
+                    color: "var(--text)"
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.88rem" }}>
+                    <span style={{ fontSize: "1.1rem" }}>📱</span>
+                    <span>
+                      {isUrdu ? "ماڈل منتخب:" : "Model Selected:"} <strong>{awaitingPhoneModel.name}</strong> ({awaitingPhoneModel.stock} {isUrdu ? "دستیاب" : "in stock"}) —{" "}
+                      <span style={{ color: "var(--primary)", fontWeight: 600 }}>
+                        {isUrdu ? "اب اس فون کا 15 ہندسوں کا IMEI اسکین یا درج کریں" : "Now scan or enter this phone's 15-digit IMEI barcode or QR tag"}
+                      </span>
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="ghost-btn btn-sm"
+                    onClick={() => {
+                      setAwaitingPhoneModel(null);
+                      setTimeout(() => scannerInputRef.current?.focus(), 50);
+                    }}
+                    style={{ padding: "2px 8px", fontSize: "0.8rem", color: "#ef4444" }}
+                  >
+                    ✕ {isUrdu ? "منسوخ" : "Cancel"}
+                  </button>
+                </div>
+              )}
 
             {/* Multi-Product Validation Error Banner */}
             {validationErrors && validationErrors.list && validationErrors.list.length > 0 && (
@@ -1959,80 +2086,6 @@ export function SalesPage({ context }) {
 
           {/* RIGHT COLUMN: STICKY CHECKOUT & SETTLEMENT SIDEBAR */}
           <div className="pos-checkout-sidebar">
-            {/* Customer Box */}
-            <div className="pos-checkout-card">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-                <span style={{ fontSize: "0.85rem", fontWeight: "700", textTransform: "uppercase", color: "var(--text-muted)" }}>
-                  👤 {t("sales.customer_box_title", "Customer")}
-                </span>
-                <button
-                  type="button"
-                  className="ghost-btn btn-sm"
-                  onClick={() => setShowCustomerDetails(!showCustomerDetails)}
-                  style={{ fontSize: "0.78rem" }}
-                >
-                  {showCustomerDetails ? t("sales.customer_hide", "Hide Details") : t("sales.customer_change", "Change / Account")}
-                </button>
-              </div>
-
-              {!showCustomerDetails ? (
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.4rem 0" }}>
-                  <span style={{ fontSize: "1.3rem" }}>🛒</span>
-                  <div>
-                    <strong style={{ fontSize: "0.95rem", display: "block" }}>
-                      {form.customerId
-                        ? customerOptions.find((c) => String(c.id) === String(form.customerId))?.name || (isUrdu ? "منتخب کھاتے دار" : "Selected Customer")
-                        : form.quickCustomerName || t("sales.walk_in", "Walk in / new customer (Cash)")}
-                    </strong>
-                    <span className="muted small">
-                      {isUrdu ? "کاؤنٹر کی نقد فروخت" : "Default Counter Sale"}
-                    </span>
-                  </div>
-                </div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", marginTop: "0.35rem" }}>
-                  <label>
-                    {t("sales.registered_account", "Select Account Customer")}
-                    <SearchableSelect
-                      value={form.customerId}
-                      onChange={(e) => setForm({ ...form, customerId: e.target.value })}
-                      placeholder={isUrdu ? "کھاتے دار تلاش کریں..." : "Search customer..."}
-                    >
-                      <option value="">{t("sales.walk_in", "Walk in / new customer")}</option>
-                      {customerOptions.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name} {c.phone ? `(${c.phone})` : ""}
-                        </option>
-                      ))}
-                    </SearchableSelect>
-                  </label>
-
-                  {!form.customerId && (
-                    <>
-                      <label>
-                        {t("sales.customer_name", "Customer Name")}
-                        <input
-                          type="text"
-                          placeholder={isUrdu ? "عام خریدار کا نام" : "Walk-in name"}
-                          value={form.quickCustomerName}
-                          onChange={(e) => setForm({ ...form, quickCustomerName: e.target.value })}
-                        />
-                      </label>
-                      <label>
-                        {t("sales.customer_phone", "Customer Phone")}
-                        <input
-                          type="text"
-                          placeholder="e.g. 03001234567"
-                          value={form.quickCustomerPhone}
-                          onChange={(e) => setForm({ ...form, quickCustomerPhone: e.target.value })}
-                        />
-                      </label>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-
             {/* Financial Totals & Payment Card */}
             <div className="pos-checkout-card">
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.4rem" }}>
@@ -2219,8 +2272,29 @@ export function SalesPage({ context }) {
               if (context.setProducts) {
                 context.setProducts([...(context.products || []), newProd]);
               }
+              setTimeout(() => scannerInputRef.current?.focus(), 50);
             }}
             branchId={form.branchId}
+          />
+
+          {/* Quick Add Phone Model Modal */}
+          <QuickAddModelModal
+            isOpen={showQuickModelModal}
+            onClose={() => setShowQuickModelModal(false)}
+            onCreated={(newModel) => {
+              const modelTitle = `${newModel.company} ${newModel.model_name}${newModel.variant ? ` (${newModel.variant})` : ""}${newModel.storage ? ` • ${newModel.storage}` : ""}${newModel.color ? ` • ${newModel.color}` : ""}`.trim() || "Mobile Handset";
+              setAwaitingPhoneModel({
+                id: newModel.id,
+                modelId: newModel.id,
+                name: modelTitle,
+                stock: 0,
+                itemType: "phone_model"
+              });
+              if (context.setModels) {
+                context.setModels([...(context.models || []), newModel]);
+              }
+              setTimeout(() => scannerInputRef.current?.focus(), 50);
+            }}
           />
         </div>
       )}

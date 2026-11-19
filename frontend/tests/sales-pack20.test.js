@@ -167,10 +167,10 @@ test("PACK #20 - Part 6: Sidebar auto-collapse, no duplicate controls, single ze
   assert.match(executiveSource, /reports:\s*false/, "ExecutiveLayout reports collapsed by default");
   assert.doesNotMatch(executiveSource, /if \(isSalesPage\) \{\s*setIsCollapsed\(true\);\s*\}/, "ExecutiveLayout does not auto-collapse on sales page");
 
-  // 2. Heading shortened to "Universal Scanner" without subtext
-  assert.match(salesSource, /⚡ \{isUrdu \? "یونیورسل اسکینر" : "Universal Scanner"\}/, "Scanner heading shortened");
+  // 2. Heading completely removed in compact layout
   assert.doesNotMatch(salesSource, /Universal Scanner & Search Field/, "Old long heading removed");
   assert.doesNotMatch(salesSource, /Auto-detects Barcodes, QR tags, Phone IMEIs & Live Product Search/, "Old subtext removed");
+  assert.doesNotMatch(salesSource, /⚡ \{isUrdu \? "یونیورسل اسکینر" : "Universal Scanner"\}/, "Scanner heading removed");
 
   // 3. Compact empty-cart line and table header visible
   assert.match(salesSource, /Cart is empty — scan or type above to add items/, "Single compact empty-cart line");
