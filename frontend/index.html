@@ -8,8 +8,10 @@
         try {
           var mode = localStorage.getItem('dm360-theme-mode');
           var theme = 'night';
+          var isAuto = true;
           if (mode === 'day' || mode === 'night') {
             theme = mode;
+            isAuto = false;
           } else {
             try {
               var tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -33,8 +35,11 @@
             }
           }
           document.documentElement.setAttribute('data-theme', theme);
+          document.documentElement.setAttribute('data-theme-auto', isAuto ? 'true' : 'false');
+          document.documentElement.classList.add('theme-preload');
         } catch (e) {
           document.documentElement.setAttribute('data-theme', 'night');
+          document.documentElement.setAttribute('data-theme-auto', 'true');
         }
       })();
     </script>

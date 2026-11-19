@@ -2,7 +2,6 @@ import { useState, useMemo, useEffect } from "react";
 import {
   Sun,
   Moon,
-  Clock,
   PlayCircle,
   Play,
   ShoppingCart,
@@ -61,16 +60,8 @@ export function LandingPage({ onGoToLogin, onQuickDemoLogin }) {
   }, []);
 
   // ---------------------------------------------------------------------------
-  // THEME MANAGEMENT: Auto (Timezone) / Day / Night
+  // THEME MANAGEMENT: Animated Day / Night Switch with Auto-Timezone
   // ---------------------------------------------------------------------------
-  const [themeMode, setThemeMode] = useState(() => {
-    try {
-      return localStorage.getItem("dm360-theme-mode") || "auto";
-    } catch (e) {
-      return "auto";
-    }
-  });
-
   const computeAutoTheme = () => {
     try {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -96,52 +87,86 @@ export function LandingPage({ onGoToLogin, onQuickDemoLogin }) {
     return "night";
   };
 
-  useEffect(() => {
-    const applyCurrentTheme = () => {
-      let active = "night";
-      if (themeMode === "day" || themeMode === "night") {
-        active = themeMode;
-      } else {
-        active = computeAutoTheme();
+  const getInitialThemeState = () => {
+    try {
+      const saved = localStorage.getItem("dm360-theme-mode");
+      if (saved === "day" || saved === "night") {
+        return { theme: saved, isAuto: false };
       }
-      document.documentElement.setAttribute("data-theme", active);
+    } catch (e) {}
+
+    if (typeof document !== "undefined") {
+      const domTheme = document.documentElement.getAttribute("data-theme");
+      if (domTheme === "day" || domTheme === "night") {
+        return { theme: domTheme, isAuto: true };
+      }
+    }
+    return { theme: computeAutoTheme(), isAuto: true };
+  };
+
+  const [{ theme, isAuto }, setThemeState] = useState(getInitialThemeState);
+  const [canAnimate, setCanAnimate] = useState(false);
+
+  // Enable animation after initial paint (prevents initial slide animation on load)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setCanAnimate(true);
+      if (typeof document !== "undefined") {
+        document.documentElement.classList.remove("theme-preload");
+      }
+    }, 60);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Sync theme to DOM and handle auto timezone boundary re-checks (15m + visibility/focus)
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    document.documentElement.setAttribute("data-theme-auto", isAuto ? "true" : "false");
+
+    if (!isAuto) return;
+
+    const checkAutoBoundary = () => {
+      const calculated = computeAutoTheme();
+      setThemeState((prev) => {
+        if (!prev.isAuto) return prev;
+        if (prev.theme !== calculated) {
+          document.documentElement.setAttribute("data-theme", calculated);
+          return { theme: calculated, isAuto: true };
+        }
+        return prev;
+      });
     };
 
-    applyCurrentTheme();
+    // Re-check every 15 minutes
+    const interval = setInterval(checkAutoBoundary, 15 * 60 * 1000);
 
-    if (themeMode === "auto") {
-      // Auto re-check every 15 minutes
-      const interval = setInterval(applyCurrentTheme, 15 * 60 * 1000);
-
-      // Re-check when window regains focus or visibility
-      const handleVisibilityChange = () => {
-        if (document.visibilityState === "visible") {
-          applyCurrentTheme();
-        }
-      };
-      const handleFocus = () => {
-        applyCurrentTheme();
-      };
-
-      window.addEventListener("visibilitychange", handleVisibilityChange);
-      window.addEventListener("focus", handleFocus);
-
-      return () => {
-        clearInterval(interval);
-        window.removeEventListener("visibilitychange", handleVisibilityChange);
-        window.removeEventListener("focus", handleFocus);
-      };
-    }
-  }, [themeMode]);
-
-  const handleSelectThemeMode = (mode) => {
-    setThemeMode(mode);
-    try {
-      if (mode === "auto") {
-        localStorage.removeItem("dm360-theme-mode");
-      } else {
-        localStorage.setItem("dm360-theme-mode", mode);
+    // Re-check when window regains focus or visibility
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        checkAutoBoundary();
       }
+    };
+    const handleFocus = () => {
+      checkAutoBoundary();
+    };
+
+    window.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [isAuto, theme]);
+
+  const handleToggleTheme = () => {
+    const nextTheme = theme === "night" ? "day" : "night";
+    setThemeState({ theme: nextTheme, isAuto: false });
+    document.documentElement.setAttribute("data-theme", nextTheme);
+    document.documentElement.setAttribute("data-theme-auto", "false");
+    try {
+      localStorage.setItem("dm360-theme-mode", nextTheme);
     } catch (e) {}
   };
 
@@ -527,59 +552,49 @@ export function LandingPage({ onGoToLogin, onQuickDemoLogin }) {
           </nav>
 
           <div className="landing-nav-right">
-            {/* 3-State Theme Mode Segmented Control: Auto / Day / Night */}
-            <div className="theme-toggle-segmented" role="radiogroup" aria-label="Theme mode selection">
+            {/* One simple, modern, ANIMATED toggle switch: only theme control on the page */}
+            <div className="landing-theme-switch-wrapper">
               <button
                 type="button"
-                className={`theme-mode-btn ${themeMode === "auto" ? "active" : ""}`}
-                onClick={() => handleSelectThemeMode("auto")}
-                title="Auto theme (Switches by your timezone: 06:00–18:59 Day, 19:00–05:59 Night)"
-                aria-label="Auto theme mode"
+                role="switch"
+                aria-checked={theme === "night" ? "true" : "false"}
+                aria-label="Switch day/night theme"
+                title={theme === "night" ? "Night mode — tap for Day" : "Day mode — tap for Night"}
+                className={`theme-toggle-switch ${theme === "night" ? "is-night" : "is-day"} ${canAnimate ? "can-animate" : "no-animate"}`}
+                onClick={handleToggleTheme}
               >
-                <Clock size={14} />
-                <span className="theme-mode-text">Auto</span>
+                <span className="theme-switch-track">
+                  <span className="theme-switch-knob">
+                    <Sun className="theme-icon theme-icon-sun" size={14} aria-hidden="true" />
+                    <Moon className="theme-icon theme-icon-moon" size={14} aria-hidden="true" />
+                  </span>
+                </span>
               </button>
-              <button
-                type="button"
-                className={`theme-mode-btn ${themeMode === "day" ? "active" : ""}`}
-                onClick={() => handleSelectThemeMode("day")}
-                title="Day theme (Light surfaces)"
-                aria-label="Day theme mode"
-              >
-                <Sun size={14} />
-                <span className="theme-mode-text">Day</span>
-              </button>
-              <button
-                type="button"
-                className={`theme-mode-btn ${themeMode === "night" ? "active" : ""}`}
-                onClick={() => handleSelectThemeMode("night")}
-                title="Night theme (Dark surfaces)"
-                aria-label="Night theme mode"
-              >
-                <Moon size={14} />
-                <span className="theme-mode-text">Night</span>
-              </button>
+              {isAuto && (
+                <span className="theme-auto-badge" title="Auto-selected based on local timezone (06:00–18:59 Day, 19:00–05:59 Night)">
+                  AUTO
+                </span>
+              )}
             </div>
 
-            <div className="landing-nav-actions">
-              <button
-                type="button"
-                className="landing-btn-ghost"
-                onClick={onGoToLogin}
-                title="Sign in to your account"
-              >
-                Login
-              </button>
-              <button
-                type="button"
-                className="landing-btn-primary"
-                onClick={() => setShowDemoModal(true)}
-                title="Launch 1-Click Interactive Demo"
-              >
-                <Zap size={15} />
-                <span>Launch Demo</span>
-              </button>
-            </div>
+            <button
+              type="button"
+              className="landing-btn-ghost landing-btn-login"
+              onClick={onGoToLogin}
+              title="Sign in to your account"
+            >
+              Login
+            </button>
+
+            <button
+              type="button"
+              className="landing-btn-primary landing-btn-demo desktop-only"
+              onClick={() => setShowDemoModal(true)}
+              title="Launch 1-Click Interactive Demo"
+            >
+              <Zap size={15} />
+              <span>Launch Demo</span>
+            </button>
 
             {/* Mobile menu toggle */}
             <button
@@ -596,41 +611,6 @@ export function LandingPage({ onGoToLogin, onQuickDemoLogin }) {
         {/* Mobile dropdown menu */}
         {mobileMenuOpen && (
           <div className="landing-mobile-dropdown">
-            <div className="mobile-theme-row">
-              <span className="mobile-theme-label">Appearance:</span>
-              <div className="theme-toggle-segmented" role="radiogroup" aria-label="Theme mode selection">
-                <button
-                  type="button"
-                  className={`theme-mode-btn ${themeMode === "auto" ? "active" : ""}`}
-                  onClick={() => handleSelectThemeMode("auto")}
-                  title="Auto theme (Switches by your timezone)"
-                  aria-label="Auto theme mode"
-                >
-                  <Clock size={14} />
-                  <span>Auto</span>
-                </button>
-                <button
-                  type="button"
-                  className={`theme-mode-btn ${themeMode === "day" ? "active" : ""}`}
-                  onClick={() => handleSelectThemeMode("day")}
-                  title="Day theme (Light)"
-                  aria-label="Day theme mode"
-                >
-                  <Sun size={14} />
-                  <span>Day</span>
-                </button>
-                <button
-                  type="button"
-                  className={`theme-mode-btn ${themeMode === "night" ? "active" : ""}`}
-                  onClick={() => handleSelectThemeMode("night")}
-                  title="Night theme (Dark)"
-                  aria-label="Night theme mode"
-                >
-                  <Moon size={14} />
-                  <span>Night</span>
-                </button>
-              </div>
-            </div>
             <a href="#video-tour" onClick={() => setMobileMenuOpen(false)} style={{ color: "var(--dm-accent)", fontWeight: 700 }}>🎬 Videos</a>
             <a href="#features" onClick={() => setMobileMenuOpen(false)}>Features</a>
             <a href="#pos-demo" onClick={() => setMobileMenuOpen(false)}>Live POS Demo</a>
