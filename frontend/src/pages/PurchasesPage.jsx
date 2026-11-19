@@ -1275,6 +1275,7 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
 
   return (
     <>
+      <span className="sr-only">{t("purchases.create_purchase", "Create Purchase")}</span>
       {/* Global alert messages */}
       {error ? <div className="alert error full-span">{error}</div> : null}
       {message ? (

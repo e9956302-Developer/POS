@@ -579,9 +579,10 @@ function AppContent() {
         if (hash.includes("login") || path === "/login" || path.endsWith("/login")) {
           return "login";
         }
+        return "landing";
       }
     } catch {}
-    return "landing";
+    return "login";
   });
 
   useEffect(() => {
