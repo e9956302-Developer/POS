@@ -46,6 +46,7 @@ export function ModernLayout({
   const { isRtl, t } = useLanguage();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [openGroups, setOpenGroups] = useState({
+    purchases: true,
     employees: true,
     reports: false,
     admin: true
@@ -53,6 +54,14 @@ export function ModernLayout({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const isSalesPage = activeTab === "sales";
+
+  useEffect(() => {
+    tabs.forEach((tab) => {
+      if (tab.subItems && (activeTab === tab.key || activeTab.startsWith(`${tab.key}_`))) {
+        setOpenGroups((prev) => ({ ...prev, [tab.key]: true }));
+      }
+    });
+  }, [activeTab, tabs]);
 
   function toggleGroup(groupKey) {
     setOpenGroups((prev) => ({

@@ -63,6 +63,10 @@ export const translations = {
       reports: "Reports",
       admin: "Admin Control",
 
+      // Purchases subpages
+      purchases_new: "Create Purchase (Inward Counter)",
+      purchases_history: "Purchases Directory & History",
+
       // Admin subpages
       admin_branches: "Branches & Outlets",
       admin_users: "Staff Accounts",
@@ -611,6 +615,10 @@ export const translations = {
       employees: "تنخواہیں و اسٹاف",
       reports: "کاروباری رپورٹس",
       admin: "ایڈمن پینل",
+
+      // Purchases subpages
+      purchases_new: "خریداری درج کریں (انورڈ کاؤنٹر)",
+      purchases_history: "خریداری ریکارڈ و ہسٹری",
 
       // Admin subpages
       admin_branches: "برانچز و آؤٹ لیٹس",
