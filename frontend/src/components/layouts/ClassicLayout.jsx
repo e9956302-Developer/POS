@@ -274,8 +274,8 @@ export function ClassicLayout({
                               }}
                               title={sub.label}
                             >
-                              <span style={{ fontSize: "0.95rem" }}>{sub.icon}</span>
-                              <span className="nav-label">{sub.label}</span>
+                              <span className="sub-nav-icon" style={{ fontSize: "0.95rem" }}>{sub.icon}</span>
+                              <span className="nav-label sub-nav-label">{sub.label}</span>
                             </button>
                           );
                         })}

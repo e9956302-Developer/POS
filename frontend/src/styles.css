@@ -1481,12 +1481,13 @@ tbody tr.row-highlight-danger td.saas-actions-col {
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
-  padding-left: 0.75rem;
+  padding-left: 0.5rem;
   margin-top: 0.25rem;
   margin-bottom: 0.4rem;
   border-left: 2px solid rgba(255, 255, 255, 0.18);
-  margin-left: 1.25rem;
+  margin-left: 0.65rem;
   animation: slideDownSubNav 0.2s ease forwards;
+  box-sizing: border-box;
 }
 
 @keyframes slideDownSubNav {
@@ -1501,17 +1502,22 @@ tbody tr.row-highlight-danger td.saas-actions-col {
 }
 
 .sub-nav-item {
-  font-size: 0.84rem;
-  padding: 0.45rem 0.65rem;
+  font-size: 0.82rem;
+  padding: 0.35rem 0.5rem;
   border-radius: 8px;
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  align-items: flex-start;
+  gap: 0.45rem;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(255, 255, 255, 0.85);
   background: transparent;
   transition: all 0.15s ease;
   border: 1px solid transparent;
+  white-space: normal;
+  line-height: 1.25;
+  text-align: left;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .sub-nav-item:hover {
@@ -1524,6 +1530,29 @@ tbody tr.row-highlight-danger td.saas-actions-col {
   color: #f6c453;
   font-weight: 700;
   border-color: rgba(246, 196, 83, 0.45);
+}
+
+.sub-nav-item .sub-nav-icon,
+.sub-nav-item > span:first-child {
+  font-size: 0.95rem;
+  line-height: 1.2;
+  margin-top: 1px;
+  flex-shrink: 0;
+}
+
+.sub-nav-item .nav-label,
+.sub-nav-item .sub-nav-label,
+.sub-nav-label {
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  word-break: normal;
+  overflow-wrap: break-word;
+  line-height: 1.25;
+  font-size: 0.82rem;
+  flex: 1;
+  min-width: 0;
+  text-align: left;
 }
 
 .sidebar.collapsed .sub-nav-list {
@@ -10484,19 +10513,20 @@ tr.highlight-pulse > td {
 
 /* Modern Compact Sub-Menu Accordion */
 .modern-sub-nav-list {
-  padding-left: 1.15rem;
-  margin: 2px 0 4px 0;
+  padding-left: 0.65rem;
+  margin: 2px 0 4px 0.35rem;
   border-left: 2px solid var(--border-color, #1e293b);
   display: flex;
   flex-direction: column;
   gap: 2px;
+  box-sizing: border-box;
 }
 
 .modern-sub-nav-item {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.35rem 0.5rem;
+  align-items: flex-start;
+  gap: 0.4rem;
+  padding: 0.32rem 0.45rem;
   border-radius: 5px;
   font-size: 0.8rem;
   color: var(--text-muted, #94a3b8);
@@ -10506,7 +10536,9 @@ tr.highlight-pulse > td {
   text-align: left;
   width: 100%;
   transition: all 0.15s ease;
-  white-space: nowrap;
+  white-space: normal;
+  line-height: 1.25;
+  box-sizing: border-box;
 }
 
 .modern-sub-nav-item:hover {
@@ -10525,6 +10557,8 @@ tr.highlight-pulse > td {
   height: 4px;
   border-radius: 50%;
   background: var(--text-muted, #64748b);
+  margin-top: 5px;
+  flex-shrink: 0;
 }
 
 .modern-sub-nav-item.active .modern-sub-nav-bullet {
@@ -10533,12 +10567,21 @@ tr.highlight-pulse > td {
 
 .modern-sub-nav-icon {
   font-size: 0.85rem;
+  line-height: 1.2;
+  margin-top: 1px;
+  flex-shrink: 0;
 }
 
 .modern-sub-nav-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  word-break: normal;
+  overflow-wrap: break-word;
+  line-height: 1.25;
+  flex: 1;
+  min-width: 0;
+  text-align: left;
 }
 
 /* Modern Sidebar Footer */
@@ -11807,8 +11850,10 @@ body.lang-ur,
 
 [dir="rtl"] .sub-nav-list {
   padding-left: 0;
-  padding-right: 1.75rem;
-  border-right: 2px solid rgba(255, 255, 255, 0.1);
+  padding-right: 0.5rem;
+  margin-left: 0;
+  margin-right: 0.65rem;
+  border-right: 2px solid rgba(255, 255, 255, 0.18);
   border-left: none;
 }
 
@@ -11819,7 +11864,9 @@ body.lang-ur,
 
 [dir="rtl"] .modern-sub-nav-list {
   padding-left: 0;
-  padding-right: 1.25rem;
+  padding-right: 0.65rem;
+  margin-left: 0;
+  margin-right: 0.35rem;
   border-right: 2px solid var(--border-color, #1e293b);
   border-left: none;
 }
@@ -11840,6 +11887,13 @@ body.lang-ur,
 [dir="rtl"] .sub-nav-item {
   text-align: right;
   justify-content: flex-start;
+}
+
+[dir="rtl"] .sub-nav-item .nav-label,
+[dir="rtl"] .sub-nav-item .sub-nav-label,
+[dir="rtl"] .sub-nav-label,
+[dir="rtl"] .modern-sub-nav-label {
+  text-align: right !important;
 }
 
 [dir="rtl"] .modern-nav-arrow,
@@ -12699,19 +12753,20 @@ body.lang-ur,
 
 /* Executive Sub-Menu Accordion */
 .executive-sub-nav-list {
-  padding-left: 1.25rem;
-  margin: 3px 0 5px 0;
+  padding-left: 0.75rem;
+  margin: 3px 0 5px 0.35rem;
   border-left: 2px solid rgba(245, 158, 11, 0.25);
   display: flex;
   flex-direction: column;
   gap: 2px;
+  box-sizing: border-box;
 }
 
 .executive-sub-nav-item {
   display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  padding: 0.4rem 0.65rem;
+  align-items: flex-start;
+  gap: 0.45rem;
+  padding: 0.35rem 0.5rem;
   border-radius: 8px;
   font-size: 0.82rem;
   color: #94a3b8;
@@ -12721,7 +12776,9 @@ body.lang-ur,
   text-align: left;
   width: 100%;
   transition: all 0.15s ease;
-  white-space: nowrap;
+  white-space: normal;
+  line-height: 1.25;
+  box-sizing: border-box;
 }
 
 .executive-sub-nav-item:hover {
@@ -12741,6 +12798,8 @@ body.lang-ur,
   height: 5px;
   border-radius: 50%;
   background: #64748b;
+  margin-top: 5px;
+  flex-shrink: 0;
 }
 
 .executive-sub-nav-item.active .executive-sub-nav-bullet {
@@ -12750,12 +12809,21 @@ body.lang-ur,
 
 .executive-sub-nav-icon {
   font-size: 0.9rem;
+  line-height: 1.2;
+  margin-top: 1px;
+  flex-shrink: 0;
 }
 
 .executive-sub-nav-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  word-break: normal;
+  overflow-wrap: break-word;
+  line-height: 1.25;
+  flex: 1;
+  min-width: 0;
+  text-align: left;
 }
 
 /* Executive Sidebar Footer */
