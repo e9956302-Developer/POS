@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { SearchableSelect } from "./SearchableSelect.jsx";
+import { stripTrailingZeros } from "../utils/numberFormat.js";
 
 export function LineItemScanner({ models: rawModels = [], products: rawProducts = [], mode = "sale", items: rawItems = [], onChange }) {
   const models = useMemo(() => (Array.isArray(rawModels) ? rawModels : []), [rawModels]);
@@ -40,9 +41,10 @@ export function LineItemScanner({ models: rawModels = [], products: rawProducts 
 
   function handleModelSelect(index, modelId) {
     const model = models.find((m) => String(m.id) === String(modelId));
-    const defaultRate = mode === "purchase"
+    const rawRate = mode === "purchase"
       ? (model?.unit_cost || model?.cost_price || "")
       : (model?.selling_price || model?.retail_price || "");
+    const defaultRate = stripTrailingZeros(rawRate);
 
     updateItem(index, {
       itemType: "handset",
@@ -55,9 +57,10 @@ export function LineItemScanner({ models: rawModels = [], products: rawProducts 
 
   function handleProductSelect(index, productId) {
     const prod = products.find((p) => String(p.id) === String(productId));
-    const defaultRate = mode === "purchase"
+    const rawRate = mode === "purchase"
       ? (prod?.cost_price || "")
       : (prod?.retail_price ?? prod?.sale_price ?? "");
+    const defaultRate = stripTrailingZeros(rawRate);
 
     updateItem(index, {
       itemType: "product",
@@ -193,10 +196,15 @@ export function LineItemScanner({ models: rawModels = [], products: rawProducts 
                         <input
                           type="number"
                           min="1"
-                          value={item.quantity || 1}
+                          step="1"
+                          value={item.quantity === undefined ? 1 : item.quantity}
                           onChange={(e) =>
-                            updateItem(index, { quantity: Math.max(1, parseInt(e.target.value, 10) || 1) })
+                            updateItem(index, { quantity: e.target.value })
                           }
+                          onBlur={() => {
+                            const q = Math.max(1, parseInt(item.quantity, 10) || 1);
+                            updateItem(index, { quantity: q });
+                          }}
                           style={{
                             width: "65px",
                             textAlign: "center",
@@ -222,6 +230,12 @@ export function LineItemScanner({ models: rawModels = [], products: rawProducts 
                             [mode === "purchase" ? "unitCost" : "unitPrice"]: e.target.value
                           })
                         }
+                        onBlur={() => {
+                          const currentVal = mode === "purchase" ? item.unitCost : item.unitPrice;
+                          updateItem(index, {
+                            [mode === "purchase" ? "unitCost" : "unitPrice"]: stripTrailingZeros(currentVal)
+                          });
+                        }}
                         placeholder="0"
                         style={{
                           textAlign: "right",

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { api } from "../api.js";
 import { ReceiptModal } from "./ReceiptModal.jsx";
+import { stripTrailingZeros } from "../utils/numberFormat.js";
 
 export function ReturnOrderModal({ isOpen, onClose, defaultType = "customer_return", referenceOrder = null, onReturnCreated }) {
   const [returnType, setReturnType] = useState(defaultType); // "customer_return" (Sale Return) | "vendor_return" (Purchase Return)
@@ -26,7 +27,7 @@ export function ReturnOrderModal({ isOpen, onClose, defaultType = "customer_retu
       if (checked) {
         next[key] = {
           ...item,
-          refundRate: item.unit_price || item.unit_cost || item.price || 0,
+          refundRate: stripTrailingZeros(item.unit_price || item.unit_cost || item.price || 0),
           quantity: item.quantity || 1
         };
       } else {
@@ -39,7 +40,14 @@ export function ReturnOrderModal({ isOpen, onClose, defaultType = "customer_retu
   function updateRefundRate(key, rate) {
     setSelectedItems((prev) => ({
       ...prev,
-      [key]: { ...prev[key], refundRate: Number(rate) || 0 }
+      [key]: { ...prev[key], refundRate: rate }
+    }));
+  }
+
+  function updateReturnQty(key, qty) {
+    setSelectedItems((prev) => ({
+      ...prev,
+      [key]: { ...prev[key], quantity: qty }
     }));
   }
 
@@ -206,6 +214,7 @@ export function ReturnOrderModal({ isOpen, onClose, defaultType = "customer_retu
                           <th style={{ width: "45px", minWidth: "45px", textAlign: "center", whiteSpace: "nowrap" }}></th>
                           <th style={{ minWidth: "180px", whiteSpace: "nowrap" }}>Description</th>
                           <th style={{ minWidth: "140px", whiteSpace: "nowrap" }}>IMEI / SKU</th>
+                          <th style={{ width: "70px", minWidth: "70px", textAlign: "center", whiteSpace: "nowrap" }}>Qty</th>
                           <th style={{ minWidth: "125px", whiteSpace: "nowrap" }}>Original Price</th>
                           <th style={{ minWidth: "135px", whiteSpace: "nowrap" }}>Refund Amount</th>
                         </tr>
@@ -229,6 +238,30 @@ export function ReturnOrderModal({ isOpen, onClose, defaultType = "customer_retu
                               </td>
                               <td style={{ fontWeight: "600" }}>{desc}</td>
                               <td style={{ fontFamily: "var(--font-mono, monospace)" }}>{it.imei || it.product_sku || "N/A"}</td>
+                              <td style={{ textAlign: "center" }}>
+                                {isSelected ? (
+                                  it.imei ? (
+                                    <span style={{ fontWeight: 600 }}>1</span>
+                                  ) : (
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      step="1"
+                                      max={Math.max(1, Number(it.quantity || 1))}
+                                      value={selectedItems[key]?.quantity ?? 1}
+                                      onChange={(e) => updateReturnQty(key, e.target.value)}
+                                      onBlur={() => {
+                                        const maxQ = Math.max(1, Number(it.quantity || 1));
+                                        const q = Math.min(maxQ, Math.max(1, parseInt(selectedItems[key]?.quantity, 10) || 1));
+                                        updateReturnQty(key, q);
+                                      }}
+                                      style={{ width: "55px", textAlign: "center", padding: "4px" }}
+                                    />
+                                  )
+                                ) : (
+                                  <span>{it.quantity || 1}</span>
+                                )}
+                              </td>
                               <td style={{ whiteSpace: "nowrap" }}>Rs. {Number(it.unit_price || it.unit_cost || 0).toLocaleString()}</td>
                               <td>
                                 {isSelected ? (
@@ -236,8 +269,9 @@ export function ReturnOrderModal({ isOpen, onClose, defaultType = "customer_retu
                                     type="number"
                                     className="input-text"
                                     style={{ width: "110px", padding: "4px 8px" }}
-                                    value={selectedItems[key]?.refundRate || ""}
+                                    value={selectedItems[key]?.refundRate ?? ""}
                                     onChange={(e) => updateRefundRate(key, e.target.value)}
+                                    onBlur={() => updateRefundRate(key, stripTrailingZeros(selectedItems[key]?.refundRate))}
                                   />
                                 ) : (
                                   <span style={{ color: "var(--text-muted)" }}>-</span>

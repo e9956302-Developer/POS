@@ -111,7 +111,7 @@ export function classifyBulkRows(rows, batchPaidFrom = "cash", defaultDate = "")
   };
 }
 
-export function ExpensesPage({ context, initialMode = "single" }) {
+export function ExpensesPage({ context, initialMode = "single", activeSubPage, onNavigateSubPage }) {
   const { t, isRtl, language } = useLanguage();
   const defaultBranch =
     context?.session?.branch_id ||
@@ -119,7 +119,16 @@ export function ExpensesPage({ context, initialMode = "single" }) {
     (context?.branches && context?.branches[0]?.id ? String(context.branches[0].id) : "");
 
   // Main Page View Tabs: 'entry' (Record Expense Counter) vs 'directory' (Directory & History)
-  const [activeTab, setActiveTab] = useState("entry"); // "entry" | "directory"
+  const [activeTab, setActiveTab] = useState(activeSubPage || "entry"); // "entry" | "directory"
+
+  useEffect(() => {
+    if (activeSubPage && activeSubPage !== activeTab) {
+      setActiveTab(activeSubPage);
+      if (activeSubPage === "directory") {
+        loadExpenses();
+      }
+    }
+  }, [activeSubPage]);
 
   // Entry Mode inside Record Tab: 'single' vs 'bulk'
   const [entryMode, setEntryMode] = useState(initialMode);
@@ -832,66 +841,9 @@ export function ExpensesPage({ context, initialMode = "single" }) {
 
   return (
     <div>
-      {/* Top View Tabs (Matching Sales & Purchases) */}
-      <div
-        className="nav-tabs"
-        style={{
-          display: "flex",
-          gap: "0.5rem",
-          borderBottom: "1px solid var(--border)",
-          paddingBottom: "0.6rem",
-          marginBottom: "1.25rem"
-        }}
-      >
-        <button
-          type="button"
-          className={`tab-btn ${activeTab === "entry" ? "active" : ""}`}
-          onClick={() => {
-            setActiveTab("entry");
-            setError("");
-          }}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "0.45rem",
-            padding: "0.55rem 1.15rem",
-            borderRadius: "8px",
-            fontWeight: "600",
-            fontSize: "0.9rem",
-            border: activeTab === "entry" ? "1px solid var(--primary)" : "1px solid var(--border)",
-            background: activeTab === "entry" ? "var(--primary)" : "var(--surface)",
-            color: activeTab === "entry" ? "#ffffff" : "var(--text)"
-          }}
-        >
-          <span>💸</span> {t("expenses.record_expense_tab", "Record Expense (Outflow Counter)")}
-        </button>
-
-        {canView && (
-          <button
-            type="button"
-            className={`tab-btn ${activeTab === "directory" ? "active" : ""}`}
-            onClick={() => {
-              setActiveTab("directory");
-              setError("");
-              loadExpenses();
-            }}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.45rem",
-              padding: "0.55rem 1.15rem",
-              borderRadius: "8px",
-              fontWeight: "600",
-              fontSize: "0.9rem",
-              border: activeTab === "directory" ? "1px solid var(--primary)" : "1px solid var(--border)",
-              background: activeTab === "directory" ? "var(--primary)" : "var(--surface)",
-              color: activeTab === "directory" ? "#ffffff" : "var(--text)"
-            }}
-          >
-            <span>📜</span> {t("expenses.directory_tab", "Expense Directory & History")} ({expenses.length})
-          </button>
-        )}
-      </div>
+      <span className="sr-only">
+        {activeTab === "entry" ? t("expenses.record_expense_tab", "Record Expense (Outflow Counter)") : t("expenses.directory_tab", "Expense Directory & History")}
+      </span>
 
       {/* Global alert feedback */}
       {error ? (
@@ -1400,7 +1352,7 @@ export function ExpensesPage({ context, initialMode = "single" }) {
                             unicodeBidi: "isolate"
                           }}
                         >
-                          PKR {bulkBatchStats.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          PKR {bulkBatchStats.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                         </span>
                         <span style={{ fontSize: "0.82rem", color: "var(--text-muted)", fontWeight: 600 }}>
                           ({bulkBatchStats.count} {bulkBatchStats.count === 1 ? "expense" : "expenses"} ready)
@@ -1519,7 +1471,7 @@ export function ExpensesPage({ context, initialMode = "single" }) {
                     </span>
                     <div className="pos-total-amount" style={{ color: "var(--danger, #ef4444)", direction: "ltr", unicodeBidi: "isolate" }}>
                       PKR{" "}
-                      {Number(singleForm.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {Number(singleForm.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                     </div>
                   </div>
                   <div>

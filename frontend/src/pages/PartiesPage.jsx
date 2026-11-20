@@ -7,7 +7,7 @@ import { openWhatsAppReminder } from "../utils/whatsapp.js";
 import { useLanguage } from "../context/LanguageContext.jsx";
 import { TableActionButton } from "../components/TableActionColumn.jsx";
 
-export function PartiesPage({ context }) {
+export function PartiesPage({ context, activeSubPage, onNavigateSubPage }) {
   const { t, isRtl, language } = useLanguage();
   const firstFieldRef = useRef(null);
   const formRef = useRef(null);
@@ -197,10 +197,11 @@ export function PartiesPage({ context }) {
   return (
     <div className="page-stack" style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
       {/* TOP SECTION: PARTY CREATION */}
-      <SectionCard
-        title={t("parties.card_title", "Party Master & Registration")}
-        subtitle={t("parties.card_subtitle", "Create vendors, customers, and hybrid trading contacts.")}
-      >
+      {(!activeSubPage || activeSubPage === "new") && (
+        <SectionCard
+          title={t("parties.card_title", "Party Master & Registration")}
+          subtitle={t("parties.card_subtitle", "Create vendors, customers, and hybrid trading contacts.")}
+        >
         <form ref={formRef} onSubmit={handleSubmit}>
           {error && (
             <div
@@ -392,8 +393,10 @@ export function PartiesPage({ context }) {
           </div>
         </form>
       </SectionCard>
+      )}
 
       {/* BOTTOM SECTION: PARTY DETAILS & DIRECTORY */}
+      {(!activeSubPage || activeSubPage === "directory") && (
       <SectionCard
         title={t("parties.directory_title", "Party Details & Directory")}
         subtitle={t("parties.directory_subtitle", "Available vendors and customers for transactions.")}
@@ -740,6 +743,7 @@ export function PartiesPage({ context }) {
           }}
         />
       </SectionCard>
+      )}
 
       {/* PARTY DETAILS MODAL */}
       {selectedParty && (

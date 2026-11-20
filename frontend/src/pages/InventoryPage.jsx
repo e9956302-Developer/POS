@@ -9,6 +9,7 @@ import { AdaptiveTable } from "../components/AdaptiveTable.jsx";
 import { SearchableSelect } from "../components/SearchableSelect.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
 import { TableActionButton } from "../components/TableActionColumn.jsx";
+import { stripTrailingZeros } from "../utils/numberFormat.js";
 
 function highlightMatch(text, query) {
   if (!text) return "";
@@ -28,10 +29,16 @@ function highlightMatch(text, query) {
   );
 }
 
-export function InventoryPage({ context }) {
+export function InventoryPage({ context, activeSubPage = "imei", onNavigateSubPage }) {
   const { t, isRtl, language } = useLanguage();
   const isUrdu = language === "ur" || isRtl;
-  const [activeTab, setActiveTab] = useState("imei"); // "imei" | "products" | "transfers" | "returns"
+  const [activeTab, setActiveTab] = useState(activeSubPage || "imei"); // "imei" | "products" | "transfers" | "returns"
+
+  useEffect(() => {
+    if (activeSubPage && activeSubPage !== activeTab) {
+      setActiveTab(activeSubPage);
+    }
+  }, [activeSubPage]);
 
   // IMEI state & pagination
   const [filters, setFilters] = useState({ branchId: "", status: "in_stock", search: "" });
@@ -958,20 +965,22 @@ export function InventoryPage({ context }) {
   }
 
   function updateTransferItemQty(index, newQty) {
-    const qty = Math.max(1, parseInt(newQty, 10) || 1);
     const item = transferForm.items[index];
-    if (item && item.itemType === "product") {
-      const prod = (availableProducts || []).find((p) => String(p.id) === String(item.productId));
-      const stock = prod ? Number(prod.stock_quantity ?? 0) : 9999;
-      if (qty > stock) {
-        setTransferInlineError(`"${item.name}" — only ${stock} available at this branch`);
-        return;
+    if (newQty !== "") {
+      const qty = parseInt(newQty, 10) || 1;
+      if (item && item.itemType === "product") {
+        const prod = (availableProducts || []).find((p) => String(p.id) === String(item.productId));
+        const stock = prod ? Number(prod.stock_quantity ?? 0) : 9999;
+        if (qty > stock) {
+          setTransferInlineError(`"${item.name}" — only ${stock} available at this branch`);
+          return;
+        }
       }
     }
     setTransferInlineError("");
     setTransferForm((prev) => ({
       ...prev,
-      items: prev.items.map((it, idx) => (idx === index ? { ...it, quantity: qty } : it))
+      items: prev.items.map((it, idx) => (idx === index ? { ...it, quantity: newQty } : it))
     }));
   }
 
@@ -1151,34 +1160,6 @@ export function InventoryPage({ context }) {
 
   return (
     <div className="page-stack">
-      {/* Tab Navigation */}
-      <div style={{ display: "flex", gap: "0.5rem", borderBottom: "2px solid var(--border)", paddingBottom: "0.5rem", flexWrap: "wrap" }}>
-        <button
-          className={activeTab === "imei" ? "primary-btn" : "ghost-btn"}
-          onClick={() => setActiveTab("imei")}
-        >
-          📱 {t("inventory.tab_imei", "Handsets & Serialized IMEIs")}
-        </button>
-        <button
-          className={activeTab === "products" ? "primary-btn" : "ghost-btn"}
-          onClick={() => setActiveTab("products")}
-        >
-          📦 {t("inventory.tab_products", "Accessories & Products Catalog")}
-        </button>
-        <button
-          className={activeTab === "transfers" ? "primary-btn" : "ghost-btn"}
-          onClick={() => setActiveTab("transfers")}
-        >
-          🔄 {t("inventory.tab_transfers", "Inter-Branch Stock Transfers")}
-        </button>
-        <button
-          className={activeTab === "returns" ? "primary-btn" : "ghost-btn"}
-          onClick={() => setActiveTab("returns")}
-        >
-          ↩️ {t("inventory.tab_returns", "Returns & RMAs")}
-        </button>
-      </div>
-
       {error ? <div className="alert error">{error}</div> : null}
       {message ? <div className="alert success">{message}</div> : null}
 
@@ -1429,6 +1410,7 @@ export function InventoryPage({ context }) {
                     type="number"
                     value={productForm.costPrice}
                     onChange={(e) => setProductForm({ ...productForm, costPrice: e.target.value })}
+                    onBlur={(e) => setProductForm({ ...productForm, costPrice: stripTrailingZeros(e.target.value) })}
                     style={{ direction: "ltr", unicodeBidi: "isolate" }}
                   />
                 </label>
@@ -1438,6 +1420,7 @@ export function InventoryPage({ context }) {
                     type="number"
                     value={productForm.salePrice}
                     onChange={(e) => setProductForm({ ...productForm, salePrice: e.target.value })}
+                    onBlur={(e) => setProductForm({ ...productForm, salePrice: stripTrailingZeros(e.target.value) })}
                     style={{ direction: "ltr", unicodeBidi: "isolate" }}
                   />
                 </label>
@@ -1757,11 +1740,11 @@ export function InventoryPage({ context }) {
                               setEditProductForm({
                                 name: p.name || "",
                                 categoryId: p.category_id || "",
-                                costPrice: p.cost_price || 0,
-                                salePrice: p.sale_price || 0,
+                                costPrice: stripTrailingZeros(p.cost_price),
+                                salePrice: stripTrailingZeros(p.sale_price),
                                 alertQuantity: p.alert_quantity || 5,
                                 openingStockQuantity: p.opening_stock_quantity || 0,
-                                openingCostPrice: p.opening_cost_price || p.cost_price || 0
+                                openingCostPrice: stripTrailingZeros(p.opening_cost_price || p.cost_price)
                               });
                             }}
                             title="Edit product details & opening stock"
@@ -1895,6 +1878,7 @@ export function InventoryPage({ context }) {
                             step="any"
                             value={editProductForm.costPrice ?? ""}
                             onChange={(e) => setEditProductForm({ ...editProductForm, costPrice: e.target.value })}
+                            onBlur={(e) => setEditProductForm({ ...editProductForm, costPrice: stripTrailingZeros(e.target.value) })}
                           />
                         </label>
                         <label>
@@ -1905,6 +1889,7 @@ export function InventoryPage({ context }) {
                             step="any"
                             value={editProductForm.salePrice ?? ""}
                             onChange={(e) => setEditProductForm({ ...editProductForm, salePrice: e.target.value })}
+                            onBlur={(e) => setEditProductForm({ ...editProductForm, salePrice: stripTrailingZeros(e.target.value) })}
                           />
                         </label>
                         <label>
@@ -1933,6 +1918,7 @@ export function InventoryPage({ context }) {
                             step="any"
                             value={editProductForm.openingCostPrice ?? ""}
                             onChange={(e) => setEditProductForm({ ...editProductForm, openingCostPrice: e.target.value })}
+                            onBlur={(e) => setEditProductForm({ ...editProductForm, openingCostPrice: stripTrailingZeros(e.target.value) })}
                           />
                         </label>
                       </div>
@@ -2596,8 +2582,12 @@ export function InventoryPage({ context }) {
                                     <input
                                       type="number"
                                       min="1"
-                                      value={item.quantity || 1}
+                                      value={item.quantity === undefined ? 1 : item.quantity}
                                       onChange={(e) => updateTransferItemQty(idx, e.target.value)}
+                                      onBlur={() => {
+                                        const q = Math.max(1, parseInt(item.quantity, 10) || 1);
+                                        updateTransferItemQty(idx, q);
+                                      }}
                                       style={{ width: "50px", textAlign: "center", padding: "0.2rem 0.3rem", fontSize: "0.88rem", fontWeight: 700 }}
                                     />
                                     <button

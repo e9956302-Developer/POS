@@ -48,6 +48,9 @@ export function ModernLayout({
   const [openGroups, setOpenGroups] = useState({
     purchases: false,
     sales: false,
+    inventory: false,
+    parties: false,
+    expenses: false,
     employees: true,
     reports: false,
     admin: true
@@ -58,7 +61,11 @@ export function ModernLayout({
 
   useEffect(() => {
     tabs.forEach((tab) => {
-      if (tab.subItems && tab.key !== "sales" && tab.key !== "purchases" && (activeTab === tab.key || activeTab.startsWith(`${tab.key}_`))) {
+      if (
+        tab.subItems &&
+        !["sales", "purchases", "inventory", "parties", "expenses"].includes(tab.key) &&
+        (activeTab === tab.key || activeTab.startsWith(`${tab.key}_`))
+      ) {
         setOpenGroups((prev) => ({ ...prev, [tab.key]: true }));
       }
     });
@@ -122,7 +129,7 @@ export function ModernLayout({
                       aria-expanded={Boolean(isGroupOpen)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
-                          if (tab.key === "sales" || tab.key === "purchases") {
+                          if (["sales", "purchases", "inventory", "parties", "expenses"].includes(tab.key)) {
                             e.preventDefault();
                             setError("");
                             if (isCollapsed) {
@@ -136,7 +143,7 @@ export function ModernLayout({
                       }}
                       onClick={() => {
                         setError("");
-                        if (tab.key === "sales" || tab.key === "purchases") {
+                        if (["sales", "purchases", "inventory", "parties", "expenses"].includes(tab.key)) {
                           if (isCollapsed) {
                             setIsCollapsed(false);
                             toggleGroup(tab.key);

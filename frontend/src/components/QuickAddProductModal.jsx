@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { api } from "../api.js";
 import { SearchableSelect } from "./SearchableSelect.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
+import { stripTrailingZeros } from "../utils/numberFormat.js";
 
 export function QuickAddProductModal({ isOpen, onClose, onCreated, categories = [], branchId }) {
   const { t, isRtl, language } = useLanguage();
@@ -244,6 +245,7 @@ export function QuickAddProductModal({ isOpen, onClose, onCreated, categories = 
                   placeholder="0"
                   value={costPrice}
                   onChange={(e) => setCostPrice(e.target.value)}
+                  onBlur={(e) => setCostPrice(stripTrailingZeros(e.target.value))}
                   style={{ direction: "ltr", unicodeBidi: "isolate" }}
                 />
               </label>
@@ -257,6 +259,7 @@ export function QuickAddProductModal({ isOpen, onClose, onCreated, categories = 
                   placeholder="0"
                   value={salePrice}
                   onChange={(e) => setSalePrice(e.target.value)}
+                  onBlur={(e) => setSalePrice(stripTrailingZeros(e.target.value))}
                   style={{ direction: "ltr", unicodeBidi: "isolate" }}
                 />
               </label>

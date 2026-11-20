@@ -1342,7 +1342,7 @@ export function InvoicesPage({ context }) {
                             type="text"
                             readOnly
                             disabled
-                            value={`PKR ${editSubtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                            value={`PKR ${editSubtotal.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`}
                             style={{ fontWeight: "600", cursor: "not-allowed" }}
                           />
                         </label>
@@ -1386,7 +1386,7 @@ export function InvoicesPage({ context }) {
                             type="text"
                             readOnly
                             disabled
-                            value={`PKR ${editNetAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                            value={`PKR ${editNetAmount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`}
                             style={{ fontWeight: "700", color: "var(--primary)", cursor: "not-allowed" }}
                           />
                         </label>
@@ -1416,7 +1416,7 @@ export function InvoicesPage({ context }) {
                             type="text"
                             readOnly
                             disabled
-                            value={`PKR ${editBalanceAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                            value={`PKR ${editBalanceAmount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`}
                             style={{
                               fontWeight: "700",
                               color: editBalanceAmount > 0 ? "var(--danger)" : "var(--positive)",

@@ -47,6 +47,9 @@ export function ClassicLayout({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [purchaseMenuOpen, setPurchaseMenuOpen] = useState(false);
   const [saleMenuOpen, setSaleMenuOpen] = useState(false);
+  const [inventoryMenuOpen, setInventoryMenuOpen] = useState(false);
+  const [partiesMenuOpen, setPartiesMenuOpen] = useState(false);
+  const [expensesMenuOpen, setExpensesMenuOpen] = useState(false);
   const [adminMenuOpen, setAdminMenuOpen] = useState(true);
   const [employeeMenuOpen, setEmployeeMenuOpen] = useState(true);
   const [reportMenuOpen, setReportMenuOpen] = useState(false);
@@ -56,6 +59,9 @@ export function ClassicLayout({
 
   const isPurchaseActive = activeTab === "purchases" || activeTab.startsWith("purchases_");
   const isSaleActive = activeTab === "sales" || activeTab.startsWith("sales_");
+  const isInventoryActive = activeTab === "inventory" || activeTab.startsWith("inventory_");
+  const isPartiesActive = activeTab === "parties" || activeTab.startsWith("parties_");
+  const isExpensesActive = activeTab === "expenses" || activeTab.startsWith("expenses_");
   const isAdminActive = activeTab === "admin" || activeTab.startsWith("admin_");
   const isEmployeeActive = activeTab === "employees" || activeTab.startsWith("employees_");
   const isReportActive = activeTab === "reports" || activeTab.startsWith("reports_");
@@ -124,6 +130,9 @@ export function ClassicLayout({
                 tab.key === activeTab ||
                 (tab.key === "purchases" && isPurchaseActive) ||
                 (tab.key === "sales" && isSaleActive) ||
+                (tab.key === "inventory" && isInventoryActive) ||
+                (tab.key === "parties" && isPartiesActive) ||
+                (tab.key === "expenses" && isExpensesActive) ||
                 (tab.key === "admin" && isAdminActive) ||
                 (tab.key === "employees" && isEmployeeActive) ||
                 (tab.key === "reports" && isReportActive);
@@ -134,6 +143,12 @@ export function ClassicLayout({
                     ? purchaseMenuOpen
                     : tab.key === "sales"
                     ? saleMenuOpen
+                    : tab.key === "inventory"
+                    ? inventoryMenuOpen
+                    : tab.key === "parties"
+                    ? partiesMenuOpen
+                    : tab.key === "expenses"
+                    ? expensesMenuOpen
                     : tab.key === "admin"
                     ? adminMenuOpen
                     : tab.key === "employees"
@@ -144,6 +159,12 @@ export function ClassicLayout({
                     ? setPurchaseMenuOpen
                     : tab.key === "sales"
                     ? setSaleMenuOpen
+                    : tab.key === "inventory"
+                    ? setInventoryMenuOpen
+                    : tab.key === "parties"
+                    ? setPartiesMenuOpen
+                    : tab.key === "expenses"
+                    ? setExpensesMenuOpen
                     : tab.key === "admin"
                     ? setAdminMenuOpen
                     : tab.key === "employees"
@@ -154,11 +175,18 @@ export function ClassicLayout({
                     ? (tab.subItems?.[0]?.key || "purchases_new")
                     : tab.key === "sales"
                     ? (tab.subItems?.[0]?.key || "sales_new")
+                    : tab.key === "inventory"
+                    ? (tab.subItems?.[0]?.key || "inventory_imei")
+                    : tab.key === "parties"
+                    ? (tab.subItems?.[0]?.key || "parties_new")
+                    : tab.key === "expenses"
+                    ? (tab.subItems?.[0]?.key || "expenses_entry")
                     : tab.key === "admin"
                     ? "admin_branches"
                     : tab.key === "employees"
                     ? "employees_attendance"
                     : "reports_pnl";
+                const isManualToggle = ["sales", "purchases", "inventory", "parties", "expenses"].includes(tab.key);
 
                 return (
                   <div key={tab.key} className="nav-group">
@@ -168,7 +196,7 @@ export function ClassicLayout({
                       aria-expanded={Boolean(isGroupOpen)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
-                          if (tab.key === "sales" || tab.key === "purchases") {
+                          if (isManualToggle) {
                             e.preventDefault();
                             setError("");
                             if (isCollapsed) {
@@ -182,7 +210,7 @@ export function ClassicLayout({
                       }}
                       onClick={() => {
                         setError("");
-                        if (tab.key === "sales" || tab.key === "purchases") {
+                        if (isManualToggle) {
                           if (isCollapsed) {
                             setIsCollapsed(false);
                             setGroupOpen(true);

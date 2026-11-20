@@ -11,6 +11,7 @@ import { ReceiptModal } from "../components/ReceiptModal.jsx";
 import { ReturnOrderModal } from "../components/ReturnOrderModal.jsx";
 import { TableActionButton } from "../components/TableActionColumn.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
+import { stripTrailingZeros } from "../utils/numberFormat.js";
 
 function formatCnic(value) {
   const digits = String(value || "").replace(/\D/g, "").slice(0, 13);
@@ -412,7 +413,8 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
   function addProductToCart(product, customCost = null) {
     if (!product || !product.id) return;
     setError("");
-    const cost = customCost !== null ? Number(customCost) : Number(product.cost_price ?? product.sale_price ?? 0);
+    const rawCost = customCost !== null ? Number(customCost) : Number(product.cost_price ?? product.sale_price ?? 0);
+    const cost = stripTrailingZeros(rawCost);
     const existingIdx = (form.items || []).findIndex((it) => String(it.productId) === String(product.id));
 
     if (existingIdx >= 0) {
@@ -420,7 +422,7 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
         ...prev,
         items: prev.items.map((it, idx) =>
           idx === existingIdx
-            ? { ...it, quantity: Number(it.quantity || 1) + 1, unitCost: cost > 0 ? cost : it.unitCost }
+            ? { ...it, quantity: Number(it.quantity || 1) + 1, unitCost: cost !== "" ? cost : it.unitCost }
             : it
         )
       }));
@@ -455,7 +457,8 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
       return false;
     }
 
-    const cost = customCost !== null ? Number(customCost) : Number(phoneUnitCost || model?.cost_price || model?.unitCost || 0);
+    const rawCost = customCost !== null ? Number(customCost) : Number(phoneUnitCost || model?.cost_price || model?.unitCost || 0);
+    const cost = stripTrailingZeros(rawCost);
     const modelTitle = model
       ? (model.modelTitle || model.name || `${model.company || ""} ${model.model_name || ""}${model.variant ? ` (${model.variant})` : ""}${model.storage ? ` • ${model.storage}` : ""}${model.color ? ` • ${model.color}` : ""}`.trim())
       : "Mobile Handset";
@@ -795,10 +798,9 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
   }
 
   function updatePurchaseItemQty(index, newQty) {
-    const qty = Math.max(1, parseInt(newQty, 10) || 1);
     setForm((prev) => ({
       ...prev,
-      items: prev.items.map((it, idx) => (idx === index ? { ...it, quantity: qty } : it))
+      items: prev.items.map((it, idx) => (idx === index ? { ...it, quantity: newQty } : it))
     }));
   }
 
@@ -1850,15 +1852,29 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
                                     <button
                                       type="button"
                                       className="pos-qty-btn"
-                                      onClick={() => updatePurchaseItemQty(index, Math.max(1, qty - 1))}
+                                      onClick={() => updatePurchaseItemQty(index, Math.max(1, (parseInt(item.quantity, 10) || 1) - 1))}
+                                      title="Decrease quantity"
                                     >
                                       -
                                     </button>
-                                    <span className="pos-qty-num">{qty}</span>
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      step="1"
+                                      className="pos-qty-input"
+                                      value={item.quantity === undefined ? 1 : item.quantity}
+                                      onChange={(e) => updatePurchaseItemQty(index, e.target.value)}
+                                      onBlur={() => {
+                                        const q = Math.max(1, parseInt(item.quantity, 10) || 1);
+                                        updatePurchaseItemQty(index, q);
+                                      }}
+                                      title="Enter quantity (keyboard enabled)"
+                                    />
                                     <button
                                       type="button"
                                       className="pos-qty-btn"
-                                      onClick={() => updatePurchaseItemQty(index, qty + 1)}
+                                      onClick={() => updatePurchaseItemQty(index, (parseInt(item.quantity, 10) || 1) + 1)}
+                                      title="Increase quantity"
                                     >
                                       +
                                     </button>
@@ -1873,6 +1889,7 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
                                   min="0"
                                   value={item.unitCost}
                                   onChange={(e) => updatePurchaseItemCost(index, e.target.value)}
+                                  onBlur={() => updatePurchaseItemCost(index, stripTrailingZeros(item.unitCost))}
                                   style={{
                                     width: "110px",
                                     textAlign: "right",
@@ -2570,7 +2587,7 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
                         type="text"
                         readOnly
                         disabled
-                        value={`PKR ${editSubtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                        value={`PKR ${editSubtotal.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`}
                         style={{ fontWeight: "600", cursor: "not-allowed" }}
                       />
                     </label>
@@ -2614,7 +2631,7 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
                         type="text"
                         readOnly
                         disabled
-                        value={`PKR ${editNetAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                        value={`PKR ${editNetAmount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`}
                         style={{ fontWeight: "700", color: "var(--primary)", cursor: "not-allowed" }}
                       />
                     </label>
@@ -2644,7 +2661,7 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
                         type="text"
                         readOnly
                         disabled
-                        value={`PKR ${editBalanceAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                        value={`PKR ${editBalanceAmount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`}
                         style={{
                           fontWeight: "700",
                           color: editBalanceAmount > 0 ? "var(--danger)" : "var(--positive)",

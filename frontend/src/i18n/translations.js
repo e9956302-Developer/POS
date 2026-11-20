@@ -71,6 +71,20 @@ export const translations = {
       sales_new: "Create Sale (POS Counter)",
       sales_history: "Sale Directory & History",
 
+      // Inventory subpages
+      inventory_imei: "Handsets & Serialized IMEIs",
+      inventory_products: "Accessories & Products Catalog",
+      inventory_transfers: "Inter-Branch Stock Transfers",
+      inventory_returns: "Returns & RMAs",
+
+      // Parties subpages
+      parties_new: "Party Master & Registration",
+      parties_directory: "Party Details & Directory",
+
+      // Expenses subpages
+      expenses_entry: "Record Expense (Outflow Counter)",
+      expenses_directory: "Expense Directory & History",
+
       // Admin subpages
       admin_branches: "Branches & Outlets",
       admin_users: "Staff Accounts",
@@ -627,6 +641,20 @@ export const translations = {
       // Sales subpages
       sales_new: "سیل درج کریں (POS کاؤنٹر)",
       sales_history: "سیلز ریکارڈ و ہسٹری",
+
+      // Inventory subpages
+      inventory_imei: "موبائل فونز اور آئی ایم ای آئی",
+      inventory_products: "ایکسیسریز اور پروڈکٹ کیٹلاگ",
+      inventory_transfers: "برانچز کے درمیان اسٹاک ٹرانسفر",
+      inventory_returns: "واپسی مال و ریٹرنز (RMA)",
+
+      // Parties subpages
+      parties_new: "کھاتے دار رجسٹریشن و اندراج",
+      parties_directory: "کھاتے داروں کی تفصیلات و فہرست",
+
+      // Expenses subpages
+      expenses_entry: "اخراجات کا اندراج (آؤٹ فلو کاؤنٹر)",
+      expenses_directory: "اخراجات کا ریکارڈ و ہسٹری",
 
       // Admin subpages
       admin_branches: "برانچز و آؤٹ لیٹس",

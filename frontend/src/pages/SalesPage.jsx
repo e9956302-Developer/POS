@@ -12,6 +12,7 @@ import { exportToCSV } from "../utils/export.js";
 import { openWhatsAppReminder } from "../utils/whatsapp.js";
 import { useLanguage } from "../context/LanguageContext.jsx";
 import { IMEI_MIN_LENGTH, IMEI_MAX_LENGTH, isImeiFormat } from "../utils/imei.js";
+import { stripTrailingZeros } from "../utils/numberFormat.js";
 
 // Re-export shared IMEI constants & validator (Pack #18 / Pack #20)
 export { IMEI_MIN_LENGTH, IMEI_MAX_LENGTH, isImeiFormat };
@@ -436,7 +437,8 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
     }
     setError("");
     const name = `${unit.company || ""} ${unit.model_name || ""}${unit.variant ? ` (${unit.variant})` : ""}${unit.storage ? ` • ${unit.storage}` : ""}${unit.color ? ` • ${unit.color}` : ""}`.trim() || "Mobile Handset";
-    const price = customPrice !== null ? customPrice : (unit.sale_price || unit.retail_price || unit.cost_price || 0);
+    const rawPrice = customPrice !== null ? customPrice : (unit.sale_price || unit.retail_price || unit.cost_price || 0);
+    const price = stripTrailingZeros(rawPrice);
 
     const nextItems = [
       ...(form.items || []),
@@ -446,15 +448,15 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
         modelId: unit.model_id,
         name,
         unitPrice: price,
-        costPrice: unit.cost_price || 0,
+        costPrice: stripTrailingZeros(unit.cost_price || 0),
         quantity: 1
       }
     ];
-    const newSubtotal = nextItems.reduce((s, it) => s + Number(it.unitPrice || 0) * (it.itemType === "product" ? Number(it.quantity || 1) : 1), 0);
+    const newSubtotal = nextItems.reduce((s, it) => s + Number(it.unitPrice || 0) * (it.itemType === "product" ? Math.max(1, Number(it.quantity || 1)) : 1), 0);
     setForm((prev) => ({
       ...prev,
       items: nextItems,
-      paidAmount: String(newSubtotal + Number(prev.taxAmount || 0))
+      paidAmount: String(stripTrailingZeros(newSubtotal + Number(prev.taxAmount || 0)))
     }));
   }
 
@@ -477,17 +479,17 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
           barcode: product.barcode || "",
           name: product.name,
           categoryName: product.category_name || "Accessory",
-          unitPrice: product.sale_price ?? product.retail_price ?? 0,
+          unitPrice: stripTrailingZeros(product.sale_price ?? product.retail_price ?? 0),
           stockQuantity: product.stock_quantity ?? 0,
           quantity: 1
         }
       ];
     }
-    const newSubtotal = nextItems.reduce((s, it) => s + Number(it.unitPrice || 0) * (it.itemType === "product" ? Number(it.quantity || 1) : 1), 0);
+    const newSubtotal = nextItems.reduce((s, it) => s + Number(it.unitPrice || 0) * (it.itemType === "product" ? Math.max(1, Number(it.quantity || 1)) : 1), 0);
     setForm((prev) => ({
       ...prev,
       items: nextItems,
-      paidAmount: String(newSubtotal + Number(prev.taxAmount || 0))
+      paidAmount: String(stripTrailingZeros(newSubtotal + Number(prev.taxAmount || 0)))
     }));
   }
 
@@ -869,33 +871,41 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
   };
 
   function updateCartItemQty(index, newQty) {
-    const qty = Math.max(1, parseInt(newQty, 10) || 1);
-    const nextItems = form.items.map((it, idx) => (idx === index ? { ...it, quantity: qty } : it));
-    const newSubtotal = nextItems.reduce((s, it) => s + Number(it.unitPrice || 0) * (it.itemType === "product" ? Number(it.quantity || 1) : 1), 0);
+    const nextItems = form.items.map((it, idx) => (idx === index ? { ...it, quantity: newQty } : it));
+    const newSubtotal = nextItems.reduce((s, it) => {
+      const q = it.itemType === "product" || it.productId ? Math.max(1, Number(it.quantity || 1)) : 1;
+      return s + Number(it.unitPrice || 0) * q;
+    }, 0);
     setForm((prev) => ({
       ...prev,
       items: nextItems,
-      paidAmount: String(newSubtotal + Number(prev.taxAmount || 0))
+      paidAmount: String(stripTrailingZeros(newSubtotal + Number(prev.taxAmount || 0)))
     }));
   }
 
   function updateCartItemPrice(index, newPrice) {
     const nextItems = form.items.map((it, idx) => (idx === index ? { ...it, unitPrice: newPrice } : it));
-    const newSubtotal = nextItems.reduce((s, it) => s + Number(it.unitPrice || 0) * (it.itemType === "product" ? Number(it.quantity || 1) : 1), 0);
+    const newSubtotal = nextItems.reduce((s, it) => {
+      const q = it.itemType === "product" || it.productId ? Math.max(1, Number(it.quantity || 1)) : 1;
+      return s + Number(it.unitPrice || 0) * q;
+    }, 0);
     setForm((prev) => ({
       ...prev,
       items: nextItems,
-      paidAmount: String(newSubtotal + Number(prev.taxAmount || 0))
+      paidAmount: String(stripTrailingZeros(newSubtotal + Number(prev.taxAmount || 0)))
     }));
   }
 
   function removeCartItem(index) {
     const nextItems = form.items.filter((_, idx) => idx !== index);
-    const newSubtotal = nextItems.reduce((s, it) => s + Number(it.unitPrice || 0) * (it.itemType === "product" ? Number(it.quantity || 1) : 1), 0);
+    const newSubtotal = nextItems.reduce((s, it) => {
+      const q = it.itemType === "product" || it.productId ? Math.max(1, Number(it.quantity || 1)) : 1;
+      return s + Number(it.unitPrice || 0) * q;
+    }, 0);
     setForm((prev) => ({
       ...prev,
       items: nextItems,
-      paidAmount: nextItems.length ? String(newSubtotal + Number(prev.taxAmount || 0)) : ""
+      paidAmount: nextItems.length ? String(stripTrailingZeros(newSubtotal + Number(prev.taxAmount || 0))) : ""
     }));
   }
 
@@ -1947,16 +1957,28 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
                                   <button
                                     type="button"
                                     className="pos-qty-btn"
-                                    onClick={() => updateCartItemQty(index, qty - 1)}
+                                    onClick={() => updateCartItemQty(index, Math.max(1, (parseInt(item.quantity, 10) || 1) - 1))}
                                     title="Decrease quantity"
                                   >
                                     -
                                   </button>
-                                  <span className="pos-qty-num">{qty}</span>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    step="1"
+                                    className="pos-qty-input"
+                                    value={item.quantity === undefined ? 1 : item.quantity}
+                                    onChange={(e) => updateCartItemQty(index, e.target.value)}
+                                    onBlur={() => {
+                                      const q = Math.max(1, parseInt(item.quantity, 10) || 1);
+                                      updateCartItemQty(index, q);
+                                    }}
+                                    title="Enter quantity (keyboard enabled)"
+                                  />
                                   <button
                                     type="button"
                                     className="pos-qty-btn"
-                                    onClick={() => updateCartItemQty(index, qty + 1)}
+                                    onClick={() => updateCartItemQty(index, (parseInt(item.quantity, 10) || 1) + 1)}
                                     title="Increase quantity"
                                   >
                                     +
@@ -1972,6 +1994,7 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
                                 min="0"
                                 value={item.unitPrice}
                                 onChange={(e) => updateCartItemPrice(index, e.target.value)}
+                                onBlur={() => updateCartItemPrice(index, stripTrailingZeros(item.unitPrice))}
                                 style={{
                                   width: "110px",
                                   textAlign: "right",
