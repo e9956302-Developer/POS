@@ -1192,10 +1192,6 @@ function AppContent() {
     setActiveTab(tabKey);
   }
 
-  const [purchaseMenuOpen, setPurchaseMenuOpen] = useState(() => {
-    return activeTab === "purchases" || activeTab.startsWith("purchases_");
-  });
-
   const isPurchaseActive = activeTab === "purchases" || activeTab.startsWith("purchases_");
   const activePurchaseSub = activeTab === "purchases_history"
     ? "history"
@@ -1203,28 +1199,12 @@ function AppContent() {
     ? "new"
     : (canUse(session, "purchases", "create") ? "new" : "history");
 
-  useEffect(() => {
-    if (isPurchaseActive) {
-      setPurchaseMenuOpen(true);
-    }
-  }, [isPurchaseActive]);
-
-  const [saleMenuOpen, setSaleMenuOpen] = useState(() => {
-    return activeTab === "sales" || activeTab.startsWith("sales_");
-  });
-
   const isSaleActive = activeTab === "sales" || activeTab.startsWith("sales_");
   const activeSaleSub = activeTab === "sales_history"
     ? "history"
     : (activeTab === "sales_new" || activeTab === "sales_checkout")
     ? "new"
     : (canUse(session, "sales", "create") ? "new" : "history");
-
-  useEffect(() => {
-    if (isSaleActive) {
-      setSaleMenuOpen(true);
-    }
-  }, [isSaleActive]);
 
   const [adminMenuOpen, setAdminMenuOpen] = useState(() => {
     return activeTab === "admin" || activeTab.startsWith("admin_");

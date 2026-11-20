@@ -6,7 +6,7 @@ import puppeteer from "puppeteer-core";
 const CHROME_PATHS = [
   "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
   "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-  "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+  "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
   "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe"
 ];
 
@@ -74,7 +74,7 @@ async function loginAsManager() {
   await new Promise((r) => setTimeout(r, 1500));
 }
 
-test("Sales navigation acceptance: side-menu sub-items, removal of page switcher buttons, breadcrumbs, and deep links", async (t) => {
+test("Sales and Purchases sub-menus: collapsed by default, click & keyboard toggle, active parent highlight", async (t) => {
   if (!devServerAvailable) {
     t.skip("Vite dev server is not running on http://localhost:5173");
     return;
@@ -82,132 +82,183 @@ test("Sales navigation acceptance: side-menu sub-items, removal of page switcher
 
   await loginAsManager();
 
-  // 1. Verify Sales parent menu in sidebar has the 2 sub-menus with exact labels in order
-  const salesSubMenuItems = await page.evaluate(() => {
-    // Find all sub-nav-list items under sales or general sub-menus
+  // 1. DEFAULT STATE ON FRESH LOGIN:
+  // Both Sales and Purchases are COLLAPSED by default — no sub-menus visible
+  const initialMenuState = await page.evaluate(() => {
+    const navItems = Array.from(document.querySelectorAll(".nav-list button.nav-item"));
+    const salesBtn = navItems.find((b) => /Sales/i.test(b.innerText));
+    const purchasesBtn = navItems.find((b) => /Purchases/i.test(b.innerText));
+
     const subButtons = Array.from(document.querySelectorAll(".sub-nav-list button, .modern-sub-nav-list button"));
-    return subButtons.map((b) => b.innerText.trim());
+    const hasSaleSubItems = subButtons.some((b) => /Create Sale|Sale Directory/i.test(b.innerText));
+    const hasPurchaseSubItems = subButtons.some((b) => /Create Purchase|Purchases Directory/i.test(b.innerText));
+
+    return {
+      salesAriaExpanded: salesBtn ? salesBtn.getAttribute("aria-expanded") : null,
+      purchasesAriaExpanded: purchasesBtn ? purchasesBtn.getAttribute("aria-expanded") : null,
+      hasSaleSubItems,
+      hasPurchaseSubItems
+    };
   });
 
-  assert.ok(
-    salesSubMenuItems.some((label) => label.includes("Create Sale (POS Counter)")),
-    "Sidebar sub-menu must include 'Create Sale (POS Counter)'"
-  );
-  assert.ok(
-    salesSubMenuItems.some((label) => label.includes("Sale Directory & History")),
-    "Sidebar sub-menu must include 'Sale Directory & History'"
-  );
+  assert.equal(initialMenuState.hasSaleSubItems, false, "Sales sub-items must be hidden on fresh load");
+  assert.equal(initialMenuState.hasPurchaseSubItems, false, "Purchases sub-items must be hidden on fresh load");
+  assert.equal(initialMenuState.salesAriaExpanded, "false", "Sales parent must have aria-expanded='false'");
+  assert.equal(initialMenuState.purchasesAriaExpanded, "false", "Purchases parent must have aria-expanded='false'");
 
-  // Check ordering of the two items
-  const createSaleIdx = salesSubMenuItems.findIndex((l) => l.includes("Create Sale (POS Counter)"));
-  const historyIdx = salesSubMenuItems.findIndex((l) => l.includes("Sale Directory & History"));
-  assert.ok(createSaleIdx !== -1 && historyIdx !== -1, "Both sub-items must exist");
-  assert.ok(createSaleIdx < historyIdx, "Create Sale (POS Counter) must precede Sale Directory & History");
-
-  // 2. Navigate to Create Sale (POS Counter) view
+  // 2. CLICK TOGGLE BEHAVIOR (Sales):
+  // One click on Sales expands it
   await page.evaluate(() => {
-    const subButtons = Array.from(document.querySelectorAll(".sub-nav-list button, .modern-sub-nav-list button"));
+    const navItems = Array.from(document.querySelectorAll(".nav-list button.nav-item"));
+    const salesBtn = navItems.find((b) => /Sales/i.test(b.innerText));
+    if (salesBtn) salesBtn.click();
+  });
+  await new Promise((r) => setTimeout(r, 300));
+
+  const afterSalesClick = await page.evaluate(() => {
+    const navItems = Array.from(document.querySelectorAll(".nav-list button.nav-item"));
+    const salesBtn = navItems.find((b) => /Sales/i.test(b.innerText));
+    const subButtons = Array.from(document.querySelectorAll(".sub-nav-list button"));
+    const subLabels = subButtons.map((b) => b.innerText.trim());
+    return {
+      salesAriaExpanded: salesBtn ? salesBtn.getAttribute("aria-expanded") : null,
+      subLabels,
+      hash: window.location.hash
+    };
+  });
+
+  assert.equal(afterSalesClick.salesAriaExpanded, "true", "Sales parent aria-expanded becomes 'true'");
+  assert.ok(afterSalesClick.subLabels.some((l) => l.includes("Create Sale (POS Counter)")), "Contains 'Create Sale (POS Counter)'");
+  assert.ok(afterSalesClick.subLabels.some((l) => l.includes("Sale Directory & History")), "Contains 'Sale Directory & History'");
+  // Parent click NEVER navigates by itself
+  assert.equal(afterSalesClick.hash, "#dashboard", "Clicking parent does not navigate away from current page");
+
+  // Click Sales again -> collapses
+  await page.evaluate(() => {
+    const navItems = Array.from(document.querySelectorAll(".nav-list button.nav-item"));
+    const salesBtn = navItems.find((b) => /Sales/i.test(b.innerText));
+    if (salesBtn) salesBtn.click();
+  });
+  await new Promise((r) => setTimeout(r, 300));
+
+  const afterSalesSecondClick = await page.evaluate(() => {
+    const navItems = Array.from(document.querySelectorAll(".nav-list button.nav-item"));
+    const salesBtn = navItems.find((b) => /Sales/i.test(b.innerText));
+    const subButtons = Array.from(document.querySelectorAll(".sub-nav-list button"));
+    return {
+      salesAriaExpanded: salesBtn ? salesBtn.getAttribute("aria-expanded") : null,
+      hasSaleSubItems: subButtons.some((b) => /Create Sale|Sale Directory/i.test(b.innerText))
+    };
+  });
+  assert.equal(afterSalesSecondClick.hasSaleSubItems, false, "Second click on Sales collapses sub-items");
+  assert.equal(afterSalesSecondClick.salesAriaExpanded, "false", "Sales aria-expanded returns to 'false'");
+
+  // 3. INDEPENDENT TOGGLE (Purchases):
+  await page.evaluate(() => {
+    const navItems = Array.from(document.querySelectorAll(".nav-list button.nav-item"));
+    const purchasesBtn = navItems.find((b) => /Purchases/i.test(b.innerText));
+    if (purchasesBtn) purchasesBtn.click();
+  });
+  await new Promise((r) => setTimeout(r, 300));
+
+  const afterPurchasesClick = await page.evaluate(() => {
+    const subButtons = Array.from(document.querySelectorAll(".sub-nav-list button"));
+    const subLabels = subButtons.map((b) => b.innerText.trim());
+    return {
+      subLabels
+    };
+  });
+  assert.ok(afterPurchasesClick.subLabels.some((l) => l.includes("Create Purchase (Inward Counter)")), "Purchases sub-items appear on click");
+  assert.ok(afterPurchasesClick.subLabels.some((l) => l.includes("Purchases Directory & History")), "Purchases sub-items appear on click");
+
+  // 4. NAVIGATION VIA SUB-MENU ITEM & STAY OPEN DURING SESSION:
+  // Re-open Sales
+  await page.evaluate(() => {
+    const navItems = Array.from(document.querySelectorAll(".nav-list button.nav-item"));
+    const salesBtn = navItems.find((b) => /Sales/i.test(b.innerText));
+    if (salesBtn) salesBtn.click();
+  });
+  await new Promise((r) => setTimeout(r, 300));
+
+  // Click sub-menu item: "Create Sale (POS Counter)"
+  await page.evaluate(() => {
+    const subButtons = Array.from(document.querySelectorAll(".sub-nav-list button"));
     const btn = subButtons.find((b) => b.innerText.includes("Create Sale (POS Counter)"));
     if (btn) btn.click();
   });
   await new Promise((r) => setTimeout(r, 600));
 
-  // Check URL hash
-  const hashAfterCreateClick = await page.evaluate(() => window.location.hash);
-  assert.match(hashAfterCreateClick, /#sales_new/);
-
-  // Check Breadcrumb in header
-  const breadcrumbCreateSale = await page.evaluate(() => {
+  const onSalesPage = await page.evaluate(() => {
+    const navItems = Array.from(document.querySelectorAll(".nav-list button.nav-item"));
+    const salesBtn = navItems.find((b) => /Sales/i.test(b.innerText));
+    const subButtons = Array.from(document.querySelectorAll(".sub-nav-list button"));
+    const activeSubBtn = subButtons.find((b) => b.classList.contains("active"));
     const bc = document.querySelector(".page-breadcrumb-bar, .modern-row2-breadcrumb-bar, .breadcrumb-trail, .modern-breadcrumb-trail");
-    return bc ? bc.innerText.replace(/\s+/g, " ").trim() : "";
-  });
-  assert.match(breadcrumbCreateSale, /Sales.*(?:›|\/).*Create Sale \(POS Counter\)/);
 
-  // Check that page NO LONGER has .nav-tabs button switcher or visible tab-btn on the page body
-  const pageSwitcherOnCreate = await page.evaluate(() => {
-    const pageGrid = document.querySelector(".page-grid");
-    if (!pageGrid) return { hasNavTabs: false, visibleSwitcherButtons: [] };
-    const navTabs = pageGrid.querySelector(".nav-tabs");
-    const buttons = Array.from(pageGrid.querySelectorAll("button.tab-btn")).filter((b) => {
-      const style = window.getComputedStyle(b);
-      return style.display !== "none" && style.visibility !== "hidden";
-    });
     return {
-      hasNavTabs: Boolean(navTabs),
-      visibleSwitcherButtons: buttons.map((b) => b.innerText.trim())
+      hash: window.location.hash,
+      salesAriaExpanded: salesBtn ? salesBtn.getAttribute("aria-expanded") : null,
+      activeSubLabel: activeSubBtn ? activeSubBtn.innerText.trim() : null,
+      breadcrumb: bc ? bc.innerText.replace(/\s+/g, " ").trim() : ""
     };
   });
-  assert.equal(pageSwitcherOnCreate.hasNavTabs, false, "Create Sale view must not contain .nav-tabs container");
-  assert.equal(pageSwitcherOnCreate.visibleSwitcherButtons.length, 0, "No visible switcher tab-btn on Create Sale page");
 
-  // 3. Navigate to Sale Directory & History view
-  await page.evaluate(() => {
-    const subButtons = Array.from(document.querySelectorAll(".sub-nav-list button, .modern-sub-nav-list button"));
-    const btn = subButtons.find((b) => b.innerText.includes("Sale Directory & History"));
-    if (btn) btn.click();
-  });
-  await new Promise((r) => setTimeout(r, 600));
+  assert.match(onSalesPage.hash, /#sales_new/, "Navigated to sales_new");
+  assert.equal(onSalesPage.salesAriaExpanded, "true", "Parent remains open after navigating to sub-page");
+  assert.ok(onSalesPage.activeSubLabel && onSalesPage.activeSubLabel.includes("Create Sale (POS Counter)"), "Sub-item has active highlight");
+  assert.match(onSalesPage.breadcrumb, /Sales.*(?:›|\/).*Create Sale \(POS Counter\)/, "Breadcrumb panel correct");
 
-  // Check URL hash
-  const hashAfterHistoryClick = await page.evaluate(() => window.location.hash);
-  assert.match(hashAfterHistoryClick, /#sales_history/);
+  // 5. REFRESH ON SUB-PAGE:
+  // Refresh while on Create Sale: parent renders COLLAPSED, parent itself highlighted as active!
+  await page.reload({ waitUntil: "networkidle0" });
+  await page.waitForSelector(".app-shell", { timeout: 5000 });
+  await new Promise((r) => setTimeout(r, 800));
 
-  // Check Breadcrumb in header
-  const breadcrumbHistory = await page.evaluate(() => {
+  const onRefreshState = await page.evaluate(() => {
+    const navItems = Array.from(document.querySelectorAll(".nav-list button.nav-item"));
+    const salesBtn = navItems.find((b) => /Sales/i.test(b.innerText));
+    const subButtons = Array.from(document.querySelectorAll(".sub-nav-list button"));
+    const hasSaleSubItems = subButtons.some((b) => /Create Sale|Sale Directory/i.test(b.innerText));
     const bc = document.querySelector(".page-breadcrumb-bar, .modern-row2-breadcrumb-bar, .breadcrumb-trail, .modern-breadcrumb-trail");
-    return bc ? bc.innerText.replace(/\s+/g, " ").trim() : "";
-  });
-  assert.match(breadcrumbHistory, /Sales.*(?:›|\/).*Sale Directory & History/);
 
-  // Check that History view ALSO does not have .nav-tabs button switcher
-  const pageSwitcherOnHistory = await page.evaluate(() => {
-    const pageGrid = document.querySelector(".page-grid");
-    if (!pageGrid) return { hasNavTabs: false, visibleSwitcherButtons: [] };
-    const navTabs = pageGrid.querySelector(".nav-tabs");
-    const buttons = Array.from(pageGrid.querySelectorAll("button.tab-btn")).filter((b) => {
-      const style = window.getComputedStyle(b);
-      return style.display !== "none" && style.visibility !== "hidden";
-    });
     return {
-      hasNavTabs: Boolean(navTabs),
-      visibleSwitcherButtons: buttons.map((b) => b.innerText.trim())
+      salesAriaExpanded: salesBtn ? salesBtn.getAttribute("aria-expanded") : null,
+      salesIsActive: salesBtn ? salesBtn.classList.contains("active") : false,
+      hasSaleSubItems,
+      breadcrumb: bc ? bc.innerText.replace(/\s+/g, " ").trim() : ""
     };
   });
-  assert.equal(pageSwitcherOnHistory.hasNavTabs, false, "History view must not contain .nav-tabs container");
-  assert.equal(pageSwitcherOnHistory.visibleSwitcherButtons.length, 0, "No visible switcher tab-btn on History page");
 
-  // 4. Test Deep Linking: Navigate directly to /#sales
-  await page.goto("http://localhost:5173/#sales", { waitUntil: "networkidle0" });
-  await page.waitForSelector(".app-shell", { timeout: 5000 });
-  await new Promise((r) => setTimeout(r, 1000));
-  const currentHashInfo = await page.evaluate(() => ({
-    hash: window.location.hash,
-    breadcrumb: document.querySelector(".page-breadcrumb-bar, .modern-row2-breadcrumb-bar, .breadcrumb-trail, .modern-breadcrumb-trail")?.innerText
-  }));
-  assert.match(currentHashInfo.hash, /#sales_new/);
+  assert.equal(onRefreshState.hasSaleSubItems, false, "On refresh, Sales parent renders COLLAPSED");
+  assert.equal(onRefreshState.salesAriaExpanded, "false", "On refresh, Sales parent has aria-expanded='false'");
+  assert.equal(onRefreshState.salesIsActive, true, "Sales parent itself carries ACTIVE highlight when collapsed on sub-page");
+  assert.match(onRefreshState.breadcrumb, /Sales.*(?:›|\/).*Create Sale \(POS Counter\)/, "Breadcrumb panel intact");
 
-  // 5. Test Deep Linking: Navigate directly to /#sales_history
-  await page.goto("http://localhost:5173/#sales_history", { waitUntil: "networkidle0" });
-  await page.waitForSelector(".app-shell", { timeout: 5000 });
-  await new Promise((r) => setTimeout(r, 800));
-  const breadcrumbDirectHistory = await page.evaluate(() => {
-    const bc = document.querySelector(".page-breadcrumb-bar, .modern-row2-breadcrumb-bar, .breadcrumb-trail, .modern-breadcrumb-trail");
-    return bc ? bc.innerText.replace(/\s+/g, " ").trim() : "";
-  });
-  assert.match(breadcrumbDirectHistory, /Sales.*(?:›|\/).*Sale Directory & History/);
-
-  // 6. Test Modern Compact Layout
+  // 6. KEYBOARD ONLY TOGGLE:
+  // Focus Sales button and press Enter
   await page.evaluate(() => {
-    // Switch to modern compact layout through layout context or localStorage
-    localStorage.setItem("mp_layout_mode", "compact");
-    localStorage.setItem("pos_layout_mode", "compact");
+    const navItems = Array.from(document.querySelectorAll(".nav-list button.nav-item"));
+    const salesBtn = navItems.find((b) => /Sales/i.test(b.innerText));
+    if (salesBtn) salesBtn.focus();
   });
-  await page.goto("http://localhost:5173/#sales_new", { waitUntil: "networkidle0" });
-  await new Promise((r) => setTimeout(r, 800));
+  await page.keyboard.press("Enter");
+  await new Promise((r) => setTimeout(r, 300));
 
-  const modernBreadcrumb = await page.evaluate(() => {
-    const bc = document.querySelector(".page-breadcrumb-bar, .modern-row2-breadcrumb-bar, .breadcrumb-trail, .modern-breadcrumb-trail");
-    return bc ? bc.innerText.replace(/\s+/g, " ").trim() : "";
+  const afterEnter = await page.evaluate(() => {
+    const navItems = Array.from(document.querySelectorAll(".nav-list button.nav-item"));
+    const salesBtn = navItems.find((b) => /Sales/i.test(b.innerText));
+    return salesBtn ? salesBtn.getAttribute("aria-expanded") : null;
   });
-  assert.match(modernBreadcrumb, /Sales.*(?:›|\/).*Create Sale \(POS Counter\)/);
+  assert.equal(afterEnter, "true", "Pressing Enter toggles menu open");
+
+  // Press Enter again to toggle closed
+  await page.keyboard.press("Enter");
+  await new Promise((r) => setTimeout(r, 300));
+
+  const afterEnterAgain = await page.evaluate(() => {
+    const navItems = Array.from(document.querySelectorAll(".nav-list button.nav-item"));
+    const salesBtn = navItems.find((b) => /Sales/i.test(b.innerText));
+    return salesBtn ? salesBtn.getAttribute("aria-expanded") : null;
+  });
+  assert.equal(afterEnterAgain, "false", "Pressing Enter again toggles menu closed");
 });

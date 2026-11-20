@@ -45,8 +45,8 @@ export function ClassicLayout({
 }) {
   const { isRtl, t } = useLanguage();
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [purchaseMenuOpen, setPurchaseMenuOpen] = useState(true);
-  const [saleMenuOpen, setSaleMenuOpen] = useState(true);
+  const [purchaseMenuOpen, setPurchaseMenuOpen] = useState(false);
+  const [saleMenuOpen, setSaleMenuOpen] = useState(false);
   const [adminMenuOpen, setAdminMenuOpen] = useState(true);
   const [employeeMenuOpen, setEmployeeMenuOpen] = useState(true);
   const [reportMenuOpen, setReportMenuOpen] = useState(false);
@@ -59,18 +59,6 @@ export function ClassicLayout({
   const isAdminActive = activeTab === "admin" || activeTab.startsWith("admin_");
   const isEmployeeActive = activeTab === "employees" || activeTab.startsWith("employees_");
   const isReportActive = activeTab === "reports" || activeTab.startsWith("reports_");
-
-  useEffect(() => {
-    if (isPurchaseActive) {
-      setPurchaseMenuOpen(true);
-    }
-  }, [isPurchaseActive]);
-
-  useEffect(() => {
-    if (isSaleActive) {
-      setSaleMenuOpen(true);
-    }
-  }, [isSaleActive]);
 
   function toggleSidebar() {
     setIsCollapsed(!isCollapsed);
@@ -176,8 +164,33 @@ export function ClassicLayout({
                   <div key={tab.key} className="nav-group">
                     <button
                       className={`nav-item ${isTabActive ? "active" : ""}`}
+                      type="button"
+                      aria-expanded={Boolean(isGroupOpen)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
+                          if (tab.key === "sales" || tab.key === "purchases") {
+                            e.preventDefault();
+                            setError("");
+                            if (isCollapsed) {
+                              setIsCollapsed(false);
+                              setGroupOpen(true);
+                              return;
+                            }
+                            setGroupOpen(!isGroupOpen);
+                          }
+                        }
+                      }}
                       onClick={() => {
                         setError("");
+                        if (tab.key === "sales" || tab.key === "purchases") {
+                          if (isCollapsed) {
+                            setIsCollapsed(false);
+                            setGroupOpen(true);
+                            return;
+                          }
+                          setGroupOpen(!isGroupOpen);
+                          return;
+                        }
                         if (isCollapsed) {
                           setIsCollapsed(false);
                           setGroupOpen(true);
@@ -195,7 +208,6 @@ export function ClassicLayout({
                         }
                       }}
                       title={tab.label}
-                      type="button"
                     >
                       <span className="nav-icon">{tab.icon}</span>
                       <span className="nav-label" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>

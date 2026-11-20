@@ -89,13 +89,18 @@ test("Manager (Waqar) logs in and sees all assigned operational pages in sidebar
   assert.ok(navTabs.some((t) => /Sales/i.test(t)), "Manager sees Sales");
   assert.ok(navTabs.some((t) => /Inventory/i.test(t)), "Manager sees Inventory");
 
-  // Verify manager can click Sales and view the operational form
+  // Verify manager can click Sales to expand sub-menu and click Create Sale to view operational form
   await page.evaluate(() => {
     const btns = Array.from(document.querySelectorAll(".nav-list button"));
     const salesBtn = btns.find((b) => /Sales/i.test(b.innerText));
     if (salesBtn) salesBtn.click();
   });
-
+  await new Promise((r) => setTimeout(r, 400));
+  await page.evaluate(() => {
+    const subBtns = Array.from(document.querySelectorAll(".sub-nav-list button"));
+    const createSaleBtn = subBtns.find((b) => /Create Sale/i.test(b.innerText));
+    if (createSaleBtn) createSaleBtn.click();
+  });
   await new Promise((r) => setTimeout(r, 800));
 
   const salesViewStatus = await page.evaluate(() => {

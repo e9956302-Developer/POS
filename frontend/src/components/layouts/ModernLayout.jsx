@@ -46,8 +46,8 @@ export function ModernLayout({
   const { isRtl, t } = useLanguage();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [openGroups, setOpenGroups] = useState({
-    purchases: true,
-    sales: true,
+    purchases: false,
+    sales: false,
     employees: true,
     reports: false,
     admin: true
@@ -58,7 +58,7 @@ export function ModernLayout({
 
   useEffect(() => {
     tabs.forEach((tab) => {
-      if (tab.subItems && (activeTab === tab.key || activeTab.startsWith(`${tab.key}_`))) {
+      if (tab.subItems && tab.key !== "sales" && tab.key !== "purchases" && (activeTab === tab.key || activeTab.startsWith(`${tab.key}_`))) {
         setOpenGroups((prev) => ({ ...prev, [tab.key]: true }));
       }
     });
@@ -119,8 +119,32 @@ export function ModernLayout({
                     <button
                       type="button"
                       className={`modern-nav-item modern-nav-parent ${isGroupActive ? "active" : ""}`}
+                      aria-expanded={Boolean(isGroupOpen)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
+                          if (tab.key === "sales" || tab.key === "purchases") {
+                            e.preventDefault();
+                            setError("");
+                            if (isCollapsed) {
+                              setIsCollapsed(false);
+                              toggleGroup(tab.key);
+                              return;
+                            }
+                            toggleGroup(tab.key);
+                          }
+                        }
+                      }}
                       onClick={() => {
                         setError("");
+                        if (tab.key === "sales" || tab.key === "purchases") {
+                          if (isCollapsed) {
+                            setIsCollapsed(false);
+                            toggleGroup(tab.key);
+                            return;
+                          }
+                          toggleGroup(tab.key);
+                          return;
+                        }
                         if (isCollapsed) {
                           setIsCollapsed(false);
                           setOpenGroups((prev) => ({ ...prev, [tab.key]: true }));
