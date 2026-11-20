@@ -75,22 +75,6 @@ export function AdminPage({ context, activeSubPage = "branches", onNavigateSubPa
     return permissionMatrix.filter((page) => isPageInSubscription(page.pageKey, allowedPages));
   }, [allowedPages]);
 
-  const maxBranchesAllowed = useMemo(() => {
-    const branchWithPlan = branches.find((b) => b.max_branches !== undefined && b.max_branches !== null);
-    if (branchWithPlan) {
-      return Number(branchWithPlan.max_branches);
-    }
-    if (context.session?.subscriptionPlan?.max_branches !== undefined && context.session?.subscriptionPlan?.max_branches !== null) {
-      return Number(context.session.subscriptionPlan.max_branches);
-    }
-    if (context.session?.subscriptionPlan?.maxBranches !== undefined && context.session?.subscriptionPlan?.maxBranches !== null) {
-      return Number(context.session.subscriptionPlan.maxBranches);
-    }
-    return 1;
-  }, [branches, context.session]);
-
-  const isBranchLimitReached = maxBranchesAllowed > 0 && branches.length >= maxBranchesAllowed;
-
   const [currentSubPage, setCurrentSubPage] = useState(activeSubPage || "branches");
 
   useEffect(() => {
@@ -115,6 +99,22 @@ export function AdminPage({ context, activeSubPage = "branches", onNavigateSubPa
   const [branches, setBranches] = useState([]);
   const [partners, setPartners] = useState([]);
   const [branchEquityList, setBranchEquityList] = useState([]);
+
+  const maxBranchesAllowed = useMemo(() => {
+    const branchWithPlan = (branches || []).find((b) => b.max_branches !== undefined && b.max_branches !== null);
+    if (branchWithPlan) {
+      return Number(branchWithPlan.max_branches);
+    }
+    if (context.session?.subscriptionPlan?.max_branches !== undefined && context.session?.subscriptionPlan?.max_branches !== null) {
+      return Number(context.session.subscriptionPlan.max_branches);
+    }
+    if (context.session?.subscriptionPlan?.maxBranches !== undefined && context.session?.subscriptionPlan?.maxBranches !== null) {
+      return Number(context.session.subscriptionPlan.maxBranches);
+    }
+    return 1;
+  }, [branches, context.session]);
+
+  const isBranchLimitReached = maxBranchesAllowed > 0 && (branches?.length || 0) >= maxBranchesAllowed;
   const [selectedPartnerForDeposit, setSelectedPartnerForDeposit] = useState(null);
   const [selectedPartnerForLedger, setSelectedPartnerForLedger] = useState(null);
   const [viewingPartnerVoucher, setViewingPartnerVoucher] = useState(null);

@@ -57,7 +57,8 @@ before(async () => {
     inventory: await vite.ssrLoadModule("/src/pages/InventoryPage.jsx"),
     parties: await vite.ssrLoadModule("/src/pages/PartiesPage.jsx"),
     expenses: await vite.ssrLoadModule("/src/pages/ExpensesPage.jsx"),
-    invoices: await vite.ssrLoadModule("/src/pages/InvoicesPage.jsx")
+    invoices: await vite.ssrLoadModule("/src/pages/InvoicesPage.jsx"),
+    admin: await vite.ssrLoadModule("/src/pages/AdminPage.jsx")
   };
 });
 
@@ -116,4 +117,12 @@ test("invoices page renders invoice lookup controls", () => {
   const html = render(React.createElement(modules.invoices.InvoicesPage));
   assert.match(html, /Invoices Directory/);
   assert.match(html, /Sale Invoice/);
+});
+
+test("admin page renders all admin control subpages without crash or ReferenceError", () => {
+  const subPages = ["branches", "users", "roles", "partners", "company", "themes"];
+  for (const sub of subPages) {
+    const html = render(React.createElement(modules.admin.AdminPage, { context, activeSubPage: sub }));
+    assert.ok(html.length > 0, `AdminPage subpage ${sub} must render HTML`);
+  }
 });
