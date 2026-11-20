@@ -67,6 +67,10 @@ export const translations = {
       purchases_new: "Create Purchase (Inward Counter)",
       purchases_history: "Purchases Directory & History",
 
+      // Sales subpages
+      sales_new: "Create Sale (POS Counter)",
+      sales_history: "Sale Directory & History",
+
       // Admin subpages
       admin_branches: "Branches & Outlets",
       admin_users: "Staff Accounts",
@@ -619,6 +623,10 @@ export const translations = {
       // Purchases subpages
       purchases_new: "خریداری درج کریں (انورڈ کاؤنٹر)",
       purchases_history: "خریداری ریکارڈ و ہسٹری",
+
+      // Sales subpages
+      sales_new: "سیل درج کریں (POS کاؤنٹر)",
+      sales_history: "سیلز ریکارڈ و ہسٹری",
 
       // Admin subpages
       admin_branches: "برانچز و آؤٹ لیٹس",

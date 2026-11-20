@@ -47,13 +47,14 @@ export function ModernLayout({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [openGroups, setOpenGroups] = useState({
     purchases: true,
+    sales: true,
     employees: true,
     reports: false,
     admin: true
   });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const isSalesPage = activeTab === "sales";
+  const isSalesPage = activeTab === "sales" || activeTab.startsWith("sales_");
 
   useEffect(() => {
     tabs.forEach((tab) => {
