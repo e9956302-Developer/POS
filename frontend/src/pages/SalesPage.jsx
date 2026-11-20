@@ -2078,7 +2078,7 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
               {/* Paid Amount & Quick Cash */}
               <label style={{ display: "block", marginTop: "0.6rem" }}>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: "0.82rem", fontWeight: "600" }}>{t("sales.amount_received", "Amount Paid (PKR)")}</span>
+                  <span style={{ fontSize: "0.82rem", fontWeight: "600" }}>{t("sales.amount_received", "Amount received")}</span>
                   {balanceDue > 0 && (
                     <span style={{ color: "var(--warning, #fbbf24)", fontSize: "0.8rem", fontWeight: "700" }}>
                       {t("sales.balance_due", "Credit Due")}: PKR {balanceDue.toLocaleString()}

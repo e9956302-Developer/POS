@@ -154,7 +154,7 @@ export const translations = {
       bank: "Bank",
       wallet: "Wallet",
       cheque: "Cheque",
-      amount_received: "Amount Paid (PKR)",
+      amount_received: "Amount received",
       exact_net: "Exact Net",
       balance_due: "Balance Due (Credit)",
       credit_due_date: "Credit Due Date",
