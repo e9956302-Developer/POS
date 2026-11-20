@@ -53,7 +53,7 @@ function highlightMatch(text, query) {
   );
 }
 
-export function SalesPage({ context }) {
+export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
   const { t, isRtl, language, formatCurrency } = useLanguage();
   const isUrdu = language === "ur";
   const defaultBranchId = context.session?.branch_id || context.session?.branchId || "";
@@ -67,7 +67,14 @@ export function SalesPage({ context }) {
   const canView = context.can ? context.can("sales", "view") : true;
 
   // View state: "checkout" (Add Sale) | "history" (Search, View, Edit, Delete)
-  const [activeTab, setActiveTab] = useState("checkout");
+  const [activeTab, setActiveTab] = useState(() => (activeSubPage === "history" ? "history" : "checkout"));
+
+  useEffect(() => {
+    if (activeSubPage) {
+      const target = activeSubPage === "history" ? "history" : "checkout";
+      setActiveTab(target);
+    }
+  }, [activeSubPage]);
 
   // POS Checkout Form State
   const [form, setForm] = useState(initialForm(defaultBranchId));
@@ -1230,63 +1237,7 @@ export function SalesPage({ context }) {
 
   return (
     <div className="page-grid">
-      {/* Top POS Switcher Tabs */}
-      <div
-        className="nav-tabs"
-        style={{
-          display: "flex",
-          gap: "0.5rem",
-          borderBottom: "1px solid var(--border)",
-          paddingBottom: "0.6rem",
-          marginBottom: "1rem"
-        }}
-      >
-        <button
-          type="button"
-          className={`tab-btn ${activeTab === "checkout" ? "active" : ""}`}
-          onClick={() => {
-            setActiveTab("checkout");
-            setError("");
-          }}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "0.45rem",
-            padding: "0.55rem 1.1rem",
-            borderRadius: "8px",
-            fontWeight: "600",
-            fontSize: "0.9rem",
-            border: activeTab === "checkout" ? "1px solid var(--primary)" : "1px solid var(--border)",
-            background: activeTab === "checkout" ? "var(--primary)" : "var(--surface)",
-            color: activeTab === "checkout" ? "#ffffff" : "var(--text)"
-          }}
-        >
-          <span>🛒</span> {t("sales.pos_counter", "Create Sale (POS Counter)")}
-        </button>
-
-        <button
-          type="button"
-          className={`tab-btn ${activeTab === "history" ? "active" : ""}`}
-          onClick={() => {
-            setActiveTab("history");
-            setError("");
-          }}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "0.45rem",
-            padding: "0.55rem 1.1rem",
-            borderRadius: "8px",
-            fontWeight: "600",
-            fontSize: "0.9rem",
-            border: activeTab === "history" ? "1px solid var(--primary)" : "1px solid var(--border)",
-            background: activeTab === "history" ? "var(--primary)" : "var(--surface)",
-            color: activeTab === "history" ? "#ffffff" : "var(--text)"
-          }}
-        >
-          <span>📜</span> {t("sales.history", "Sales Directory & History")} ({salesList.length})
-        </button>
-      </div>
+      <span className="sr-only">{t("sales.pos_counter", "Create Sale (POS Counter)")}</span>
 
       {/* Global alert messages */}
       {error ? <div className="alert error full-span">{error}</div> : null}
@@ -1310,8 +1261,12 @@ export function SalesPage({ context }) {
                 type="button"
                 className="ghost-btn btn-sm"
                 onClick={() => {
-                  setActiveTab("history");
-                  fetchSalesList();
+                  if (onNavigateSubPage) {
+                    onNavigateSubPage("history");
+                  } else {
+                    setActiveTab("history");
+                    fetchSalesList();
+                  }
                 }}
               >
                 📋 {t("sales.view_history", "View in History")}

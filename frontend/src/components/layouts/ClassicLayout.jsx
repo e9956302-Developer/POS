@@ -46,14 +46,16 @@ export function ClassicLayout({
   const { isRtl, t } = useLanguage();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [purchaseMenuOpen, setPurchaseMenuOpen] = useState(true);
+  const [saleMenuOpen, setSaleMenuOpen] = useState(true);
   const [adminMenuOpen, setAdminMenuOpen] = useState(true);
   const [employeeMenuOpen, setEmployeeMenuOpen] = useState(true);
   const [reportMenuOpen, setReportMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const isSalesPage = activeTab === "sales";
+  const isSalesPage = activeTab === "sales" || activeTab.startsWith("sales_");
 
   const isPurchaseActive = activeTab === "purchases" || activeTab.startsWith("purchases_");
+  const isSaleActive = activeTab === "sales" || activeTab.startsWith("sales_");
   const isAdminActive = activeTab === "admin" || activeTab.startsWith("admin_");
   const isEmployeeActive = activeTab === "employees" || activeTab.startsWith("employees_");
   const isReportActive = activeTab === "reports" || activeTab.startsWith("reports_");
@@ -63,6 +65,12 @@ export function ClassicLayout({
       setPurchaseMenuOpen(true);
     }
   }, [isPurchaseActive]);
+
+  useEffect(() => {
+    if (isSaleActive) {
+      setSaleMenuOpen(true);
+    }
+  }, [isSaleActive]);
 
   function toggleSidebar() {
     setIsCollapsed(!isCollapsed);
@@ -127,6 +135,7 @@ export function ClassicLayout({
               const isTabActive =
                 tab.key === activeTab ||
                 (tab.key === "purchases" && isPurchaseActive) ||
+                (tab.key === "sales" && isSaleActive) ||
                 (tab.key === "admin" && isAdminActive) ||
                 (tab.key === "employees" && isEmployeeActive) ||
                 (tab.key === "reports" && isReportActive);
@@ -135,6 +144,8 @@ export function ClassicLayout({
                 const isGroupOpen =
                   tab.key === "purchases"
                     ? purchaseMenuOpen
+                    : tab.key === "sales"
+                    ? saleMenuOpen
                     : tab.key === "admin"
                     ? adminMenuOpen
                     : tab.key === "employees"
@@ -143,6 +154,8 @@ export function ClassicLayout({
                 const setGroupOpen =
                   tab.key === "purchases"
                     ? setPurchaseMenuOpen
+                    : tab.key === "sales"
+                    ? setSaleMenuOpen
                     : tab.key === "admin"
                     ? setAdminMenuOpen
                     : tab.key === "employees"
@@ -151,6 +164,8 @@ export function ClassicLayout({
                 const defaultSubKey =
                   tab.key === "purchases"
                     ? (tab.subItems?.[0]?.key || "purchases_new")
+                    : tab.key === "sales"
+                    ? (tab.subItems?.[0]?.key || "sales_new")
                     : tab.key === "admin"
                     ? "admin_branches"
                     : tab.key === "employees"

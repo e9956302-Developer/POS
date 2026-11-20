@@ -203,5 +203,51 @@ test("getVisibleTabs: Branch Manager sees operational pages in the sidemenu", ()
   assert.ok(visibleKeys.includes("sales"));
   assert.ok(visibleKeys.includes("purchases"));
   assert.ok(visibleKeys.includes("dashboard"));
+
+  const salesTab = visible.find((t) => t.key === "sales");
+  assert.ok(salesTab && salesTab.subItems, "Sales tab must have subItems");
+  assert.equal(salesTab.subItems.length, 2, "Sales tab must have 2 sub-items for fully-permitted manager");
+  assert.equal(salesTab.subItems[0].key, "sales_new");
+  assert.equal(salesTab.subItems[0].label, "Create Sale (POS Counter)");
+  assert.equal(salesTab.subItems[1].key, "sales_history");
+  assert.equal(salesTab.subItems[1].label, "Sale Directory & History");
+});
+
+test("Sales navigation permissions: restricted user only sees permitted sub-menu and direct-URL guarded", () => {
+  const cashierOnlyCreate = {
+    id: 20,
+    role_name: "cashier",
+    full_name: "Cashier Checkout Only",
+    permissions: [
+      { page_key: "sales", action_key: "create", is_allowed: 1 },
+      { page_key: "sales", action_key: "view", is_allowed: 0 }
+    ]
+  };
+
+  const visibleOnlyCreate = AppMod.getVisibleTabs(cashierOnlyCreate);
+  const salesTabCreate = visibleOnlyCreate.find((t) => t.key === "sales");
+  assert.ok(salesTabCreate, "Cashier has Sales tab");
+  assert.equal(salesTabCreate.subItems.length, 1, "Only 1 sub-item visible when view is forbidden");
+  assert.equal(salesTabCreate.subItems[0].key, "sales_new");
+  assert.equal(AppMod.canUse(cashierOnlyCreate, "sales_new"), true);
+  assert.equal(AppMod.canUse(cashierOnlyCreate, "sales_history"), false);
+
+  const auditorOnlyView = {
+    id: 21,
+    role_name: "cashier",
+    full_name: "Cashier History Only",
+    permissions: [
+      { page_key: "sales", action_key: "create", is_allowed: 0 },
+      { page_key: "sales", action_key: "view", is_allowed: 1 }
+    ]
+  };
+
+  const visibleOnlyView = AppMod.getVisibleTabs(auditorOnlyView);
+  const salesTabView = visibleOnlyView.find((t) => t.key === "sales");
+  assert.ok(salesTabView, "Auditor has Sales tab");
+  assert.equal(salesTabView.subItems.length, 1, "Only 1 sub-item visible when create is forbidden");
+  assert.equal(salesTabView.subItems[0].key, "sales_history");
+  assert.equal(AppMod.canUse(auditorOnlyView, "sales_new"), false);
+  assert.equal(AppMod.canUse(auditorOnlyView, "sales_history"), true);
 });
 

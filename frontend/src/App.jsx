@@ -47,6 +47,11 @@ export const PURCHASE_SUB_PAGES = [
   { key: "purchases_history", subKey: "history", label: "Purchases Directory & History", icon: "📜", permissionAction: "view" }
 ];
 
+export const SALE_SUB_PAGES = [
+  { key: "sales_new", subKey: "new", label: "Create Sale (POS Counter)", icon: "🛒", permissionAction: "create" },
+  { key: "sales_history", subKey: "history", label: "Sale Directory & History", icon: "📜", permissionAction: "view" }
+];
+
 export const EMPLOYEE_SUB_PAGES = [
   { key: "employees_attendance", subKey: "attendance", label: "Monthly Attendance", icon: "📅" },
   { key: "employees_advances", subKey: "advances", label: "Advances & Loans", icon: "💸" },
@@ -76,7 +81,13 @@ export const tabs = [
     icon: "🛒",
     subItems: PURCHASE_SUB_PAGES
   },
-  { key: "sales", label: "Sales", pageKey: "sales", icon: "💰" },
+  {
+    key: "sales",
+    label: "Sales",
+    pageKey: "sales",
+    icon: "💰",
+    subItems: SALE_SUB_PAGES
+  },
   { key: "cash_register", label: "Cash Register", pageKey: "cash_register", icon: "💵" },
   { key: "inventory", label: "Inventory", pageKey: "inventory", icon: "📦" },
   { key: "parties", label: "Parties", pageKey: "parties", icon: "👥" },
@@ -143,6 +154,9 @@ export function getVisibleTabs(user) {
       if (tab.key === "purchases") {
         return canUse(user, "purchases", "view") || canUse(user, "purchases", "create");
       }
+      if (tab.key === "sales") {
+        return canUse(user, "sales", "view") || canUse(user, "sales", "create");
+      }
       return canUse(user, tab.pageKey);
     })
     .map((tab) => {
@@ -156,6 +170,16 @@ export function getVisibleTabs(user) {
         });
         return { ...tab, subItems: filteredSubs };
       }
+      if (tab.key === "sales" && tab.subItems) {
+        const canCreate = canUse(user, "sales", "create");
+        const canView = canUse(user, "sales", "view");
+        const filteredSubs = tab.subItems.filter((sub) => {
+          if (sub.key === "sales_new" || sub.key === "sales_checkout") return canCreate;
+          if (sub.key === "sales_history") return canView;
+          return true;
+        });
+        return { ...tab, subItems: filteredSubs };
+      }
       return tab;
     });
 }
@@ -163,6 +187,9 @@ export function getVisibleTabs(user) {
 export const SUB_ENTITY_MAP = {
   purchases_new: "purchases",
   purchases_history: "purchases",
+  sales_new: "sales",
+  sales_history: "sales",
+  sales_checkout: "sales",
   models: "inventory",
   products: "inventory",
   categories: "inventory",
@@ -210,6 +237,12 @@ export function canUse(user, pageKey, actionKey = "view") {
     if (actionKey === "view") targetAction = "create";
   } else if (pageKey === "purchases_history") {
     targetPage = "purchases";
+    if (actionKey === "view") targetAction = "view";
+  } else if (pageKey === "sales_new" || pageKey === "sales_checkout") {
+    targetPage = "sales";
+    if (actionKey === "view") targetAction = "create";
+  } else if (pageKey === "sales_history") {
+    targetPage = "sales";
     if (actionKey === "view") targetAction = "view";
   }
 
@@ -655,7 +688,7 @@ function AppContent() {
     if (session && activeTab) {
       try {
         const currentHash = window.location.hash.replace(/^#\/?/, "").toLowerCase().trim();
-        if (currentHash !== activeTab && currentHash !== "login" && currentHash !== "landing") {
+        if (currentHash !== activeTab) {
           window.location.hash = activeTab;
         }
       } catch {}
@@ -1176,6 +1209,23 @@ function AppContent() {
     }
   }, [isPurchaseActive]);
 
+  const [saleMenuOpen, setSaleMenuOpen] = useState(() => {
+    return activeTab === "sales" || activeTab.startsWith("sales_");
+  });
+
+  const isSaleActive = activeTab === "sales" || activeTab.startsWith("sales_");
+  const activeSaleSub = activeTab === "sales_history"
+    ? "history"
+    : (activeTab === "sales_new" || activeTab === "sales_checkout")
+    ? "new"
+    : (canUse(session, "sales", "create") ? "new" : "history");
+
+  useEffect(() => {
+    if (isSaleActive) {
+      setSaleMenuOpen(true);
+    }
+  }, [isSaleActive]);
+
   const [adminMenuOpen, setAdminMenuOpen] = useState(() => {
     return activeTab === "admin" || activeTab.startsWith("admin_");
   });
@@ -1261,7 +1311,11 @@ function AppContent() {
           (tab.key === "purchases" &&
             (activeTab === "purchases" ||
               tab.subItems?.some((sub) => sub.key === activeTab))) ||
-          (["sales", "expenses"].includes(activeTab) && canUse(session, activeTab))
+          (tab.key === "sales" &&
+            (activeTab === "sales" ||
+              activeTab === "sales_checkout" ||
+              tab.subItems?.some((sub) => sub.key === activeTab))) ||
+          (["expenses"].includes(activeTab) && canUse(session, activeTab))
       )
     ) {
       setActiveTab(visibleTabs[0].key);
@@ -1272,20 +1326,42 @@ function AppContent() {
   useEffect(() => {
     if (activeTab === "purchases") {
       const purchasesTab = visibleTabs.find((t) => t.key === "purchases");
-      const firstSubKey = purchasesTab?.subItems?.[0]?.key;
+      const firstSubKey = purchasesTab?.subItems?.[0]?.key || (canUse(session, "purchases", "create") ? "purchases_new" : "purchases_history");
       if (firstSubKey) {
         setActiveTab(firstSubKey);
-      } else if (canUse(session, "purchases", "create")) {
-        setActiveTab("purchases_new");
-      } else if (canUse(session, "purchases", "view")) {
-        setActiveTab("purchases_history");
+        try {
+          window.location.hash = firstSubKey;
+        } catch {}
       }
+    } else if (activeTab === "sales") {
+      const salesTab = visibleTabs.find((t) => t.key === "sales");
+      const firstSubKey = salesTab?.subItems?.[0]?.key || (canUse(session, "sales", "create") ? "sales_new" : "sales_history");
+      if (firstSubKey) {
+        setActiveTab(firstSubKey);
+        try {
+          window.location.hash = firstSubKey;
+        } catch {}
+      }
+    } else if (activeTab === "sales_checkout") {
+      setActiveTab("sales_new");
+      try {
+        window.location.hash = "sales_new";
+      } catch {}
     } else if (activeTab === "admin") {
       setActiveTab("admin_branches");
+      try {
+        window.location.hash = "admin_branches";
+      } catch {}
     } else if (activeTab === "reports") {
       setActiveTab("reports_pnl");
+      try {
+        window.location.hash = "reports_pnl";
+      } catch {}
     } else if (activeTab === "employees") {
       setActiveTab("employees_attendance");
+      try {
+        window.location.hash = "employees_attendance";
+      } catch {}
     }
   }, [activeTab, visibleTabs, session]);
 
@@ -1296,6 +1372,15 @@ function AppContent() {
         : `purchases_${activePurchaseSub || "new"}`;
       const sub = PURCHASE_SUB_PAGES.find((s) => s.key === subKey) || PURCHASE_SUB_PAGES[0];
       return { key: sub.key, label: `${t("nav.purchases", "Purchases")}: ${t(`nav.${sub.key}`, sub.label)}`, icon: sub.icon };
+    }
+    if (activeTab === "sales" || activeTab.startsWith("sales_")) {
+      const subKey = activeTab === "sales_history"
+        ? "sales_history"
+        : (activeTab === "sales_new" || activeTab === "sales_checkout")
+        ? "sales_new"
+        : (canUse(session, "sales", "create") ? "sales_new" : "sales_history");
+      const sub = SALE_SUB_PAGES.find((s) => s.key === subKey) || SALE_SUB_PAGES[0];
+      return { key: sub.key, label: `${t("nav.sales", "Sales")}: ${t(`nav.${sub.key}`, sub.label)}`, icon: sub.icon };
     }
     if (activeTab.startsWith("admin_")) {
       const sub = ADMIN_SUB_PAGES.find((s) => s.key === activeTab);
@@ -1329,6 +1414,23 @@ function AppContent() {
       return {
         parent: t("nav.purchases", "Purchases"),
         parentIcon: "🛒",
+        current: t(`nav.${sub.key}`, sub.label),
+        currentIcon: sub.icon,
+        isNested: true
+      };
+    }
+
+    // 0b. Sales subpages
+    if (activeTab === "sales" || activeTab.startsWith("sales_")) {
+      const subKey = activeTab === "sales_history"
+        ? "sales_history"
+        : (activeTab === "sales_new" || activeTab === "sales_checkout")
+        ? "sales_new"
+        : (canUse(session, "sales", "create") ? "sales_new" : "sales_history");
+      const sub = SALE_SUB_PAGES.find((s) => s.key === subKey) || SALE_SUB_PAGES[0];
+      return {
+        parent: t("nav.sales", "Sales"),
+        parentIcon: "💰",
         current: t(`nav.${sub.key}`, sub.label),
         currentIcon: sub.icon,
         isNested: true
@@ -1773,7 +1875,19 @@ function AppContent() {
               }}
             />
           ) : null}
-          {activeTab === "sales" && canUse(session, "sales") ? <SalesPage context={context} /> : null}
+          {(isSaleActive || activeTab === "sales") &&
+          (canUse(session, activeTab === "sales_history" ? "sales_history" : "sales_new") ||
+           canUse(session, "sales", activeSaleSub === "history" ? "view" : "create") ||
+           (activeTab === "sales" && (canUse(session, "sales", "create") || canUse(session, "sales", "view")))) ? (
+            <SalesPage
+              context={context}
+              activeSubPage={activeSaleSub}
+              onNavigateSubPage={(subKey) => {
+                setError("");
+                setActiveTab(subKey === "checkout" ? "sales_new" : `sales_${subKey}`);
+              }}
+            />
+          ) : null}
           {activeTab === "cash_register" && !isCompanyAdmin && canUse(session, "cash_register") ? <CashRegisterPage context={context} /> : null}
           {activeTab === "inventory" && !isCompanyAdmin && canUse(session, "inventory") ? <InventoryPage context={context} /> : null}
           {activeTab === "parties" && !isCompanyAdmin && canUse(session, "parties") ? <PartiesPage context={context} /> : null}
