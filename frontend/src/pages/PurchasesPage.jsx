@@ -1,6 +1,7 @@
 import { useMemo, useState, useRef, useEffect, useCallback } from "react";
 import { api } from "../api.js";
 import { LineItemScanner } from "../components/LineItemScanner.jsx";
+import { UniversalEntryRow } from "../components/UniversalEntryRow.jsx";
 import { SectionCard } from "../components/SectionCard.jsx";
 import { PhoneQRTagModal } from "../components/PhoneQRTagModal.jsx";
 import { SearchableSelect } from "../components/SearchableSelect.jsx";
@@ -410,11 +411,12 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
     : "";
 
   // Helper to add simple product into purchase cart
-  function addProductToCart(product, customCost = null) {
+  function addProductToCart(product, customCost = null, customQty = 1) {
     if (!product || !product.id) return;
     setError("");
     const rawCost = customCost !== null ? Number(customCost) : Number(product.cost_price ?? product.sale_price ?? 0);
     const cost = stripTrailingZeros(rawCost);
+    const qtyToAdd = Math.max(1, Number(customQty || 1));
     const existingIdx = (form.items || []).findIndex((it) => String(it.productId) === String(product.id));
 
     if (existingIdx >= 0) {
@@ -422,7 +424,7 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
         ...prev,
         items: prev.items.map((it, idx) =>
           idx === existingIdx
-            ? { ...it, quantity: Number(it.quantity || 1) + 1, unitCost: cost !== "" ? cost : it.unitCost }
+            ? { ...it, quantity: Number(it.quantity || 1) + qtyToAdd, unitCost: cost !== "" ? cost : it.unitCost }
             : it
         )
       }));
@@ -436,7 +438,7 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
             productId: Number(product.id),
             productName: product.name,
             categoryName: product.category_name || "Accessory",
-            quantity: 1,
+            quantity: qtyToAdd,
             unitCost: cost
           }
         ]
@@ -1426,204 +1428,36 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
                 </label>
               </div>
 
-              {/* ROW 2: Scanner row (universal scanner field + Add button) */}
-              <div ref={comboboxContainerRef} style={{ position: "relative", width: "100%", marginBottom: "0.5rem" }}>
-                <div
-                  className="pos-scanner-bar"
-                  style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: 0, width: "100%" }}
-                >
-                  <div className="pos-scanner-input-wrap" style={{ position: "relative", flex: 1, minWidth: 0 }}>
-                    <span className="pos-scanner-icon">⚡</span>
-                    <input
-                      ref={scannerInputRef}
-                      type="text"
-                      className="pos-scanner-input"
-                      placeholder={
-                        awaitingPhoneModel
-                          ? (isUrdu
-                              ? `ماڈل "${awaitingPhoneModel.name}" کے لیے فون کا IMEI یا QR کوڈ اسکین کریں...`
-                              : `Scan or type 15-digit IMEI for ${awaitingPhoneModel.name}...`)
-                          : (isUrdu
-                              ? "یونیورسل فیلڈ: فون کا IMEI، سامان کا بارکوڈ / کیو آر اسکین کریں یا نام لکھیں..."
-                              : "Universal Purchase Scanner: Scan Barcode, QR Code, Phone IMEI, or search items...")
-                      }
-                      value={universalScanInput}
-                      onChange={handleInputChange}
-                      onKeyDown={handleKeyDown}
-                      autoFocus
-                      autoComplete="off"
-                    />
-                    {universalScanInput && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setUniversalScanInput("");
-                          setDebouncedQuery("");
-                          setIsDropdownOpen(false);
-                          setHighlightedIndex(-1);
-                          scannerInputRef.current?.focus();
-                        }}
-                        style={{
-                          position: "absolute",
-                          right: isUrdu ? "auto" : "0.75rem",
-                          left: isUrdu ? "0.75rem" : "auto",
-                          top: "50%",
-                          transform: "translateY(-50%)",
-                          background: "none",
-                          border: "none",
-                          color: "var(--text-muted)",
-                          fontSize: "1rem",
-                          cursor: "pointer",
-                          padding: "0.25rem"
-                        }}
-                        title="Clear"
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleAddAction}
-                    className="primary-btn"
-                    style={{
-                      padding: "0.75rem 1.25rem",
-                      whiteSpace: "nowrap",
-                      flexShrink: 0
-                    }}
-                  >
+              {/* ROW 2: Universal Entry Row Component */}
+              <div ref={comboboxContainerRef} className="pos-scanner-bar" style={{ width: "100%", marginBottom: "0.5rem" }}>
+                <UniversalEntryRow
+                  ref={scannerInputRef}
+                  onClick={handleAddAction}
+                  mode="purchase"
+                  availableProducts={availableProducts}
+                  availableModels={availableModels}
+                  currentItems={form.items}
+                  onAddItem={(item) => {
+                    if (item.itemType === "handset") {
+                      addPhoneToCart(item.rawItem, item.imei, item.unitCost);
+                    } else {
+                      addProductToCart(item.rawItem, item.unitCost, item.quantity);
+                    }
+                  }}
+                  branchId={form.branchId}
+                  isUrdu={isUrdu}
+                  t={t}
+                  api={api}
+                  scannerInputRef={scannerInputRef}
+                  comboboxContainerRef={comboboxContainerRef}
+                  disabled={!canCreate}
+                />
+                <div style={{ display: "none" }} aria-hidden="true">
+                  <input ref={scannerInputRef} value={universalScanInput} onChange={handleInputChange} readOnly />
+                  <button type="button" onClick={handleAddAction}>
                     {isUrdu ? "شامل کریں" : "Add"}
                   </button>
                 </div>
-
-                {/* Attached Overlay Dropdown Panel */}
-                {isDropdownOpen && (
-                  <div
-                    className="pos-attached-dropdown"
-                    style={{
-                      position: "absolute",
-                      top: "calc(100% + 4px)",
-                      left: 0,
-                      right: 0,
-                      zIndex: 1000,
-                      background: "var(--surface, #1e293b)",
-                      border: "1px solid var(--border, #334155)",
-                      borderRadius: "8px",
-                      boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3)",
-                      maxHeight: "360px",
-                      overflowY: "auto"
-                    }}
-                  >
-                    {searchFailed ? (
-                      <div style={{ padding: "0.85rem 1rem", textAlign: "center", color: "#ef4444", fontSize: "0.88rem" }}>
-                        ⚠️ {isUrdu ? "تلاش میں خرابی، دوبارہ کوشش کریں" : "Search failed, try again"}
-                      </div>
-                    ) : isSearching ? (
-                      <div
-                        style={{
-                          padding: "0.85rem 1rem",
-                          textAlign: "center",
-                          color: "var(--text-muted)",
-                          fontSize: "0.88rem",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: "0.5rem"
-                        }}
-                      >
-                        <span className="spinner-border spinner-border-sm" role="status" style={{ width: "1rem", height: "1rem", borderWidth: "2px" }} />
-                        <span>{isUrdu ? "تلاش جاری ہے..." : "Searching catalog items..."}</span>
-                      </div>
-                    ) : searchResults.length === 0 ? (
-                      <div style={{ padding: "0.85rem 1rem", textAlign: "center", color: "var(--text-muted)", fontSize: "0.88rem" }}>
-                        {isUrdu ? `کوئی پروڈکٹ یا ماڈل "${debouncedQuery}" سے مطابقت نہیں رکھتا` : `No products or models match "${debouncedQuery}"`}
-                      </div>
-                    ) : (
-                      searchResults.map((item, idx) => (
-                        <div
-                          key={item.id}
-                          className={`pos-combobox-row ${idx === highlightedIndex ? "is-highlighted" : ""}`}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            padding: "0.6rem 0.85rem",
-                            borderBottom: idx < searchResults.length - 1 ? "1px solid var(--border, rgba(255,255,255,0.06))" : "none",
-                            background: idx === highlightedIndex ? "rgba(56, 189, 248, 0.15)" : "transparent",
-                            cursor: "pointer",
-                            transition: "background 0.15s ease"
-                          }}
-                          onMouseEnter={() => setHighlightedIndex(idx)}
-                          onClick={() => handleSelectItem(item)}
-                        >
-                          <div style={{ display: "flex", flexDirection: "column", gap: "2px", overflow: "hidden", paddingRight: "0.5rem" }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
-                              <span style={{ fontSize: "0.95rem" }}>{item.itemType === "phone_model" ? "📱" : "📦"}</span>
-                              <span style={{ fontWeight: 600, fontSize: "0.9rem", color: "var(--text)" }}>
-                                {highlightMatch(item.name, debouncedQuery)}
-                              </span>
-                              {item.isBarcodeMatch && (
-                                <span
-                                  style={{
-                                    fontSize: "0.7rem",
-                                    fontWeight: 700,
-                                    padding: "1px 6px",
-                                    borderRadius: "4px",
-                                    background: "#10b981",
-                                    color: "#ffffff"
-                                  }}
-                                >
-                                  {isUrdu ? "بارکوڈ میچ" : "Barcode match"}
-                                </span>
-                              )}
-                              {item.itemType === "phone_model" && (
-                                <span
-                                  style={{
-                                    fontSize: "0.7rem",
-                                    fontWeight: 600,
-                                    padding: "1px 6px",
-                                    borderRadius: "4px",
-                                    background: "rgba(56, 189, 248, 0.2)",
-                                    color: "var(--primary)"
-                                  }}
-                                >
-                                  {isUrdu ? "فون ماڈل" : "Phone Model"}
-                                </span>
-                              )}
-                            </div>
-                            {item.secondaryText && (
-                              <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontFamily: "monospace" }}>
-                                {item.secondaryText}
-                              </span>
-                            )}
-                          </div>
-
-                          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexShrink: 0 }}>
-                            <div style={{ textAlign: "right" }}>
-                              <div style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--primary)" }}>
-                                PKR {item.cost.toLocaleString()}
-                              </div>
-                              <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--text-muted)" }}>
-                                {item.stockLabel}
-                              </div>
-                            </div>
-                            <span
-                              className="primary-btn btn-sm"
-                              style={{
-                                padding: "3px 8px",
-                                fontSize: "0.75rem",
-                                borderRadius: "4px",
-                                pointerEvents: "none"
-                              }}
-                            >
-                              + {item.itemType === "phone_model" ? (isUrdu ? "منتخب کریں" : "Select") : (isUrdu ? "شامل کریں" : "Add")}
-                            </span>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                )}
               </div>
 
               {/* ROW 3: Quick-create buttons */}

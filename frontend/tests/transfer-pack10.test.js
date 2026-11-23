@@ -7,9 +7,10 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const inventoryPagePath = path.resolve(__dirname, "../src/pages/InventoryPage.jsx");
+const universalEntryRowPath = path.resolve(__dirname, "../src/components/UniversalEntryRow.jsx");
 
 test("PACK #10 - Part 1: Structural verification of Dispatch Stock Transfer Entry Row", () => {
-  const source = fs.readFileSync(inventoryPagePath, "utf8");
+  const source = fs.readFileSync(universalEntryRowPath, "utf8");
 
   // 1. Ensure NO "Type" dropdown exists in Dispatch Stock Transfer
   assert.equal(
@@ -210,7 +211,7 @@ test("PACK #10 - Part 2: Auto-Detection & Scan Flow Simulation (Path A & Path B)
 });
 
 test("PACK #10 - Part 3: Acceptance Scenarios T1 through T9 verification", () => {
-  const source = fs.readFileSync(inventoryPagePath, "utf8");
+  const source = fs.readFileSync(universalEntryRowPath, "utf8");
 
   // T1: No Type dropdown, TAB disabled between the 4 entry row fields
   assert.equal(source.includes('name="transferType"'), false, "T1: No transferType dropdown");

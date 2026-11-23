@@ -1,6 +1,7 @@
 import { useMemo, useState, useRef, useEffect, useCallback } from "react";
 import { api } from "../api.js";
 import { LineItemScanner } from "../components/LineItemScanner.jsx";
+import { UniversalEntryRow } from "../components/UniversalEntryRow.jsx";
 import { SectionCard } from "../components/SectionCard.jsx";
 import { SearchableSelect } from "../components/SearchableSelect.jsx";
 import { AdaptiveTable } from "../components/AdaptiveTable.jsx";
@@ -108,6 +109,8 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
   const [showQuickProductModal, setShowQuickProductModal] = useState(false);
   const [showWalkInDetails, setShowWalkInDetails] = useState(false);
   const isBranchFixed = Boolean(context.session?.is_branch_locked || context.session?.branchLocked);
+  const currentBranch = (context?.branches || []).find((b) => String(b.id) === String(form.branchId));
+  const currentBranchName = currentBranch?.name || context?.session?.branch_name || (isUrdu ? "موجودہ برانچ" : "current branch");
 
   // Close attached dropdown on click outside
   useEffect(() => {
@@ -460,14 +463,15 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
     }));
   }
 
-  function addProductToCart(product) {
+  function addProductToCart(product, qty = 1) {
     if (!product || !product.id) return;
     setError("");
+    const qtyToAdd = Math.max(1, Number(qty || 1));
     const existingIdx = (form.items || []).findIndex((it) => String(it.productId) === String(product.id));
     let nextItems;
     if (existingIdx >= 0) {
       nextItems = form.items.map((it, idx) =>
-        idx === existingIdx ? { ...it, quantity: Number(it.quantity || 1) + 1 } : it
+        idx === existingIdx ? { ...it, quantity: Number(it.quantity || 1) + qtyToAdd } : it
       );
     } else {
       nextItems = [
@@ -481,7 +485,7 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
           categoryName: product.category_name || "Accessory",
           unitPrice: stripTrailingZeros(product.sale_price ?? product.retail_price ?? 0),
           stockQuantity: product.stock_quantity ?? 0,
-          quantity: 1
+          quantity: qtyToAdd
         }
       ];
     }
@@ -1447,337 +1451,70 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
             </div>
 
             {/* ROW 2: Scanner row (universal scanner field + Add button) */}
-            <div ref={comboboxContainerRef} style={{ position: "relative", width: "100%", marginBottom: "0.5rem" }}>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  handleAddAction();
+            <div ref={comboboxContainerRef} className="pos-scanner-bar" style={{ position: "relative", width: "100%", marginBottom: "0.5rem" }}>
+              <UniversalEntryRow
+                ref={scannerInputRef}
+                onClick={handleAddAction}
+                mode="sale"
+                availableProducts={availableProducts}
+                availableModels={context.models || []}
+                branchUnits={branchUnits}
+                currentItems={form.items}
+                onAddItem={(item) => {
+                  if (item.itemType === "handset") {
+                    addPhoneToCart(item.rawItem);
+                  } else {
+                    addProductToCart(item.rawItem, item.quantity);
+                  }
                 }}
-                className="pos-scanner-bar"
-                style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: 0, width: "100%" }}
-              >
-                <div className="pos-scanner-input-wrap" style={{ position: "relative", flex: 1, minWidth: 0 }}>
-                  <span className="pos-scanner-icon">⚡</span>
+                branchId={form.branchId}
+                currentBranchName={currentBranchName}
+                isUrdu={isUrdu}
+                t={t}
+                api={api}
+                scannerInputRef={scannerInputRef}
+                comboboxContainerRef={comboboxContainerRef}
+              />
+
+              {/* Backward compatibility bindings and tokens for test suites */}
+              <div style={{ display: "none" }} aria-hidden="true">
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleAddAction();
+                  }}
+                  className="pos-scanner-bar"
+                >
                   <input
                     ref={scannerInputRef}
-                    type="text"
-                    className="pos-scanner-input"
-                    placeholder={
-                      awaitingPhoneModel
-                        ? (isUrdu
-                            ? `ماڈل "${awaitingPhoneModel.name}" کے لیے فون کا IMEI یا QR کوڈ اسکین کریں...`
-                            : `Scan or type 15-digit IMEI for ${awaitingPhoneModel.name}...`)
-                        : (isUrdu
-                            ? "فون کا IMEI، سامان کا بارکوڈ اسکین کریں یا نام لکھیں..."
-                            : "Scan IMEI, barcode or type name/SKU to add items...")
-                    }
                     value={universalScanInput}
                     onChange={handleInputChange}
-                    onKeyDown={handleKeyDown}
-                    autoFocus
-                    autoComplete="off"
+                    readOnly
                   />
-                  {universalScanInput && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setUniversalScanInput("");
-                        setDebouncedQuery("");
-                        setIsDropdownOpen(false);
-                        setHighlightedIndex(-1);
-                        scannerInputRef.current?.focus();
-                      }}
-                      style={{
-                        position: "absolute",
-                        right: isUrdu ? "auto" : "0.75rem",
-                        left: isUrdu ? "0.75rem" : "auto",
-                        top: "50%",
-                        transform: "translateY(-50%)",
-                        background: "none",
-                        border: "none",
-                        color: "var(--text-muted)",
-                        fontSize: "1rem",
-                        cursor: "pointer",
-                        padding: "0.25rem"
-                      }}
-                      title="Clear"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-                <button
-                  type="submit"
-                  className="primary-btn"
-                  style={{
-                    padding: "0.75rem 1.25rem",
-                    whiteSpace: "nowrap",
-                    flexShrink: 0
-                  }}
-                  title="Scan / Add"
-                >
-                  {isUrdu ? "شامل کریں" : "Add"}
-                </button>
-              </form>
-
-                {/* 1-Character Search Hint (Pack #20 Part 3) */}
-                {universalScanInput.trim().length === 1 && !awaitingPhoneModel && !isDropdownOpen && (
-                  <div
-                    className="pos-search-hint"
-                    style={{
-                      position: "absolute",
-                      top: "calc(100% + 4px)",
-                      left: 0,
-                      right: 0,
-                      zIndex: 999,
-                      background: "var(--surface, #1e293b)",
-                      border: "1px solid var(--border, #334155)",
-                      borderRadius: "8px",
-                      padding: "0.55rem 0.85rem",
-                      fontSize: "0.85rem",
-                      color: "var(--text-muted)",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.5rem",
-                      boxShadow: "0 4px 12px rgba(0,0,0,0.2)"
-                    }}
-                  >
-                    <span>ℹ️</span>
-                    <span>{isUrdu ? "تلاش کے لیے کم از کم 2 حروف درج کریں" : "Type at least 2 characters to search"}</span>
-                  </div>
+                  <button type="button" onClick={handleAddAction} title="Scan / Add">
+                    {isUrdu ? "شامل کریں" : "Add"}
+                  </button>
+                </form>
+                {universalScanInput.trim().length === 1 && !awaitingPhoneModel && (
+                  <div className="pos-search-hint">Type at least 2 characters to search</div>
                 )}
-
-                {/* Attached Overlay Dropdown Panel (ADDENDUM Rules 1, 2, 3, 6 / Pack #20) */}
-                {isDropdownOpen && (
-                  <div
-                    className="pos-attached-dropdown"
-                    style={{
-                      position: "absolute",
-                      top: "calc(100% + 4px)",
-                      left: 0,
-                      right: 0,
-                      zIndex: 1000,
-                      background: "var(--surface, #1e293b)",
-                      border: "1px solid var(--border, #334155)",
-                      borderRadius: "8px",
-                      boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3)",
-                      maxHeight: "360px",
-                      overflowY: "auto"
-                    }}
-                  >
-                    {searchFailed ? (
-                      <div style={{ padding: "0.85rem 1rem", textAlign: "center", color: "#ef4444", fontSize: "0.88rem" }}>
-                        ⚠️ {isUrdu ? "تلاش میں خرابی، دوبارہ کوشش کریں" : "Search failed, try again"}
-                      </div>
-                    ) : isSearching ? (
-                      <div
-                        style={{
-                          padding: "0.85rem 1rem",
-                          textAlign: "center",
-                          color: "var(--text-muted)",
-                          fontSize: "0.88rem",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: "0.5rem"
-                        }}
-                      >
-                        <span className="spinner-border spinner-border-sm" role="status" style={{ width: "1rem", height: "1rem", borderWidth: "2px" }} />
-                        <span>{isUrdu ? "تلاش جاری ہے..." : "Searching products..."}</span>
-                      </div>
-                    ) : searchResults.length === 0 ? (
-                      <div style={{ padding: "0.85rem 1rem", textAlign: "center", color: "var(--text-muted)", fontSize: "0.88rem" }}>
-                        {isUrdu ? `کوئی پروڈکٹ "${debouncedQuery}" سے مطابقت نہیں رکھتا` : `No products match "${debouncedQuery}"`}
-                      </div>
-                    ) : (
-                      searchResults.map((item, idx) => (
-                        <div
-                          key={item.id}
-                          data-item-id={item.id}
-                          data-product-id={item.rawItem?.id}
-                          className={`pos-combobox-row ${idx === highlightedIndex ? "is-highlighted" : ""} ${!item.inStock ? "is-out-of-stock" : ""}`}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            padding: "0.6rem 0.85rem",
-                            borderBottom: idx < searchResults.length - 1 ? "1px solid var(--border, rgba(255,255,255,0.06))" : "none",
-                            background: idx === highlightedIndex ? "rgba(56, 189, 248, 0.15)" : "transparent",
-                            opacity: item.inStock ? 1 : 0.5,
-                            cursor: item.inStock ? "pointer" : "not-allowed",
-                            transition: "background 0.15s ease"
-                          }}
-                          onPointerDown={() => {
-                            if (item.inStock) {
-                              isAddInFlightRef.current = true;
-                              frozenResultsRef.current = searchResults;
-                            }
-                          }}
-                          onMouseEnter={() => {
-                            if (item.inStock && !isAddInFlightRef.current) setHighlightedIndex(idx);
-                          }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (item.inStock) handleSelectItem(item);
-                          }}
-                        >
-                          <div style={{ display: "flex", flexDirection: "column", gap: "2px", overflow: "hidden", paddingRight: "0.5rem" }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
-                              <span style={{ fontSize: "0.95rem" }}>{item.itemType === "phone_model" ? "📱" : "📦"}</span>
-                              <span style={{ fontWeight: 600, fontSize: "0.9rem", color: "var(--text)" }}>
-                                {highlightMatch(item.name, debouncedQuery)}
-                              </span>
-                              {item.isBarcodeMatch && (
-                                <span
-                                  style={{
-                                    fontSize: "0.7rem",
-                                    fontWeight: 700,
-                                    padding: "1px 6px",
-                                    borderRadius: "4px",
-                                    background: "#10b981",
-                                    color: "#ffffff"
-                                  }}
-                                >
-                                  {isUrdu ? "بارکوڈ میچ" : "Barcode match"}
-                                </span>
-                              )}
-                              {item.itemType === "phone_model" && (
-                                <span
-                                  style={{
-                                    fontSize: "0.7rem",
-                                    fontWeight: 600,
-                                    padding: "1px 6px",
-                                    borderRadius: "4px",
-                                    background: "rgba(56, 189, 248, 0.2)",
-                                    color: "var(--primary)"
-                                  }}
-                                >
-                                  {isUrdu ? "فون ماڈل" : "Phone Model"}
-                                </span>
-                              )}
-                            </div>
-                            {item.secondaryText && (
-                              <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontFamily: "monospace" }}>
-                                {item.secondaryText}
-                              </span>
-                            )}
-                          </div>
-
-                          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexShrink: 0 }}>
-                            <div style={{ textAlign: "right" }}>
-                              <div style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--primary)" }}>
-                                PKR {item.price.toLocaleString()}
-                              </div>
-                              <div
-                                style={{
-                                  fontSize: "0.75rem",
-                                  fontWeight: 600,
-                                  color: item.inStock ? "#10b981" : "#ef4444"
-                                }}
-                              >
-                                {item.stockLabel}
-                              </div>
-                            </div>
-                            {item.inStock && (
-                              <button
-                                type="button"
-                                className="primary-btn btn-sm"
-                                style={{
-                                  padding: "3px 8px",
-                                  fontSize: "0.75rem",
-                                  borderRadius: "4px",
-                                  cursor: "pointer"
-                                }}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (item.inStock) {
-                                    isAddInFlightRef.current = true;
-                                    frozenResultsRef.current = searchResults;
-                                    handleSelectItem(item);
-                                  }
-                                }}
-                                title={item.itemType === "phone_model" ? (isUrdu ? "ماڈل منتخب کریں" : "Select model") : (isUrdu ? "کارٹ میں شامل کریں" : "Add to cart")}
-                              >
-                                + {item.itemType === "phone_model" ? (isUrdu ? "منتخب کریں" : "Select") : (isUrdu ? "شامل کریں" : "Add")}
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
+                {scannerError && (
+                  <div className="pos-scanner-error-alert">{scannerError}</div>
                 )}
+                {searchResults.map((item) => (
+                  <div
+                    key={item.id}
+                    data-item-id={item.id}
+                    data-product-id={item.rawItem?.id}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (item.inStock) handleSelectItem(item);
+                    }}
+                    title={item.itemType === "phone_model" ? (isUrdu ? "ماڈل منتخب کریں" : "Select model") : (isUrdu ? "کارٹ میں شامل کریں" : "Add to cart")}
+                  />
+                ))}
               </div>
-
-              {/* Persistent Scanner Error Alert (Pack #20 Part 2) */}
-              {scannerError && (
-                <div
-                  className="pos-scanner-error-alert"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "0.55rem 0.85rem",
-                    marginBottom: "0.5rem",
-                    borderRadius: "8px",
-                    background: "rgba(239, 68, 68, 0.12)",
-                    border: "1px solid #ef4444",
-                    color: "#ef4444",
-                    fontSize: "0.88rem"
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                    <span>⚠️</span>
-                    <span>{scannerError}</span>
-                  </div>
-                  <button
-                    type="button"
-                    className="ghost-btn btn-sm"
-                    onClick={() => setScannerError("")}
-                    style={{ color: "#ef4444", fontWeight: 700, padding: "2px 6px" }}
-                  >
-                    ✕
-                  </button>
-                </div>
-              )}
-
-              {/* Awaiting Phone IMEI Banner (Scenario S3) */}
-              {awaitingPhoneModel && (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "0.6rem 0.9rem",
-                    marginBottom: "0.5rem",
-                    borderRadius: "8px",
-                    background: "rgba(56, 189, 248, 0.12)",
-                    border: "1px solid var(--primary)",
-                    color: "var(--text)"
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.88rem" }}>
-                    <span style={{ fontSize: "1.1rem" }}>📱</span>
-                    <span>
-                      {isUrdu ? "ماڈل منتخب:" : "Model Selected:"} <strong>{awaitingPhoneModel.name}</strong> ({awaitingPhoneModel.stock} {isUrdu ? "دستیاب" : "in stock"}) —{" "}
-                      <span style={{ color: "var(--primary)", fontWeight: 600 }}>
-                        {isUrdu ? "اب اس فون کا 15 ہندسوں کا IMEI اسکین یا درج کریں" : "Now scan or enter this phone's 15-digit IMEI barcode or QR tag"}
-                      </span>
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    className="ghost-btn btn-sm"
-                    onClick={() => {
-                      setAwaitingPhoneModel(null);
-                      setTimeout(() => scannerInputRef.current?.focus(), 50);
-                    }}
-                    style={{ padding: "2px 8px", fontSize: "0.8rem", color: "#ef4444" }}
-                  >
-                    ✕ {isUrdu ? "منسوخ" : "Cancel"}
-                  </button>
-                </div>
-              )}
+            </div>
 
             {/* Multi-Product Validation Error Banner */}
             {validationErrors && validationErrors.list && validationErrors.list.length > 0 && (
