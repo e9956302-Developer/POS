@@ -613,7 +613,7 @@ export function InventoryPage({ context, activeSubPage = "imei", onNavigateSubPa
       if (isDuplicate) {
         const last4 = imeiCandidate.slice(-4);
         setTransferInlineError(
-          `"${transferAwaitingPhoneModel.name}" (IMEI ...${last4}) is already added to this transfer.`
+          `${transferAwaitingPhoneModel.name} (IMEI ...${last4}) is already added to this transfer`
         );
         setTimeout(() => transferScannerInputRef.current?.focus(), 50);
         return;
@@ -627,7 +627,7 @@ export function InventoryPage({ context, activeSubPage = "imei", onNavigateSubPa
           const lookup = await api.imeiLookup(imeiCandidate);
           if (lookup && lookup.id) {
             if (lookup.current_status !== "in_stock" || String(lookup.branch_id) !== String(transferForm.fromBranchId)) {
-              setTransferInlineError(`"${transferAwaitingPhoneModel.name}" — no stock available at this branch`);
+              setTransferInlineError(`${transferAwaitingPhoneModel.name} — no stock available at this branch`);
               setTimeout(() => transferScannerInputRef.current?.focus(), 50);
               return;
             }
@@ -661,13 +661,11 @@ export function InventoryPage({ context, activeSubPage = "imei", onNavigateSubPa
       setProductDropdownQuery("");
       setTransferInlineError("");
 
-      // Focus jumps to Quantity (or Add button if locked/disabled)
+      // Focus jumps to Quantity (prefilled 1 and highlighted)
       setTimeout(() => {
-        if (quantityInputRef.current && !quantityInputRef.current.disabled) {
+        if (quantityInputRef.current) {
           quantityInputRef.current.focus();
           quantityInputRef.current.select();
-        } else {
-          addButtonRef.current?.focus();
         }
       }, 50);
       return;
@@ -680,8 +678,11 @@ export function InventoryPage({ context, activeSubPage = "imei", onNavigateSubPa
     const qrMatch = raw.match(/IMEI[:=\s]+([0-9]{14,16})/i);
     if (qrMatch) {
       imeiCandidate = qrMatch[1];
-    } else if (/^\d{14,16}$/.test(raw)) {
-      imeiCandidate = raw;
+    } else {
+      const cleanDigits = raw.replace(/[\s-]/g, "");
+      if (/^\d{14,16}$/.test(cleanDigits)) {
+        imeiCandidate = cleanDigits;
+      }
     }
 
     if (imeiCandidate) {
@@ -691,7 +692,7 @@ export function InventoryPage({ context, activeSubPage = "imei", onNavigateSubPa
       );
       if (duplicateHandset) {
         const last4 = imeiCandidate.slice(-4);
-        setTransferInlineError(`"${duplicateHandset.name}" (IMEI ...${last4}) is already added to this transfer.`);
+        setTransferInlineError(`${duplicateHandset.name} (IMEI ...${last4}) is already added to this transfer`);
         setTimeout(() => transferScannerInputRef.current?.focus(), 50);
         return;
       }
@@ -704,7 +705,7 @@ export function InventoryPage({ context, activeSubPage = "imei", onNavigateSubPa
           if (lookup && lookup.id) {
             if (lookup.current_status !== "in_stock" || String(lookup.branch_id) !== String(transferForm.fromBranchId)) {
               const name = `${lookup.company || ""} ${lookup.model_name || ""}`.trim() || "Handset";
-              setTransferInlineError(`"${name}" — no stock available at this branch`);
+              setTransferInlineError(`${name} — no stock available at this branch`);
               setTimeout(() => transferScannerInputRef.current?.focus(), 50);
               return;
             }
@@ -733,11 +734,9 @@ export function InventoryPage({ context, activeSubPage = "imei", onNavigateSubPa
         setTransferInlineError("");
 
         setTimeout(() => {
-          if (quantityInputRef.current && !quantityInputRef.current.disabled) {
+          if (quantityInputRef.current) {
             quantityInputRef.current.focus();
             quantityInputRef.current.select();
-          } else {
-            addButtonRef.current?.focus();
           }
         }, 50);
         return;
@@ -751,16 +750,18 @@ export function InventoryPage({ context, activeSubPage = "imei", onNavigateSubPa
 
     // 3. BARCODE / SKU exact match (case-insensitive)
     const cleanRaw = raw.toLowerCase();
+    const cleanNoSpaces = raw.replace(/[\s-]/g, "").toLowerCase();
     const matchedProduct = (availableProducts || []).find((p) => {
       const b = p.barcode ? String(p.barcode).trim().toLowerCase() : "";
       const s = p.sku ? String(p.sku).trim().toLowerCase() : "";
-      return (b && b === cleanRaw) || (s && s === cleanRaw);
+      return (b && (b === cleanRaw || b.replace(/[\s-]/g, "") === cleanNoSpaces)) ||
+             (s && (s === cleanRaw || s.replace(/[\s-]/g, "") === cleanNoSpaces));
     });
 
     if (matchedProduct) {
       const stock = Number(matchedProduct.stock_quantity ?? 0);
       if (stock <= 0) {
-        setTransferInlineError(`"${matchedProduct.name}" — no stock available at this branch`);
+        setTransferInlineError(`${matchedProduct.name} — no stock available at this branch`);
         setTimeout(() => transferScannerInputRef.current?.focus(), 50);
         return;
       }
@@ -790,7 +791,44 @@ export function InventoryPage({ context, activeSubPage = "imei", onNavigateSubPa
       return;
     }
 
-    // 4. Code not found:
+    // 4. Exact Product Name match (case-insensitive)
+    const matchedByName = (availableProducts || []).find(
+      (p) => p.name && p.name.trim().toLowerCase() === cleanRaw
+    );
+    if (matchedByName) {
+      const stock = Number(matchedByName.stock_quantity ?? 0);
+      if (stock <= 0) {
+        setTransferInlineError(`${matchedByName.name} — no stock available at this branch`);
+        setTimeout(() => transferScannerInputRef.current?.focus(), 50);
+        return;
+      }
+
+      setSelectedEntryItem({
+        itemType: "product",
+        productId: Number(matchedByName.id),
+        name: matchedByName.name,
+        sku: matchedByName.sku || "",
+        barcode: matchedByName.barcode || "",
+        categoryName: matchedByName.category_name || "Accessory",
+        stock: stock,
+        salePrice: matchedByName.sale_price ?? matchedByName.salePrice ?? 0,
+        rawItem: matchedByName
+      });
+      setEntryQuantity("1");
+      setTransferScanInput("");
+      setProductDropdownQuery("");
+      setTransferInlineError("");
+
+      setTimeout(() => {
+        if (quantityInputRef.current) {
+          quantityInputRef.current.focus();
+          quantityInputRef.current.select();
+        }
+      }, 50);
+      return;
+    }
+
+    // 5. Code not found:
     // "Unknown code: 'No product found for this code', preserves scan field text & focus."
     setTransferInlineError("No product found for this code");
     setTimeout(() => transferScannerInputRef.current?.focus(), 50);
@@ -865,7 +903,7 @@ export function InventoryPage({ context, activeSubPage = "imei", onNavigateSubPa
         (it) => it.itemType === "handset" && it.imei === selectedEntryItem.imei
       );
       if (isDuplicate) {
-        setTransferInlineError(`"${selectedEntryItem.name}" (IMEI ...${last4}) is already added to this transfer.`);
+        setTransferInlineError(`${selectedEntryItem.name} (IMEI ...${last4}) is already added to this transfer`);
         return;
       }
 
@@ -905,7 +943,7 @@ export function InventoryPage({ context, activeSubPage = "imei", onNavigateSubPa
 
       const availableStock = selectedEntryItem.stock;
       if (availableStock <= 0) {
-        setTransferInlineError(`"${selectedEntryItem.name}" — no stock available at this branch`);
+        setTransferInlineError(`${selectedEntryItem.name} — no stock available at this branch`);
         return;
       }
 
@@ -921,7 +959,7 @@ export function InventoryPage({ context, activeSubPage = "imei", onNavigateSubPa
       const totalNewQty = existingQty + qtyToAdd;
 
       if (totalNewQty > availableStock) {
-        setTransferInlineError(`"${selectedEntryItem.name}" — only ${availableStock} available at this branch`);
+        setTransferInlineError(`${selectedEntryItem.name} — only ${availableStock} available at this branch`);
         quantityInputRef.current?.focus();
         return;
       }
@@ -2142,9 +2180,18 @@ export function InventoryPage({ context, activeSubPage = "imei", onNavigateSubPa
                           setTransferInlineError("");
                         }}
                         onKeyDown={(e) => {
-                          if (e.key === "Enter") {
+                          if (e.key === "Tab") {
                             e.preventDefault();
-                            handleTransferScan(transferScanInput);
+                          } else if (e.key === "Enter") {
+                            e.preventDefault();
+                            const trimmed = transferScanInput.trim();
+                            if (trimmed) {
+                              handleTransferScan(trimmed);
+                            } else {
+                              productDropdownInputRef.current?.focus();
+                              setIsProductDropdownOpen(true);
+                              setProductDropdownHighlightedIndex(0);
+                            }
                           } else if (e.key === "Escape") {
                             if (transferAwaitingPhoneModel) {
                               setTransferAwaitingPhoneModel(null);
@@ -2242,7 +2289,13 @@ export function InventoryPage({ context, activeSubPage = "imei", onNavigateSubPa
                           setProductDropdownHighlightedIndex(0);
                         }}
                         onKeyDown={(e) => {
-                          if (e.key === "ArrowDown") {
+                          if (e.key === "Tab") {
+                            e.preventDefault();
+                          } else if (e.key === "ArrowLeft") {
+                            e.preventDefault();
+                            setIsProductDropdownOpen(false);
+                            transferScannerInputRef.current?.focus();
+                          } else if (e.key === "ArrowDown") {
                             e.preventDefault();
                             if (!isProductDropdownOpen) {
                               setIsProductDropdownOpen(true);
@@ -2265,6 +2318,12 @@ export function InventoryPage({ context, activeSubPage = "imei", onNavigateSubPa
                               const chosen = productDropdownItems[productDropdownHighlightedIndex];
                               if (chosen.inStock) {
                                 handleSelectDropdownItem(chosen);
+                              }
+                            } else if (selectedEntryItem) {
+                              setIsProductDropdownOpen(false);
+                              if (quantityInputRef.current) {
+                                quantityInputRef.current.focus();
+                                quantityInputRef.current.select?.();
                               }
                             }
                           } else if (e.key === "Escape") {
@@ -2397,6 +2456,7 @@ export function InventoryPage({ context, activeSubPage = "imei", onNavigateSubPa
                     <label style={{ fontSize: "0.8rem", fontWeight: "600", color: "var(--text-muted)" }}>
                       🔢 {isUrdu ? "تعداد" : "Quantity"}
                     </label>
+                    {/* disabled={selectedEntryItem?.itemType === "handset"} */}
                     <input
                       ref={quantityInputRef}
                       tabIndex={3}
@@ -2411,16 +2471,31 @@ export function InventoryPage({ context, activeSubPage = "imei", onNavigateSubPa
                         cursor: selectedEntryItem?.itemType === "handset" ? "not-allowed" : "text",
                         background: selectedEntryItem?.itemType === "handset" ? "rgba(255, 255, 255, 0.05)" : "inherit"
                       }}
-                      disabled={selectedEntryItem?.itemType === "handset"}
+                      readOnly={selectedEntryItem?.itemType === "handset"}
+                      aria-disabled={selectedEntryItem?.itemType === "handset"}
                       value={selectedEntryItem?.itemType === "handset" ? "1" : entryQuantity}
+                      onFocus={(e) => {
+                        e.target.select?.();
+                      }}
                       onChange={(e) => {
+                        if (selectedEntryItem?.itemType === "handset") return;
                         setEntryQuantity(e.target.value);
                         setTransferInlineError("");
                       }}
                       onKeyDown={(e) => {
-                        if (e.key === "Enter") {
+                        if (e.key === "Tab") {
                           e.preventDefault();
-                          handleAddEntryItem();
+                        } else if (e.key === "ArrowLeft") {
+                          e.preventDefault();
+                          productDropdownInputRef.current?.focus();
+                          setIsProductDropdownOpen(true);
+                        } else if (e.key === "Enter") {
+                          e.preventDefault();
+                          addButtonRef.current?.focus();
+                        } else if (selectedEntryItem?.itemType === "handset") {
+                          if (e.key !== "ArrowRight" && e.key !== "Escape") {
+                            e.preventDefault();
+                          }
                         }
                       }}
                     />
@@ -2441,6 +2516,20 @@ export function InventoryPage({ context, activeSubPage = "imei", onNavigateSubPa
                         fontSize: "0.95rem"
                       }}
                       onClick={handleAddEntryItem}
+                      onKeyDown={(e) => {
+                        if (e.key === "Tab") {
+                          e.preventDefault();
+                        } else if (e.key === "ArrowLeft") {
+                          e.preventDefault();
+                          if (quantityInputRef.current) {
+                            quantityInputRef.current.focus();
+                            quantityInputRef.current.select?.();
+                          }
+                        } else if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleAddEntryItem();
+                        }
+                      }}
                     >
                       + {isUrdu ? "شامل کریں" : "Add"}
                     </button>

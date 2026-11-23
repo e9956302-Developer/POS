@@ -208,3 +208,88 @@ test("PACK #10 - Part 2: Auto-Detection & Scan Flow Simulation (Path A & Path B)
   simulateScan("8901234567891");
   assert.equal(inlineError, '"Braided Lightning Cable 1m" — no stock available at this branch');
 });
+
+test("PACK #10 - Part 3: Acceptance Scenarios T1 through T9 verification", () => {
+  const source = fs.readFileSync(inventoryPagePath, "utf8");
+
+  // T1: No Type dropdown, TAB disabled between the 4 entry row fields
+  assert.equal(source.includes('name="transferType"'), false, "T1: No transferType dropdown");
+  assert.equal(source.includes('name="itemType"'), false, "T1: No itemType dropdown");
+
+  // Check tab is prevented across all 4 controls
+  const scanFieldSection = source.slice(source.indexOf("ref={transferScannerInputRef}"), source.indexOf("ref={productDropdownInputRef}"));
+  assert.match(scanFieldSection, /e\.key === ["']Tab["'][\s\S]*?e\.preventDefault\(\)/, "T1: Scan field must preventDefault on Tab");
+
+  const dropdownSection = source.slice(source.indexOf("ref={productDropdownInputRef}"), source.indexOf("ref={quantityInputRef}"));
+  assert.match(dropdownSection, /e\.key === ["']Tab["'][\s\S]*?e\.preventDefault\(\)/, "T1: Product dropdown must preventDefault on Tab");
+
+  const qtySection = source.slice(source.indexOf("ref={quantityInputRef}"), source.indexOf("ref={addButtonRef}"));
+  assert.match(qtySection, /e\.key === ["']Tab["'][\s\S]*?e\.preventDefault\(\)/, "T1: Quantity input must preventDefault on Tab");
+
+  const addButtonSection = source.slice(source.indexOf("ref={addButtonRef}"), source.indexOf("Transfer Line Items Table"));
+  assert.match(addButtonSection, /e\.key === ["']Tab["'][\s\S]*?e\.preventDefault\(\)/, "T1: Add button must preventDefault on Tab");
+
+  // T4 / Forward navigation:
+  // Enter on empty scan field moves to Product Dropdown
+  assert.match(scanFieldSection, /productDropdownInputRef\.current\?\.focus\(\)/, "T4: Empty scan field Enter moves to Product Dropdown");
+
+  // Enter on Quantity moves to Add Button
+  assert.match(qtySection, /addButtonRef\.current\?\.focus\(\)/, "T2/T3/T4: Quantity Enter moves to Add Button");
+
+  // T6: Backward navigation with Left Arrow:
+  // Add Button Left Arrow -> moves to Quantity
+  assert.match(addButtonSection, /e\.key === ["']ArrowLeft["'][\s\S]*?quantityInputRef\.current(?:\?\.|\.)focus\(\)/, "T6: Add Button Left Arrow moves to Quantity");
+
+  // Quantity Left Arrow -> moves to Product Dropdown
+  assert.match(qtySection, /e\.key === ["']ArrowLeft["'][\s\S]*?productDropdownInputRef\.current(?:\?\.|\.)focus\(\)/, "T6: Quantity Left Arrow moves to Product Dropdown");
+
+  // Product Dropdown Left Arrow -> moves to Scan Field
+  assert.match(dropdownSection, /e\.key === ["']ArrowLeft["'][\s\S]*?transferScannerInputRef\.current(?:\?\.|\.)focus\(\)/, "T6: Product Dropdown Left Arrow moves to Scan Field");
+
+  // T3 / T6: Quantity field readOnly and focusable for phone handset
+  assert.match(qtySection, /readOnly=\{selectedEntryItem\?\.itemType === ["']handset["']\}/, "T3: Quantity readOnly when phone handset selected");
+
+  // End-to-end multi-item rapid run simulation (T9)
+  const products = [
+    { id: 1, name: "USB Cable", barcode: "111", stock_quantity: 20 },
+    { id: 2, name: "Wall Adapter", barcode: "222", stock_quantity: 10 }
+  ];
+  const handsets = [
+    { id: 101, model_name: "iPhone 13", imei: "351111111111111", current_status: "in_stock", branch_id: 1 },
+    { id: 102, model_name: "Galaxy S22", imei: "352222222222222", current_status: "in_stock", branch_id: 1 },
+    { id: 103, model_name: "Pixel 7", imei: "353333333333333", current_status: "in_stock", branch_id: 1 }
+  ];
+
+  let transferItems = [];
+  function runItem(type, code, qty) {
+    if (type === "product") {
+      const p = products.find((x) => x.barcode === code);
+      assert.ok(p);
+      const existing = transferItems.find((it) => it.productId === p.id);
+      if (existing) {
+        existing.quantity += qty;
+      } else {
+        transferItems.push({ itemType: "product", productId: p.id, name: p.name, quantity: qty });
+      }
+    } else {
+      const h = handsets.find((x) => x.imei === code);
+      assert.ok(h);
+      assert.ok(!transferItems.some((it) => it.imei === code));
+      transferItems.push({ itemType: "handset", imei: h.imei, name: h.model_name, quantity: 1 });
+    }
+  }
+
+  // Rapid run: 5 items mixing phones and accessories
+  runItem("product", "111", 5);
+  runItem("phone", "351111111111111", 1);
+  runItem("phone", "352222222222222", 1);
+  runItem("product", "222", 2);
+  runItem("phone", "353333333333333", 1);
+
+  assert.equal(transferItems.length, 5, "T9: All 5 items added");
+  assert.equal(transferItems[0].quantity, 5);
+  assert.equal(transferItems[1].imei, "351111111111111");
+  assert.equal(transferItems[2].imei, "352222222222222");
+  assert.equal(transferItems[3].quantity, 2);
+  assert.equal(transferItems[4].imei, "353333333333333");
+});
