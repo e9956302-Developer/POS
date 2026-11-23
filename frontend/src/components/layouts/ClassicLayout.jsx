@@ -50,10 +50,11 @@ export function ClassicLayout({
   const [inventoryMenuOpen, setInventoryMenuOpen] = useState(false);
   const [partiesMenuOpen, setPartiesMenuOpen] = useState(false);
   const [expensesMenuOpen, setExpensesMenuOpen] = useState(false);
-  const [adminMenuOpen, setAdminMenuOpen] = useState(true);
-  const [employeeMenuOpen, setEmployeeMenuOpen] = useState(true);
+  const [adminMenuOpen, setAdminMenuOpen] = useState(false);
+  const [employeeMenuOpen, setEmployeeMenuOpen] = useState(false);
   const [reportMenuOpen, setReportMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [manuallyClosedGroups, setManuallyClosedGroups] = useState({});
 
   const isSalesPage = activeTab === "sales" || activeTab.startsWith("sales_");
 
@@ -138,38 +139,6 @@ export function ClassicLayout({
                 (tab.key === "reports" && isReportActive);
 
               if (tab.subItems) {
-                const isGroupOpen =
-                  tab.key === "purchases"
-                    ? purchaseMenuOpen
-                    : tab.key === "sales"
-                    ? saleMenuOpen
-                    : tab.key === "inventory"
-                    ? inventoryMenuOpen
-                    : tab.key === "parties"
-                    ? partiesMenuOpen
-                    : tab.key === "expenses"
-                    ? expensesMenuOpen
-                    : tab.key === "admin"
-                    ? adminMenuOpen
-                    : tab.key === "employees"
-                    ? employeeMenuOpen
-                    : reportMenuOpen;
-                const setGroupOpen =
-                  tab.key === "purchases"
-                    ? setPurchaseMenuOpen
-                    : tab.key === "sales"
-                    ? setSaleMenuOpen
-                    : tab.key === "inventory"
-                    ? setInventoryMenuOpen
-                    : tab.key === "parties"
-                    ? setPartiesMenuOpen
-                    : tab.key === "expenses"
-                    ? setExpensesMenuOpen
-                    : tab.key === "admin"
-                    ? setAdminMenuOpen
-                    : tab.key === "employees"
-                    ? setEmployeeMenuOpen
-                    : setReportMenuOpen;
                 const defaultSubKey =
                   tab.key === "purchases"
                     ? (tab.subItems?.[0]?.key || "purchases_new")
@@ -182,11 +151,14 @@ export function ClassicLayout({
                     : tab.key === "expenses"
                     ? (tab.subItems?.[0]?.key || "expenses_entry")
                     : tab.key === "admin"
-                    ? "admin_branches"
+                    ? (tab.subItems?.[0]?.key || "admin_branches")
                     : tab.key === "employees"
-                    ? "employees_attendance"
-                    : "reports_pnl";
-                const isManualToggle = ["sales", "purchases", "inventory", "parties", "expenses"].includes(tab.key);
+                    ? (tab.subItems?.[0]?.key || "employees_attendance")
+                    : (tab.subItems?.[0]?.key || "reports_pnl");
+
+                // Sub menu items are ONLY shown when related page is active, otherwise show main menu items only
+                const isManualClosed = manuallyClosedGroups[tab.key] ?? false;
+                const isGroupOpen = isTabActive && !isManualClosed;
 
                 return (
                   <div key={tab.key} className="nav-group">
@@ -196,43 +168,31 @@ export function ClassicLayout({
                       aria-expanded={Boolean(isGroupOpen)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
-                          if (isManualToggle) {
-                            e.preventDefault();
-                            setError("");
-                            if (isCollapsed) {
-                              setIsCollapsed(false);
-                              setGroupOpen(true);
-                              return;
-                            }
-                            setGroupOpen(!isGroupOpen);
+                          e.preventDefault();
+                          setError("");
+                          if (isCollapsed) {
+                            setIsCollapsed(false);
+                          }
+                          if (!isTabActive) {
+                            setManuallyClosedGroups((prev) => ({ ...prev, [tab.key]: false }));
+                            setActiveTab(defaultSubKey);
+                            setMobileMenuOpen(false);
+                          } else {
+                            setManuallyClosedGroups((prev) => ({ ...prev, [tab.key]: !isManualClosed }));
                           }
                         }
                       }}
                       onClick={() => {
                         setError("");
-                        if (isManualToggle) {
-                          if (isCollapsed) {
-                            setIsCollapsed(false);
-                            setGroupOpen(true);
-                            return;
-                          }
-                          setGroupOpen(!isGroupOpen);
-                          return;
-                        }
                         if (isCollapsed) {
                           setIsCollapsed(false);
-                          setGroupOpen(true);
-                          if (!activeTab.startsWith(`${tab.key}_`)) {
-                            setActiveTab(defaultSubKey);
-                          }
-                          return;
                         }
-                        const isAlreadyInGroup = activeTab === tab.key || activeTab.startsWith(`${tab.key}_`);
-                        if (!isAlreadyInGroup) {
-                          setGroupOpen(true);
+                        if (!isTabActive) {
+                          setManuallyClosedGroups((prev) => ({ ...prev, [tab.key]: false }));
                           setActiveTab(defaultSubKey);
+                          setMobileMenuOpen(false);
                         } else {
-                          setGroupOpen(!isGroupOpen);
+                          setManuallyClosedGroups((prev) => ({ ...prev, [tab.key]: !isManualClosed }));
                         }
                       }}
                       title={tab.label}

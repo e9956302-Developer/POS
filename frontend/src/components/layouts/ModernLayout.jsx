@@ -51,25 +51,14 @@ export function ModernLayout({
     inventory: false,
     parties: false,
     expenses: false,
-    employees: true,
+    employees: false,
     reports: false,
-    admin: true
+    admin: false
   });
+  const [manuallyClosedGroups, setManuallyClosedGroups] = useState({});
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const isSalesPage = activeTab === "sales" || activeTab.startsWith("sales_");
-
-  useEffect(() => {
-    tabs.forEach((tab) => {
-      if (
-        tab.subItems &&
-        !["sales", "purchases", "inventory", "parties", "expenses"].includes(tab.key) &&
-        (activeTab === tab.key || activeTab.startsWith(`${tab.key}_`))
-      ) {
-        setOpenGroups((prev) => ({ ...prev, [tab.key]: true }));
-      }
-    });
-  }, [activeTab, tabs]);
 
   function toggleGroup(groupKey) {
     setOpenGroups((prev) => ({
@@ -117,9 +106,14 @@ export function ModernLayout({
           <nav className="modern-nav-menu">
             {tabs.map((tab) => {
               if (tab.subItems && tab.subItems.length > 0) {
-                const isGroupOpen = openGroups[tab.key] ?? false;
-                const isGroupActive = activeTab === tab.key || activeTab.startsWith(`${tab.key}_`);
+                const isGroupActive =
+                  activeTab === tab.key ||
+                  activeTab.startsWith(`${tab.key}_`) ||
+                  tab.subItems.some((s) => s.key === activeTab);
                 const defaultSubKey = tab.subItems[0].key;
+                const isManualClosed = manuallyClosedGroups[tab.key] ?? false;
+                // Sub menu items are ONLY shown when related page is active, otherwise show main menu items only
+                const isGroupOpen = isGroupActive && !isManualClosed;
 
                 return (
                   <div key={tab.key} className={`modern-nav-group ${isGroupActive ? "group-active" : ""}`}>
@@ -129,43 +123,31 @@ export function ModernLayout({
                       aria-expanded={Boolean(isGroupOpen)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
-                          if (["sales", "purchases", "inventory", "parties", "expenses"].includes(tab.key)) {
-                            e.preventDefault();
-                            setError("");
-                            if (isCollapsed) {
-                              setIsCollapsed(false);
-                              toggleGroup(tab.key);
-                              return;
-                            }
-                            toggleGroup(tab.key);
+                          e.preventDefault();
+                          setError("");
+                          if (isCollapsed) {
+                            setIsCollapsed(false);
+                          }
+                          if (!isGroupActive) {
+                            setManuallyClosedGroups((prev) => ({ ...prev, [tab.key]: false }));
+                            setActiveTab(defaultSubKey);
+                            setMobileMenuOpen(false);
+                          } else {
+                            setManuallyClosedGroups((prev) => ({ ...prev, [tab.key]: !isManualClosed }));
                           }
                         }
                       }}
                       onClick={() => {
                         setError("");
-                        if (["sales", "purchases", "inventory", "parties", "expenses"].includes(tab.key)) {
-                          if (isCollapsed) {
-                            setIsCollapsed(false);
-                            toggleGroup(tab.key);
-                            return;
-                          }
-                          toggleGroup(tab.key);
-                          return;
-                        }
                         if (isCollapsed) {
                           setIsCollapsed(false);
-                          setOpenGroups((prev) => ({ ...prev, [tab.key]: true }));
-                          if (!activeTab.startsWith(`${tab.key}_`)) {
-                            setActiveTab(defaultSubKey);
-                          }
-                          return;
                         }
-                        const isAlreadyInGroup = activeTab === tab.key || activeTab.startsWith(`${tab.key}_`);
-                        if (!isAlreadyInGroup) {
-                          setOpenGroups((prev) => ({ ...prev, [tab.key]: true }));
+                        if (!isGroupActive) {
+                          setManuallyClosedGroups((prev) => ({ ...prev, [tab.key]: false }));
                           setActiveTab(defaultSubKey);
+                          setMobileMenuOpen(false);
                         } else {
-                          toggleGroup(tab.key);
+                          setManuallyClosedGroups((prev) => ({ ...prev, [tab.key]: !isManualClosed }));
                         }
                       }}
                       title={tab.label}

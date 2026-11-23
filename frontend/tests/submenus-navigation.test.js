@@ -56,7 +56,8 @@ before(async () => {
     parties: await vite.ssrLoadModule("/src/pages/PartiesPage.jsx"),
     expenses: await vite.ssrLoadModule("/src/pages/ExpensesPage.jsx"),
     classicLayout: await vite.ssrLoadModule("/src/components/layouts/ClassicLayout.jsx"),
-    modernLayout: await vite.ssrLoadModule("/src/components/layouts/ModernLayout.jsx")
+    modernLayout: await vite.ssrLoadModule("/src/components/layouts/ModernLayout.jsx"),
+    executiveLayout: await vite.ssrLoadModule("/src/components/layouts/ExecutiveLayout.jsx")
   };
 });
 
@@ -214,5 +215,82 @@ test("Permissions: Cashier vs Manager for subpages", () => {
   const cashier = { id: 2, role_name: "cashier" };
   assert.equal(canUse(cashier, "inventory_imei", "view"), true);
   assert.equal(canUse(cashier, "parties_directory", "view"), true);
+});
+
+test("Side menu: sub-menu items are only shown when related page is active, otherwise show main menu items only", () => {
+  const user = { id: 1, role_name: "admin" };
+  const allTabs = modules.app.tabs;
+
+  // 1. When on 'dashboard': All sub-menus are hidden across Classic, Modern, and Executive layouts
+  for (const layoutName of ["classicLayout", "modernLayout", "executiveLayout"]) {
+    const LayoutComponent = modules[layoutName][Object.keys(modules[layoutName])[0]];
+    const html = render(React.createElement(LayoutComponent, {
+      session: user,
+      activeTab: "dashboard",
+      tabs: allTabs,
+      pageBreadcrumb: { isNested: false, current: "Dashboard" },
+      THEMES: []
+    }));
+
+    // Inactive menu groups must NOT show sub-menu items
+    assert.doesNotMatch(html, /Handsets &amp; Serialized IMEIs/);
+    assert.doesNotMatch(html, /Party Master &amp; Registration/);
+    assert.doesNotMatch(html, /Record Expense/);
+    assert.doesNotMatch(html, /Branches &amp; Outlets/);
+
+    // All groups must have aria-expanded="false"
+    assert.match(html, /aria-expanded="false"[^>]*>[\s\S]*?Inventory/i);
+    assert.match(html, /aria-expanded="false"[^>]*>[\s\S]*?Parties &amp; Accounts/i);
+    assert.match(html, /aria-expanded="false"[^>]*>[\s\S]*?Expenses/i);
+    assert.match(html, /aria-expanded="false"[^>]*>[\s\S]*?Admin/i);
+  }
+
+  // 2. When on 'inventory_imei': Only Inventory shows its sub-menu items, others show main menu items only
+  for (const layoutName of ["classicLayout", "modernLayout", "executiveLayout"]) {
+    const LayoutComponent = modules[layoutName][Object.keys(modules[layoutName])[0]];
+    const html = render(React.createElement(LayoutComponent, {
+      session: user,
+      activeTab: "inventory_imei",
+      tabs: allTabs,
+      pageBreadcrumb: { isNested: true, parent: "Inventory", current: "Handsets" },
+      THEMES: []
+    }));
+
+    // Inventory sub-items ARE shown
+    assert.match(html, /Handsets &amp; Serialized IMEIs/);
+    assert.match(html, /Inter-Branch Stock Transfers/);
+    assert.match(html, /aria-expanded="true"[^>]*>[\s\S]*?Inventory/i);
+
+    // Other sub-items are NOT shown (main menu items only)
+    assert.doesNotMatch(html, /Party Master &amp; Registration/);
+    assert.doesNotMatch(html, /Record Expense/);
+    assert.doesNotMatch(html, /Branches &amp; Outlets/);
+    assert.match(html, /aria-expanded="false"[^>]*>[\s\S]*?Parties &amp; Accounts/i);
+    assert.match(html, /aria-expanded="false"[^>]*>[\s\S]*?Expenses/i);
+    assert.match(html, /aria-expanded="false"[^>]*>[\s\S]*?Admin/i);
+  }
+
+  // 3. When on 'parties_new': Only Parties shows its sub-menu items
+  for (const layoutName of ["classicLayout", "modernLayout", "executiveLayout"]) {
+    const LayoutComponent = modules[layoutName][Object.keys(modules[layoutName])[0]];
+    const html = render(React.createElement(LayoutComponent, {
+      session: user,
+      activeTab: "parties_new",
+      tabs: allTabs,
+      pageBreadcrumb: { isNested: true, parent: "Parties", current: "Registration" },
+      THEMES: []
+    }));
+
+    // Parties sub-items ARE shown
+    assert.match(html, /Party Master &amp; Registration/);
+    assert.match(html, /Party Details &amp; Directory/);
+    assert.match(html, /aria-expanded="true"[^>]*>[\s\S]*?Parties &amp; Accounts/i);
+
+    // Inventory and other sub-items are NOT shown
+    assert.doesNotMatch(html, /Handsets &amp; Serialized IMEIs/);
+    assert.doesNotMatch(html, /Record Expense/);
+    assert.doesNotMatch(html, /Branches &amp; Outlets/);
+    assert.match(html, /aria-expanded="false"[^>]*>[\s\S]*?Inventory/i);
+  }
 });
 
