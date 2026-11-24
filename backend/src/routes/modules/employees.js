@@ -12,6 +12,17 @@ import {
 
 export const employeesRouter = Router();
 
+// Enforce strict access control: Cashier and Technician are forbidden from all employee & payroll endpoints
+employeesRouter.use((req, res, next) => {
+  const role = req.user?.role_name;
+  if (role === "cashier" || role === "technician") {
+    return res.status(403).json({
+      message: "Access forbidden: your role does not have permission to view or manage employees & payroll."
+    });
+  }
+  next();
+});
+
 // ==========================================
 // 1. EMPLOYEES CRUD
 // ==========================================

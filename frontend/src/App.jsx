@@ -31,6 +31,8 @@ import { ModernLayout } from "./components/layouts/ModernLayout.jsx";
 import { ExecutiveLayout } from "./components/layouts/ExecutiveLayout.jsx";
 import { TopSettingsPage } from "./pages/TopSettingsPage.jsx";
 import { SessionExpiredModal } from "./components/SessionExpiredModal.jsx";
+import { ErrorBoundary } from "./components/ErrorBoundary.jsx";
+import { ConfirmModal } from "./components/ConfirmModal.jsx";
 import { useLanguage } from "./context/LanguageContext.jsx";
 
 export const ADMIN_SUB_PAGES = [
@@ -167,6 +169,66 @@ export const TOP_ADMIN_TABS = [
 
 export function roleName(user) {
   return user?.role_name || user?.roleName;
+}
+
+export function getRoleLandingRoute(user) {
+  if (!user) return "dashboard";
+  const role = roleName(user);
+  if (role === "top_admin") {
+    return "top_dashboard";
+  }
+  return "dashboard";
+}
+
+export function isTabAllowedForUser(user, tabKey) {
+  if (!user || !tabKey) return false;
+  const role = roleName(user);
+  const cleanKey = String(tabKey).replace(/^#\/?/, "").toLowerCase().trim();
+  if (!cleanKey || cleanKey === "login" || cleanKey === "landing") return false;
+
+  // 1. SaaS Top Admin
+  if (role === "top_admin") {
+    return cleanKey.startsWith("top_") || cleanKey === "top_dashboard";
+  }
+
+  // Non-top_admin cannot access SaaS Top Admin tabs
+  if (cleanKey.startsWith("top_")) {
+    return false;
+  }
+
+  // 2. Company Admin (business_super_admin, admin)
+  if (["business_super_admin", "admin"].includes(role)) {
+    if (cleanKey === "dashboard") return true;
+    if (cleanKey === "admin" || cleanKey.startsWith("admin_")) return true;
+    if (cleanKey === "reports" || cleanKey.startsWith("reports_")) return true;
+    return false;
+  }
+
+  // 3. Operational Staff (Manager, Cashier, Technician) cannot access admin section
+  if (cleanKey === "admin" || cleanKey.startsWith("admin_")) {
+    return false;
+  }
+
+  // 4. Role-specific explicit route blocks
+  if (role === "cashier") {
+    if (cleanKey === "employees" || cleanKey.startsWith("employees_")) return false;
+    if (cleanKey === "purchases" || cleanKey.startsWith("purchases_")) return false;
+    if (cleanKey === "expenses" || cleanKey.startsWith("expenses_")) return false;
+    if (cleanKey === "reports" || cleanKey.startsWith("reports_")) return false;
+  }
+
+  if (role === "technician") {
+    if (cleanKey === "sales" || cleanKey.startsWith("sales_")) return false;
+    if (cleanKey === "purchases" || cleanKey.startsWith("purchases_")) return false;
+    if (cleanKey === "cash_register") return false;
+    if (cleanKey === "expenses" || cleanKey.startsWith("expenses_")) return false;
+    if (cleanKey === "employees" || cleanKey.startsWith("employees_")) return false;
+    if (cleanKey === "reports" || cleanKey.startsWith("reports_")) return false;
+    if (cleanKey === "invoices") return false;
+  }
+
+  // 5. Check module/sub-entity permission
+  return canUse(user, cleanKey, "view") || canUse(user, cleanKey, "create");
 }
 
 export function getVisibleTabs(user) {
@@ -488,7 +550,7 @@ export function canUse(user, pageKey, actionKey = "view") {
   if (role === "cashier") {
     const cashierDefaultPages = [
       "dashboard", "sales", "cash_register", "invoices",
-      "parties", "repairs", "employees", "inventory"
+      "parties", "repairs", "inventory"
     ];
     const targetModule = parentModule || targetPage;
     if (targetAction === "view") {
@@ -496,6 +558,18 @@ export function canUse(user, pageKey, actionKey = "view") {
     }
     if (targetAction === "create" || targetAction === "payment" || targetAction === "close") {
       return ["sales", "cash_register", "invoices", "parties", "repairs"].includes(targetModule);
+    }
+    return false;
+  }
+
+  if (role === "technician") {
+    const technicianDefaultPages = ["dashboard", "repairs", "inventory", "parties"];
+    const targetModule = parentModule || targetPage;
+    if (targetAction === "view") {
+      return technicianDefaultPages.includes(targetModule);
+    }
+    if (targetModule === "repairs") {
+      return ["view", "create", "edit", "delete"].includes(targetAction);
     }
     return false;
   }
@@ -719,7 +793,16 @@ function AppContent() {
         } else if (session) {
           const h = window.location.hash.replace(/^#\/?/, "").toLowerCase().trim();
           if (h && h !== "login" && h !== "landing") {
-            setActiveTab(h);
+            if (isTabAllowedForUser(session, h)) {
+              setActiveTab(h);
+            } else {
+              const landing = getRoleLandingRoute(session);
+              setActiveTab(landing);
+              try {
+                window.location.hash = landing;
+              } catch {}
+              setError(t ? t("nav.access_denied", "You don't have access to that page.") : "You don't have access to that page.");
+            }
           }
         }
       } catch {}
@@ -730,7 +813,7 @@ function AppContent() {
       window.removeEventListener("hashchange", handleHashChange);
       window.removeEventListener("popstate", handleHashChange);
     };
-  }, [session]);
+  }, [session, t]);
   const [subscriptionExpiredData, setSubscriptionExpiredData] = useState(null);
   const [sessionExpiredData, setSessionExpiredData] = useState(null);
   const [activeTab, setActiveTab] = useState(() => {
@@ -775,6 +858,15 @@ function AppContent() {
 
   useEffect(() => {
     if (session && activeTab) {
+      if (!isTabAllowedForUser(session, activeTab)) {
+        const landing = getRoleLandingRoute(session);
+        setActiveTab(landing);
+        try {
+          window.location.hash = landing;
+        } catch {}
+        setError(t ? t("nav.access_denied", "You don't have access to that page.") : "You don't have access to that page.");
+        return;
+      }
       try {
         const currentHash = window.location.hash.replace(/^#\/?/, "").toLowerCase().trim();
         if (currentHash !== activeTab) {
@@ -782,7 +874,7 @@ function AppContent() {
         }
       } catch {}
     }
-  }, [session, activeTab]);
+  }, [session, activeTab, t]);
 
   useEffect(() => {
     function handleSubExpired(e) {
@@ -880,7 +972,17 @@ function AppContent() {
   useEffect(() => {
     if (!getToken()) return;
     api.me()
-      .then((data) => setSession(data.user))
+      .then((data) => {
+        setSession(data.user);
+        const currentHash = window.location.hash.replace(/^#\/?/, "").toLowerCase().trim();
+        if (!currentHash || currentHash === "login" || currentHash === "landing" || !isTabAllowedForUser(data.user, currentHash)) {
+          const landing = getRoleLandingRoute(data.user);
+          setActiveTab(landing);
+          try {
+            window.location.hash = landing;
+          } catch {}
+        }
+      })
       .catch((err) => {
         clearToken();
         if (err?.message) {
@@ -1019,10 +1121,12 @@ function AppContent() {
   const companyName = session?.business_name || session?.businessName || (isTopAdmin ? "SaaS Top Admin" : "Company");
   const companyCode = session?.business_code || session?.businessCode || (isTopAdmin ? "ROOT" : "");
   const companyLogo = session?.business_logo || session?.logo_url || session?.businessLogo || null;
+  const companyPhone = session?.business_phone || session?.businessPhone || session?.phone || "";
 
   if (typeof window !== "undefined") {
     window.__POS_COMPANY_NAME__ = companyName;
     window.__POS_COMPANY_LOGO__ = companyLogo;
+    window.__POS_COMPANY_PHONE__ = companyPhone;
   }
 
   const context = useMemo(
@@ -1705,6 +1809,11 @@ function AppContent() {
     }
     setToken(result.token);
     setSession(result.user);
+    const landing = getRoleLandingRoute(result.user);
+    setActiveTab(landing);
+    try {
+      window.location.hash = landing;
+    } catch {}
     return result;
   }
 
@@ -1713,6 +1822,11 @@ function AppContent() {
     setSubscriptionExpiredData(null);
     setToken(loginResult.token);
     setSession(loginResult.user);
+    const landing = getRoleLandingRoute(loginResult.user);
+    setActiveTab(landing);
+    try {
+      window.location.hash = landing;
+    } catch {}
   }
 
   function handleGoToLogin() {
@@ -1734,6 +1848,7 @@ function AppContent() {
     setSession(null);
     setSubscriptionExpiredData(null);
     setSessionExpiredData(null);
+    setActiveTab("dashboard");
     try {
       window.location.hash = "";
     } catch {}
@@ -2005,150 +2120,161 @@ function AppContent() {
               </button>
             </div>
           )}
-          {activeTab === "top_dashboard" ? (
-            <TopDashboard context={context} onNavigate={handleTopNavigate} />
-          ) : null}
-          {activeTab === "top_businesses" ? (
-            <TopBusinessesPage
-              context={context}
-              initialView={topNavParams.view || "companies"}
-              initialStatus={topNavParams.status || "all"}
-              onNavigate={handleTopNavigate}
-            />
-          ) : null}
-          {activeTab === "top_packages" || activeTab === "top_package_access" ? (
-            <TopPackagesPage context={context} initialView="packages" />
-          ) : null}
-          {activeTab === "top_subscriptions" ? (
-            <TopPackagesPage context={context} initialView="subscriptions" />
-          ) : null}
-          {activeTab === "top_payments" ? (
-            <TopPaymentsPage
-              context={context}
-              initialStatus={topNavParams.status || "all"}
-            />
-          ) : null}
-          {activeTab === "top_saas_admins" ? (
-            <TopSaasAdminsPage
-              context={context}
-              onOpenMfaSetup={(targetAdm) => {
-                setMfaTargetUser(targetAdm || session);
-                setShowMfaModal(true);
-              }}
-            />
-          ) : null}
-          {activeTab === "top_admins" ? (
-            <TopAdminsPage
-              context={context}
-              initialBusinessId={topNavParams.businessId || ""}
-              onOpenMfaSetup={(targetAdm) => {
-                setMfaTargetUser(targetAdm || session);
-                setShowMfaModal(true);
-              }}
-            />
-          ) : null}
-          {activeTab === "top_deleted_transactions" ? (
-            <TopDeletedTransactionsPage context={context} />
-          ) : null}
-          {activeTab === "top_login_logs" ? (
-            <TopLoginLogsPage context={context} />
-          ) : null}
-          {activeTab === "top_settings" ? (
-            <TopSettingsPage context={context} />
-          ) : null}
-          {activeTab === "dashboard" ? <DashboardPage context={context} /> : null}
-          {(isPurchaseActive || activeTab === "purchases") &&
-          (canUse(session, "purchases", activePurchaseSub === "history" ? "view" : "create") ||
-           canUse(session, "purchases", "view") ||
-           canUse(session, "purchases", "create")) ? (
-            <PurchasesPage
-              context={context}
-              activeSubPage={activePurchaseSub}
-              onNavigateSubPage={(subKey) => {
-                setError("");
-                setActiveTab(`purchases_${subKey}`);
-              }}
-            />
-          ) : null}
-          {(isSaleActive || activeTab === "sales") &&
-          (canUse(session, activeTab === "sales_history" ? "sales_history" : "sales_new") ||
-           canUse(session, "sales", activeSaleSub === "history" ? "view" : "create") ||
-           (activeTab === "sales" && (canUse(session, "sales", "create") || canUse(session, "sales", "view")))) ? (
-            <SalesPage
-              context={context}
-              activeSubPage={activeSaleSub}
-              onNavigateSubPage={(subKey) => {
-                setError("");
-                setActiveTab(subKey === "checkout" ? "sales_new" : `sales_${subKey}`);
-              }}
-            />
-          ) : null}
-          {activeTab === "cash_register" && !isCompanyAdmin && canUse(session, "cash_register") ? <CashRegisterPage context={context} /> : null}
-          {(isInventoryActive || activeTab === "inventory") && !isCompanyAdmin && canUse(session, "inventory") ? (
-            <InventoryPage
-              context={context}
-              activeSubPage={activeInventorySub}
-              onNavigateSubPage={(subKey) => {
-                setError("");
-                setActiveTab(`inventory_${subKey}`);
-              }}
-            />
-          ) : null}
-          {(isPartiesActive || activeTab === "parties") &&
-          !isCompanyAdmin &&
-          (canUse(session, "parties", "view") || canUse(session, "parties", "create")) ? (
-            <PartiesPage
-              context={context}
-              activeSubPage={activePartiesSub}
-              onNavigateSubPage={(subKey) => {
-                setError("");
-                setActiveTab(`parties_${subKey}`);
-              }}
-            />
-          ) : null}
-          {(isExpensesActive || activeTab === "expenses") &&
-          (canUse(session, "expenses", "view") || canUse(session, "expenses", "create")) ? (
-            <ExpensesPage
-              context={context}
-              activeSubPage={activeExpensesSub}
-              onNavigateSubPage={(subKey) => {
-                setError("");
-                setActiveTab(`expenses_${subKey}`);
-              }}
-            />
-          ) : null}
-          {activeTab === "invoices" && !isCompanyAdmin && canUse(session, "invoices") ? <InvoicesPage context={context} /> : null}
-          {activeTab === "repairs" && !isCompanyAdmin && canUse(session, "repairs") ? <RepairsPage context={context} /> : null}
-          {isEmployeeActive && !isCompanyAdmin && canUse(session, "employees") ? (
-            <EmployeesPage
-              context={context}
-              activeSubPage={activeEmployeeSub}
-              onNavigateSubPage={(subKey) => {
-                setError("");
-                setActiveTab(`employees_${subKey}`);
-              }}
-            />
-          ) : null}
-          {isReportActive ? (
-            <ReportsPage
-              context={context}
-              activeSubPage={activeReportSub}
-              onNavigateSubPage={(subKey) => {
-                setError("");
-                setActiveTab(`reports_${subKey}`);
-              }}
-            />
-          ) : null}
-          {isAdminActive ? (
-            <AdminPage
-              context={context}
-              activeSubPage={activeAdminSub}
-              onNavigateSubPage={(subKey) => {
-                setError("");
-                setActiveTab(`admin_${subKey}`);
-              }}
-            />
-          ) : null}
+          <ErrorBoundary
+            key={activeTab}
+            onReset={() => {
+              const landing = getRoleLandingRoute(session);
+              setActiveTab(landing);
+              try {
+                window.location.hash = landing;
+              } catch {}
+            }}
+          >
+            {activeTab === "top_dashboard" ? (
+              <TopDashboard context={context} onNavigate={handleTopNavigate} />
+            ) : null}
+            {activeTab === "top_businesses" ? (
+              <TopBusinessesPage
+                context={context}
+                initialView={topNavParams.view || "companies"}
+                initialStatus={topNavParams.status || "all"}
+                onNavigate={handleTopNavigate}
+              />
+            ) : null}
+            {activeTab === "top_packages" || activeTab === "top_package_access" ? (
+              <TopPackagesPage context={context} initialView="packages" />
+            ) : null}
+            {activeTab === "top_subscriptions" ? (
+              <TopPackagesPage context={context} initialView="subscriptions" />
+            ) : null}
+            {activeTab === "top_payments" ? (
+              <TopPaymentsPage
+                context={context}
+                initialStatus={topNavParams.status || "all"}
+              />
+            ) : null}
+            {activeTab === "top_saas_admins" ? (
+              <TopSaasAdminsPage
+                context={context}
+                onOpenMfaSetup={(targetAdm) => {
+                  setMfaTargetUser(targetAdm || session);
+                  setShowMfaModal(true);
+                }}
+              />
+            ) : null}
+            {activeTab === "top_admins" ? (
+              <TopAdminsPage
+                context={context}
+                initialBusinessId={topNavParams.businessId || ""}
+                onOpenMfaSetup={(targetAdm) => {
+                  setMfaTargetUser(targetAdm || session);
+                  setShowMfaModal(true);
+                }}
+              />
+            ) : null}
+            {activeTab === "top_deleted_transactions" ? (
+              <TopDeletedTransactionsPage context={context} />
+            ) : null}
+            {activeTab === "top_login_logs" ? (
+              <TopLoginLogsPage context={context} />
+            ) : null}
+            {activeTab === "top_settings" ? (
+              <TopSettingsPage context={context} />
+            ) : null}
+            {activeTab === "dashboard" ? <DashboardPage context={context} /> : null}
+            {(isPurchaseActive || activeTab === "purchases") &&
+            (canUse(session, "purchases", activePurchaseSub === "history" ? "view" : "create") ||
+             canUse(session, "purchases", "view") ||
+             canUse(session, "purchases", "create")) ? (
+              <PurchasesPage
+                context={context}
+                activeSubPage={activePurchaseSub}
+                onNavigateSubPage={(subKey) => {
+                  setError("");
+                  setActiveTab(`purchases_${subKey}`);
+                }}
+              />
+            ) : null}
+            {(isSaleActive || activeTab === "sales") &&
+            (canUse(session, activeTab === "sales_history" ? "sales_history" : "sales_new") ||
+             canUse(session, "sales", activeSaleSub === "history" ? "view" : "create") ||
+             (activeTab === "sales" && (canUse(session, "sales", "create") || canUse(session, "sales", "view")))) ? (
+              <SalesPage
+                context={context}
+                activeSubPage={activeSaleSub}
+                onNavigateSubPage={(subKey) => {
+                  setError("");
+                  setActiveTab(subKey === "checkout" ? "sales_new" : `sales_${subKey}`);
+                }}
+              />
+            ) : null}
+            {activeTab === "cash_register" && !isCompanyAdmin && canUse(session, "cash_register") ? <CashRegisterPage context={context} /> : null}
+            {(isInventoryActive || activeTab === "inventory") && !isCompanyAdmin && canUse(session, "inventory") ? (
+              <InventoryPage
+                context={context}
+                activeSubPage={activeInventorySub}
+                onNavigateSubPage={(subKey) => {
+                  setError("");
+                  setActiveTab(`inventory_${subKey}`);
+                }}
+              />
+            ) : null}
+            {(isPartiesActive || activeTab === "parties") &&
+            !isCompanyAdmin &&
+            (canUse(session, "parties", "view") || canUse(session, "parties", "create")) ? (
+              <PartiesPage
+                context={context}
+                activeSubPage={activePartiesSub}
+                onNavigateSubPage={(subKey) => {
+                  setError("");
+                  setActiveTab(`parties_${subKey}`);
+                }}
+              />
+            ) : null}
+            {(isExpensesActive || activeTab === "expenses") &&
+            (canUse(session, "expenses", "view") || canUse(session, "expenses", "create")) ? (
+              <ExpensesPage
+                context={context}
+                activeSubPage={activeExpensesSub}
+                onNavigateSubPage={(subKey) => {
+                  setError("");
+                  setActiveTab(`expenses_${subKey}`);
+                }}
+              />
+            ) : null}
+            {activeTab === "invoices" && !isCompanyAdmin && canUse(session, "invoices") ? <InvoicesPage context={context} /> : null}
+            {activeTab === "repairs" && !isCompanyAdmin && canUse(session, "repairs") ? <RepairsPage context={context} /> : null}
+            {isEmployeeActive && !isCompanyAdmin && canUse(session, "employees") ? (
+              <EmployeesPage
+                context={context}
+                activeSubPage={activeEmployeeSub}
+                onNavigateSubPage={(subKey) => {
+                  setError("");
+                  setActiveTab(`employees_${subKey}`);
+                }}
+              />
+            ) : null}
+            {isReportActive ? (
+              <ReportsPage
+                context={context}
+                activeSubPage={activeReportSub}
+                onNavigateSubPage={(subKey) => {
+                  setError("");
+                  setActiveTab(`reports_${subKey}`);
+                }}
+              />
+            ) : null}
+            {isAdminActive ? (
+              <AdminPage
+                context={context}
+                activeSubPage={activeAdminSub}
+                onNavigateSubPage={(subKey) => {
+                  setError("");
+                  setActiveTab(`admin_${subKey}`);
+                }}
+              />
+            ) : null}
+          </ErrorBoundary>
       </LayoutShell>
 
       {/* Edit Profile Modal */}
@@ -2227,42 +2353,27 @@ function AppContent() {
       )}
 
       {/* Logout Confirmation Modal */}
-      {showLogoutConfirm && (
-        <div className="modal-backdrop" onClick={() => setShowLogoutConfirm(false)}>
-          <div className="modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "420px" }}>
-            <div className="modal-header">
-              <h3>Confirm Logout</h3>
-              <button type="button" className="close-btn" onClick={() => setShowLogoutConfirm(false)}>
-                ✕
-              </button>
-            </div>
-            <div className="modal-body" style={{ textAlign: "center", padding: "1.5rem 1rem" }}>
-              <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>🚪</div>
-              <h4 style={{ margin: "0 0 0.5rem 0" }}>Do you want to perform this?</h4>
-              <p className="muted" style={{ margin: 0, fontSize: "0.95rem" }}>
-                Are you sure you want to log out of your session, <strong>{session.full_name || session.fullName}</strong>?
-              </p>
-            </div>
-            <div className="modal-footer" style={{ justifyContent: "center" }}>
-              <button
-                type="button"
-                className="secondary-btn"
-                onClick={() => setShowLogoutConfirm(false)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="primary-btn"
-                style={{ background: "#ef4444", borderColor: "#dc2626" }}
-                onClick={handleConfirmLogout}
-              >
-                Yes, Log Out
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmModal
+        isOpen={showLogoutConfirm}
+        title={t ? t("nav.confirm_logout", "Confirm Logout") : "Confirm Logout"}
+        message={
+          session ? (
+            <span>
+              {t
+                ? t("nav.logout_prompt", "Are you sure you want to log out of your session?")
+                : "Are you sure you want to log out of your session,"}{" "}
+              <strong>{session.full_name || session.fullName}</strong>?
+            </span>
+          ) : (
+            "Are you sure you want to log out?"
+          )
+        }
+        confirmText={t ? t("nav.yes_logout", "Yes, Log Out") : "Yes, Log Out"}
+        cancelText={t ? t("common.cancel", "Cancel") : "Cancel"}
+        isDanger={true}
+        onConfirm={handleConfirmLogout}
+        onCancel={() => setShowLogoutConfirm(false)}
+      />
 
       {/* Two-Factor Authentication (2FA/MFA) Setup & Management Modal */}
       {showMfaModal && (

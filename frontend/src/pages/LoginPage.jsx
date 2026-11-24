@@ -5,8 +5,8 @@ import { LanguageSwitcher } from "../components/LanguageSwitcher.jsx";
 
 export function LoginPage({ onLogin, onCompleteLogin, error, onBackToLanding, onMfaSetupRequired }) {
   const { t, isRtl } = useLanguage();
-  const [email, setEmail] = useState("admin@mobilepos.local");
-  const [password, setPassword] = useState("admin123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState("");
 
@@ -297,6 +297,7 @@ export function LoginPage({ onLogin, onCompleteLogin, error, onBackToLanding, on
             <input
               type="email"
               value={email}
+              autoComplete="username"
               onChange={(event) => setEmail(event.target.value)}
               required
             />
@@ -306,6 +307,7 @@ export function LoginPage({ onLogin, onCompleteLogin, error, onBackToLanding, on
             <input
               type="password"
               value={password}
+              autoComplete="current-password"
               onChange={(event) => setPassword(event.target.value)}
               required
             />

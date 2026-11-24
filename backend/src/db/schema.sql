@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS branches (
   name VARCHAR(120) NOT NULL,
   code VARCHAR(60) NOT NULL UNIQUE,
   address VARCHAR(255) NULL,
+  phone VARCHAR(60) NULL,
   is_active TINYINT(1) NOT NULL DEFAULT 1,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (business_id) REFERENCES businesses(id)
@@ -243,6 +244,7 @@ CREATE TABLE IF NOT EXISTS parties (
   branch_id INT NULL,
   party_type ENUM('vendor', 'customer', 'both') NOT NULL DEFAULT 'customer',
   name VARCHAR(120) NOT NULL,
+  contact_person VARCHAR(120) NULL,
   phone VARCHAR(30) NULL,
   cnic VARCHAR(30) NULL,
   address VARCHAR(255) NULL,

@@ -1104,19 +1104,46 @@ adminRouter.post(
 
     const created = await withTransaction(async (connection) => {
       const [branchResult] = await connection.execute(
-        `INSERT INTO branches (business_id, name, code, address, is_active) VALUES (?, ?, ?, ?, 1)`,
-        [businessId, name.trim(), cleanCode, address || null]
+        `INSERT INTO branches (business_id, name, code, address, phone, is_active) VALUES (?, ?, ?, ?, ?, 1)`,
+        [businessId, name.trim(), cleanCode, address || null, phone || null]
       );
       const branchId = branchResult.insertId;
 
-      await connection.execute(
-        `INSERT INTO branch_subscriptions
-         (business_id, branch_id, plan_id, status, trial_ends_on, grace_ends_on)
-         SELECT ?, ?, sp.id, 'trialing', DATE_ADD(CURDATE(), INTERVAL sp.trial_days DAY), DATE_ADD(CURDATE(), INTERVAL (sp.trial_days + sp.grace_days) DAY)
-         FROM subscription_plans sp
-         WHERE sp.id = ? AND sp.is_active = 1`,
-        [businessId, branchId, planId]
+      const [existingActiveSub] = await connection.execute(
+        `SELECT bs.*, sp.name AS plan_name
+         FROM branch_subscriptions bs
+         JOIN subscription_plans sp ON sp.id = bs.plan_id
+         WHERE bs.business_id = ?
+         ORDER BY (bs.status = 'active') DESC, (bs.status = 'trialing') DESC, bs.id ASC
+         LIMIT 1`,
+        [businessId]
       );
+      const activeSub = existingActiveSub[0];
+
+      if (activeSub && activeSub.status === "active" && activeSub.current_period_ends_on) {
+        await connection.execute(
+          `INSERT INTO branch_subscriptions
+           (business_id, branch_id, plan_id, status, subscription_starts_on, current_period_ends_on, grace_ends_on)
+           VALUES (?, ?, ?, 'active', CURDATE(), ?, ?)`,
+          [businessId, branchId, activeSub.plan_id, activeSub.current_period_ends_on, activeSub.grace_ends_on || null]
+        );
+      } else if (activeSub && activeSub.status === "trialing" && activeSub.trial_ends_on) {
+        await connection.execute(
+          `INSERT INTO branch_subscriptions
+           (business_id, branch_id, plan_id, status, trial_ends_on, grace_ends_on)
+           VALUES (?, ?, ?, 'trialing', ?, ?)`,
+          [businessId, branchId, activeSub.plan_id, activeSub.trial_ends_on, activeSub.grace_ends_on || null]
+        );
+      } else if (planId) {
+        await connection.execute(
+          `INSERT INTO branch_subscriptions
+           (business_id, branch_id, plan_id, status, trial_ends_on, grace_ends_on)
+           SELECT ?, ?, sp.id, 'trialing', DATE_ADD(CURDATE(), INTERVAL sp.trial_days DAY), DATE_ADD(CURDATE(), INTERVAL (sp.trial_days + sp.grace_days) DAY)
+           FROM subscription_plans sp
+           WHERE sp.id = ? AND sp.is_active = 1`,
+          [businessId, branchId, planId]
+        );
+      }
 
       await createAuditLog(connection, {
         userId: req.user.id,
@@ -1146,7 +1173,7 @@ adminRouter.put(
   "/branches/:id",
   requireRole("top_admin"),
   asyncHandler(async (req, res) => {
-    const { name, code, address, isActive, planId } = req.body;
+    const { name, code, address, phone, isActive, planId } = req.body;
     const [branch] = await query("SELECT * FROM branches WHERE id = :id", { id: req.params.id });
     if (!branch) {
       const error = new Error("Branch not found");
@@ -1183,6 +1210,10 @@ adminRouter.put(
       updates.push("address = :address");
       params.address = address ? address.trim() : null;
     }
+    if (phone !== undefined) {
+      updates.push("phone = :phone");
+      params.phone = phone ? phone.trim() : null;
+    }
     if (isActive !== undefined) {
       updates.push("is_active = :isActive");
       params.isActive = isActive ? 1 : 0;
@@ -1197,6 +1228,7 @@ adminRouter.put(
         if (name !== undefined) { setStrings.push("name = ?"); bindValues.push(name.trim()); }
         if (code !== undefined) { setStrings.push("code = ?"); bindValues.push(code.trim().toUpperCase()); }
         if (address !== undefined) { setStrings.push("address = ?"); bindValues.push(address ? address.trim() : null); }
+        if (phone !== undefined) { setStrings.push("phone = ?"); bindValues.push(phone ? phone.trim() : null); }
         if (isActive !== undefined) { setStrings.push("is_active = ?"); bindValues.push(isActive ? 1 : 0); }
         bindValues.push(req.params.id);
 
@@ -1758,7 +1790,7 @@ adminRouter.get(
     const rows = await query(
       `SELECT
          bs.id AS subscription_id,
-         bs.branch_id,
+         b.id AS branch_id,
          b.name AS customer_name,
          b.name AS branch_name,
          b.code AS branch_code,
@@ -1774,20 +1806,33 @@ adminRouter.get(
          bs.subscription_starts_on,
          bs.current_period_ends_on,
          bs.trial_ends_on,
-         bs.status AS raw_status,
+         COALESCE(bs.status, 'unassigned') AS raw_status,
          COALESCE(bs.subscription_starts_on, DATE(bs.created_at)) AS start_date,
          COALESCE(bs.current_period_ends_on, bs.trial_ends_on) AS end_date,
          DATEDIFF(COALESCE(bs.current_period_ends_on, bs.trial_ends_on), CURDATE()) AS days_left
-       FROM branch_subscriptions bs
-       JOIN branches b ON b.id = bs.branch_id
-       JOIN businesses biz ON biz.id = bs.business_id
-       JOIN subscription_plans sp ON sp.id = bs.plan_id
+       FROM branches b
+       JOIN businesses biz ON biz.id = b.business_id
+       LEFT JOIN branch_subscriptions bs ON bs.branch_id = b.id
+       LEFT JOIN subscription_plans sp ON sp.id = bs.plan_id
        ORDER BY biz.name, b.name`
     );
 
     // Auto-update expired rows in DB and format
     const processed = [];
     for (const r of rows) {
+      if (!r.subscription_id || !r.plan_id || r.raw_status === "unassigned") {
+        processed.push({
+          ...r,
+          status: "unassigned",
+          plan_name: null,
+          package_name: null,
+          startDate: null,
+          endDate: null,
+          daysLeft: null
+        });
+        continue;
+      }
+
       let status = "active";
       if (r.raw_status === "cancelled" || r.raw_status === "suspended") {
         status = "cancelled";
@@ -1842,10 +1887,10 @@ adminRouter.post(
       throw badRequest("Cannot assign an inactive package to a customer");
     }
 
-    const todayStr = new Date().toISOString().slice(0, 10);
-    const start = startDate ? startDate.slice(0, 10) : todayStr;
+    const pkDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Karachi" }).format(new Date());
+    const start = startDate ? startDate.slice(0, 10) : pkDate;
 
-    if (!isBackdated && start < todayStr) {
+    if (!isBackdated && start < pkDate) {
       throw badRequest("Start date cannot be in the past unless 'Backdate subscription' is checked");
     }
 
@@ -3458,7 +3503,7 @@ adminRouter.post(
 
     const businessId = req.user.role_name === "top_admin" ? (req.body.businessId || null) : req.user.business_id;
 
-    if (req.user.role_name !== "top_admin" && !["manager", "cashier", "admin"].includes(roleName)) {
+    if (req.user.role_name !== "top_admin" && !["manager", "cashier", "admin", "technician"].includes(roleName)) {
       throw badRequest("Invalid role for business staff");
     }
 
@@ -3491,7 +3536,7 @@ adminRouter.post(
     );
 
     // Automatically seed user_permissions based on business role template or defaults, bounded by package allowed pages
-    if (businessId && ["manager", "cashier"].includes(roleName)) {
+    if (businessId && ["manager", "cashier", "technician"].includes(roleName)) {
       const subInfo = await fetchUserSubscription(businessId, branchId);
       const allowedPages = subInfo.allowedPages;
       const initialPerms = await resolveUserPermissions(null, businessId, roleName, allowedPages);

@@ -7,6 +7,7 @@ import { formatPhoneNumberForWhatsApp } from "../utils/whatsapp.js";
 import { useLanguage } from "../context/LanguageContext.jsx";
 import { ReceiptModal } from "../components/ReceiptModal.jsx";
 import { TableActionButton } from "../components/TableActionColumn.jsx";
+import { ConfirmModal } from "../components/ConfirmModal.jsx";
 
 export function RepairsPage({ context }) {
   const { t, isRtl, formatCurrency } = useLanguage();
@@ -27,6 +28,7 @@ export function RepairsPage({ context }) {
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [receiptTicket, setReceiptTicket] = useState(null);
   const [lastSavedTicket, setLastSavedTicket] = useState(null);
+  const [ticketToCancel, setTicketToCancel] = useState(null);
 
   const defaultBranchId = context?.session?.branch_id || context?.session?.branchId || "";
   const shopName = context?.companyName || context?.session?.business_name || context?.session?.businessName || "DigitalMarkaz360";
@@ -170,12 +172,18 @@ export function RepairsPage({ context }) {
     }
   }
 
-  async function handleCancelTicket(ticket) {
+  function handleCancelTicket(ticket) {
     if (!canDelete) {
       setError("Permission denied: You do not have permission to cancel or delete repair tickets.");
       return;
     }
-    if (!window.confirm(`Are you sure you want to cancel repair ticket #${ticket.ticket_number}?`)) return;
+    setTicketToCancel(ticket);
+  }
+
+  async function confirmCancelTicket() {
+    if (!ticketToCancel) return;
+    const ticket = ticketToCancel;
+    setTicketToCancel(null);
     setError("");
     setMessage("");
     try {
@@ -190,7 +198,7 @@ export function RepairsPage({ context }) {
   function sendWhatsAppStatus(ticket) {
     const clean = formatPhoneNumberForWhatsApp(ticket.customer_phone);
     if (!clean) {
-      alert("No valid customer phone number recorded on this ticket.");
+      setError("No valid customer phone number recorded on this ticket.");
       return;
     }
     const statusText = ticket.status === "repaired" 
@@ -576,6 +584,17 @@ export function RepairsPage({ context }) {
         defaultMode="thermal"
         shopName={shopName}
         companyLogo={companyLogo}
+      />
+
+      {/* Confirm Cancel Repair Ticket Modal */}
+      <ConfirmModal
+        isOpen={Boolean(ticketToCancel)}
+        title={t("repairs.cancel_ticket", "Cancel Repair Ticket")}
+        message={`Are you sure you want to cancel repair ticket #${ticketToCancel?.ticket_number}? This will remove the ticket from the active repair queue.`}
+        confirmLabel={t("common.confirm", "Cancel Ticket")}
+        onConfirm={confirmCancelTicket}
+        onCancel={() => setTicketToCancel(null)}
+        variant="danger"
       />
     </div>
   );

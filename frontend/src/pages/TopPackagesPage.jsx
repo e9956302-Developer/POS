@@ -4,6 +4,8 @@ import { PaginationBar } from "../components/PaginationBar.jsx";
 import { SectionCard } from "../components/SectionCard.jsx";
 import { ToggleSwitch } from "../components/ToggleSwitch.jsx";
 import { SearchableSelect } from "../components/SearchableSelect.jsx";
+import { ConfirmModal } from "../components/ConfirmModal.jsx";
+import { formatDatePK, getTodayDateStringPK } from "../utils/date.js";
 import {
   TableActionHeader,
   TableActionCell,
@@ -42,8 +44,12 @@ export function formatDurationLabel(plan) {
 
 export function computeEndDate(startDateStr, durationKeyOrPlan) {
   if (!startDateStr) return "";
-  const d = new Date(startDateStr);
-  if (isNaN(d.getTime())) return "";
+  const parts = String(startDateStr).slice(0, 10).split("-");
+  if (parts.length !== 3) return "";
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10) - 1;
+  const day = parseInt(parts[2], 10);
+  if (isNaN(year) || isNaN(month) || isNaN(day)) return "";
 
   let monthsToAdd = 1;
   let isYear = false;
@@ -70,13 +76,17 @@ export function computeEndDate(startDateStr, durationKeyOrPlan) {
     }
   }
 
+  const d = new Date(year, month, day);
   if (isYear) {
     d.setFullYear(d.getFullYear() + yearCount);
   } else {
     d.setMonth(d.getMonth() + monthsToAdd);
   }
 
-  return !isNaN(d.getTime()) ? d.toISOString().slice(0, 10) : "";
+  const resY = d.getFullYear();
+  const resM = String(d.getMonth() + 1).padStart(2, "0");
+  const resD = String(d.getDate()).padStart(2, "0");
+  return `${resY}-${resM}-${resD}`;
 }
 
 export const VALID_MODULE_KEYS = new Set(SYSTEM_MODULES.map((m) => m.key));
@@ -147,10 +157,15 @@ export function TopPackagesPage({ initialView = "packages" }) {
   const [assignForm, setAssignForm] = useState({
     branchId: "",
     planId: "",
-    startDate: new Date().toISOString().slice(0, 10),
+    startDate: getTodayDateStringPK(),
     isBackdated: false,
     applyToAllBranches: false
   });
+
+  const [packageToDelete, setPackageToDelete] = useState(null);
+  const [subToCancel, setSubToCancel] = useState(null);
+  const [confirmingModuleUpdate, setConfirmingModuleUpdate] = useState(false);
+  const [confirmingAssignData, setConfirmingAssignData] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -436,10 +451,13 @@ export function TopPackagesPage({ initialView = "packages" }) {
       setError(`Cannot delete package '${plan.name}' because it has ${subsCount} subscriber(s). You can deactivate it instead.`);
       return;
     }
+    setPackageToDelete(plan);
+  }
 
-    const confirmed = window.confirm(`Are you sure you want to permanently delete package '${plan.name}'?`);
-    if (!confirmed) return;
-
+  async function confirmDeletePackage() {
+    if (!packageToDelete) return;
+    const plan = packageToDelete;
+    setPackageToDelete(null);
     setError("");
     setMessage("");
     try {
@@ -514,12 +532,16 @@ export function TopPackagesPage({ initialView = "packages" }) {
 
     const subsCount = Number(selectedPlan.subscribersCount || selectedPlan.assigned_branches_count || 0);
     if (subsCount > 0) {
-      const confirmed = window.confirm(
-        `⚠️ This will immediately update module access for ${subsCount} subscriber(s) of package '${selectedPlan.name}'. Continue?`
-      );
-      if (!confirmed) return;
+      setConfirmingModuleUpdate(true);
+      return;
     }
 
+    await executeSaveModuleAccess();
+  }
+
+  async function executeSaveModuleAccess() {
+    if (!selectedPlan) return;
+    setConfirmingModuleUpdate(false);
     setSavingModules(true);
     const targetPlanId = selectedPlan.id;
     const sanitizedModules = sanitizeAllowedPages(currentDraftModules);
@@ -565,7 +587,7 @@ export function TopPackagesPage({ initialView = "packages" }) {
   // SUBSCRIPTION ACTIONS
   // ==========================================
   function handleOpenAssignModal(prefillSub = null) {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getTodayDateStringPK();
     const defaultPlan = activePlans[0] || plans[0];
 
     setAssignForm({
@@ -596,22 +618,39 @@ export function TopPackagesPage({ initialView = "packages" }) {
       return;
     }
 
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = getTodayDateStringPK();
     if (!assignForm.isBackdated && assignForm.startDate < todayStr) {
       setError("Start date cannot be in the past when creating a new subscription. Check 'Backdate subscription' if recording an existing one.");
       return;
     }
 
+    const targetCustomer = customers.find((c) => String(c.id) === String(assignForm.branchId));
+    const targetPlan = plans.find((p) => String(p.id) === String(assignForm.planId));
+
+    setConfirmingAssignData({
+      branchId: Number(assignForm.branchId),
+      planId: Number(assignForm.planId),
+      startDate: assignForm.startDate,
+      isBackdated: assignForm.isBackdated,
+      applyToAllBranches: Boolean(assignForm.applyToAllBranches),
+      customerName: targetCustomer?.name || targetCustomer?.branch_name || targetCustomer?.business_name || "selected customer",
+      packageName: targetPlan?.name || "selected package"
+    });
+  }
+
+  async function executeSaveAssignment() {
+    if (!confirmingAssignData) return;
+    const payload = {
+      branchId: confirmingAssignData.branchId,
+      planId: confirmingAssignData.planId,
+      startDate: confirmingAssignData.startDate,
+      isBackdated: confirmingAssignData.isBackdated,
+      applyToAllBranches: confirmingAssignData.applyToAllBranches
+    };
+    setConfirmingAssignData(null);
     setIsSubmitting(true);
     try {
-      const res = await api.assignBranchSubscription({
-        branchId: Number(assignForm.branchId),
-        planId: Number(assignForm.planId),
-        startDate: assignForm.startDate,
-        isBackdated: assignForm.isBackdated,
-        applyToAllBranches: Boolean(assignForm.applyToAllBranches)
-      });
-
+      const res = await api.assignBranchSubscription(payload);
       setMessage(res.message || "Package assigned successfully!");
       setAssignModalOpen(false);
       await loadData();
@@ -623,12 +662,14 @@ export function TopPackagesPage({ initialView = "packages" }) {
   }
 
   async function handleCancelSubscription(sub) {
-    const custName = sub.customer_name || sub.branch_name;
-    const confirmed = window.confirm(
-      `Are you sure you want to cancel the subscription for '${custName}'? The customer will lose access to paid modules immediately.`
-    );
-    if (!confirmed) return;
+    setSubToCancel(sub);
+  }
 
+  async function confirmCancelSubscription() {
+    if (!subToCancel) return;
+    const sub = subToCancel;
+    const custName = sub.customer_name || sub.branch_name;
+    setSubToCancel(null);
     setError("");
     setMessage("");
     try {
@@ -1238,6 +1279,7 @@ export function TopPackagesPage({ initialView = "packages" }) {
                     const days = sub.daysLeft;
                     const isExp = sub.status === "expired" || (days !== null && days < 0);
                     const isSoon = sub.status === "expiring_soon" || (days !== null && days >= 0 && days <= 7);
+                    const isUnassigned = sub.status === "unassigned" || !sub.plan_id;
 
                     return (
                       <tr key={sub.subscription_id || sub.branch_id}>
@@ -1248,19 +1290,27 @@ export function TopPackagesPage({ initialView = "packages" }) {
                           </p>
                         </td>
                         <td style={{ minWidth: "120px", maxWidth: "180px", padding: "0.45rem 0.5rem", borderBottom: "1px solid var(--border)" }}>
-                          <strong>{sub.package_name || sub.plan_name}</strong>
-                          <p className="small muted" style={{ margin: 0 }}>
-                            {formatDurationLabel(sub)}
-                          </p>
+                          {isUnassigned ? (
+                            <span className="muted">No package assigned</span>
+                          ) : (
+                            <>
+                              <strong>{sub.package_name || sub.plan_name}</strong>
+                              <p className="small muted" style={{ margin: 0 }}>
+                                {formatDurationLabel(sub)}
+                              </p>
+                            </>
+                          )}
                         </td>
                         <td style={{ whiteSpace: "nowrap", padding: "0.45rem 0.5rem", borderBottom: "1px solid var(--border)" }}>
-                          {sub.startDate ? sub.startDate.slice(0, 10) : "N/A"}
+                          {isUnassigned || !sub.startDate ? "—" : formatDatePK(sub.startDate)}
                         </td>
                         <td style={{ whiteSpace: "nowrap", padding: "0.45rem 0.5rem", borderBottom: "1px solid var(--border)" }}>
-                          <strong>{sub.endDate ? sub.endDate.slice(0, 10) : "N/A"}</strong>
+                          {isUnassigned || !sub.endDate ? "—" : <strong>{formatDatePK(sub.endDate)}</strong>}
                         </td>
                         <td style={{ whiteSpace: "nowrap", padding: "0.45rem 0.5rem", borderBottom: "1px solid var(--border)" }}>
-                          {sub.status === "cancelled" ? (
+                          {isUnassigned ? (
+                            <span className="small muted">—</span>
+                          ) : sub.status === "cancelled" ? (
                             <span className="small muted">—</span>
                           ) : isExp ? (
                             <span style={{ color: "#ef4444", fontWeight: 700 }}>
@@ -1277,7 +1327,9 @@ export function TopPackagesPage({ initialView = "packages" }) {
                           )}
                         </td>
                         <td style={{ whiteSpace: "nowrap", padding: "0.45rem 0.5rem", borderBottom: "1px solid var(--border)" }}>
-                          {sub.status === "cancelled" ? (
+                          {isUnassigned ? (
+                            <span className="status-pill status-disabled" style={{ background: "rgba(148, 163, 184, 0.15)", color: "#94a3b8" }}>No package assigned</span>
+                          ) : sub.status === "cancelled" ? (
                             <span className="status-pill status-disabled">Cancelled</span>
                           ) : isExp ? (
                             <span className="status-pill status-danger">Expired</span>
@@ -1290,12 +1342,12 @@ export function TopPackagesPage({ initialView = "packages" }) {
                         <TableActionCell>
                           <TableActionButton
                             variant="edit"
-                            icon="🔄"
-                            label="Change"
+                            icon={isUnassigned ? "➕" : "🔄"}
+                            label={isUnassigned ? "Assign" : "Change"}
                             onClick={() => handleOpenAssignModal(sub)}
-                            title="Assign or change active package"
+                            title={isUnassigned ? "Assign package" : "Assign or change active package"}
                           />
-                          {sub.status !== "cancelled" && (
+                          {!isUnassigned && sub.status !== "cancelled" && (
                             <TableActionButton
                               variant="delete"
                               icon="✕"
@@ -1573,7 +1625,7 @@ export function TopPackagesPage({ initialView = "packages" }) {
                     type="date"
                     required
                     value={assignForm.startDate}
-                    min={assignForm.isBackdated ? undefined : new Date().toISOString().slice(0, 10)}
+                    min={assignForm.isBackdated ? undefined : getTodayDateStringPK()}
                     onChange={(e) => setAssignForm({ ...assignForm, startDate: e.target.value })}
                   />
                   <div style={{ marginTop: "0.35rem" }}>
@@ -1635,6 +1687,54 @@ export function TopPackagesPage({ initialView = "packages" }) {
           </div>
         </div>
       )}
+
+      {/* Confirm Delete Package Modal */}
+      <ConfirmModal
+        isOpen={Boolean(packageToDelete)}
+        title="Delete Subscription Package"
+        message={`Are you sure you want to permanently delete package '${packageToDelete?.name}'? This action cannot be undone.`}
+        confirmLabel="Delete Package"
+        onConfirm={confirmDeletePackage}
+        onCancel={() => setPackageToDelete(null)}
+        variant="danger"
+      />
+
+      {/* Confirm Update Module Access Modal */}
+      <ConfirmModal
+        isOpen={confirmingModuleUpdate}
+        title="Confirm Module Access Update"
+        message={`⚠️ This will immediately update module access for ${Number(selectedPlan?.subscribersCount || selectedPlan?.assigned_branches_count || 0)} subscriber(s) of package '${selectedPlan?.name}'. Continue?`}
+        confirmLabel="Update Modules"
+        onConfirm={executeSaveModuleAccess}
+        onCancel={() => setConfirmingModuleUpdate(false)}
+        variant="warning"
+      />
+
+      {/* Confirm Assign Package Modal */}
+      <ConfirmModal
+        isOpen={Boolean(confirmingAssignData)}
+        title="Confirm Package Assignment"
+        message={
+          confirmingAssignData?.applyToAllBranches
+            ? `Assign package '${confirmingAssignData?.packageName}' to ALL branches of this company?`
+            : `Assign package '${confirmingAssignData?.packageName}' to '${confirmingAssignData?.customerName}'?`
+        }
+        confirmLabel="Assign Package"
+        onConfirm={executeSaveAssignment}
+        onCancel={() => setConfirmingAssignData(null)}
+        variant="primary"
+      />
+
+      {/* Confirm Cancel Subscription Modal */}
+      <ConfirmModal
+        isOpen={Boolean(subToCancel)}
+        title="Cancel Subscription"
+        message={`Are you sure you want to cancel the subscription for '${subToCancel?.customer_name || subToCancel?.branch_name}'? The customer will lose access to paid modules immediately.`}
+        confirmLabel="Cancel Subscription"
+        onConfirm={confirmCancelSubscription}
+        onCancel={() => setSubToCancel(null)}
+        variant="danger"
+      />
     </div>
   );
 }

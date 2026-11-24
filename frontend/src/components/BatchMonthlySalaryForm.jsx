@@ -4,6 +4,7 @@ import { exportToCSV } from "../utils/export.js";
 import { SalaryVoucherModal } from "./SalaryVoucherModal.jsx";
 import { StatCard } from "./StatCard.jsx";
 import { SectionCard } from "./SectionCard.jsx";
+import { ConfirmModal } from "./ConfirmModal.jsx";
 
 /**
  * BatchMonthlySalaryForm - Unified Batch Processing Screen for ALL Employees
@@ -46,6 +47,7 @@ export function BatchMonthlySalaryForm({
 
   // Bulk action inputs
   const [bulkBonusValue, setBulkBonusValue] = useState("");
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   // Payment details applied to batch
   const [paymentMethod, setPaymentMethod] = useState("cash");
@@ -276,7 +278,7 @@ export function BatchMonthlySalaryForm({
   function handleApplyBonusToAll() {
     const val = Number(bulkBonusValue || 0);
     if (isNaN(val) || val < 0) {
-      alert("Please enter a valid non-negative bonus amount to apply.");
+      setError("Please enter a valid non-negative bonus amount to apply.");
       return;
     }
 
@@ -304,7 +306,7 @@ export function BatchMonthlySalaryForm({
   function handleCopyFirstRowBonus() {
     const firstRow = filteredRows.find((r) => !r.isAlreadyPaid && r.hasBaseSalary);
     if (!firstRow) {
-      alert("No valid employee rows available to copy bonus from.");
+      setError("No valid employee rows available to copy bonus from.");
       return;
     }
     const val = Number(firstRow.bonus || 0);
@@ -330,10 +332,11 @@ export function BatchMonthlySalaryForm({
   }
 
   function handleResetAllOverrides() {
-    if (!window.confirm("Reset all custom bonuses, advances, and deductions back to standard calculations?")) {
-      return;
-    }
+    setShowResetConfirm(true);
+  }
 
+  function executeResetAllOverrides() {
+    setShowResetConfirm(false);
     setRows((prev) =>
       prev.map((r) => {
         if (r.isAlreadyPaid) return r;
@@ -1532,6 +1535,17 @@ export function BatchMonthlySalaryForm({
           companyLogo={context?.companyLogo || context?.session?.business_logo || context?.session?.logo_url}
         />
       )}
+
+      {/* Confirm Reset All Overrides Modal */}
+      <ConfirmModal
+        isOpen={showResetConfirm}
+        title="Reset All Overrides"
+        message="Are you sure you want to reset all custom bonuses, advances, and deductions back to standard calculations?"
+        confirmLabel="Reset Overrides"
+        onConfirm={executeResetAllOverrides}
+        onCancel={() => setShowResetConfirm(false)}
+        variant="warning"
+      />
     </div>
   );
 }

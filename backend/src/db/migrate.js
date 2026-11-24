@@ -101,6 +101,12 @@ export async function runMigrations() {
   } catch (err) {
     console.warn("Payroll advances migration notice:", err.message);
   }
+  try {
+    const { migrateTechnicianAndFields } = await import("./migrateTechnicianAndFields.js");
+    await migrateTechnicianAndFields();
+  } catch (err) {
+    console.warn("Technician and fields migration notice:", err.message);
+  }
 
   // 3. Scan migrations directory
   const migrationsDir = path.join(__dirname, "migrations");

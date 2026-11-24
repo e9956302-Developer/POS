@@ -4,7 +4,7 @@
  */
 export function exportToCSV(filename, rows, columns = [], meta = {}) {
   if (!rows || !rows.length) {
-    alert("No records available to export.");
+    console.warn("No records available to export.");
     return;
   }
 

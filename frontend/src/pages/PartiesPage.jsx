@@ -53,6 +53,7 @@ export function PartiesPage({ context, activeSubPage, onNavigateSubPage }) {
       branchId: context.session?.branch_id || context.session?.branchId || "",
       partyType: "customer",
       name: "",
+      contactPerson: "",
       phone: "",
       cnic: "",
       address: "",
@@ -76,6 +77,7 @@ export function PartiesPage({ context, activeSubPage, onNavigateSubPage }) {
       await api.createParty({
         ...form,
         branchId: form.branchId ? Number(form.branchId) : null,
+        contactPerson: form.contactPerson ? form.contactPerson.trim() : null,
         openingBalance: Number(form.openingBalance || 0),
         openingBalanceType: form.openingBalanceType || (form.partyType === "vendor" ? "payable" : "receivable"),
         openingBalanceDate: form.openingBalanceDate || null
@@ -116,6 +118,7 @@ export function PartiesPage({ context, activeSubPage, onNavigateSubPage }) {
         name: editForm.name,
         partyType: editForm.partyType,
         branchId: editForm.branchId ? Number(editForm.branchId) : null,
+        contactPerson: editForm.contactPerson ? editForm.contactPerson.trim() : null,
         phone: editForm.phone,
         cnic: editForm.cnic,
         address: editForm.address,
@@ -164,6 +167,8 @@ export function PartiesPage({ context, activeSubPage, onNavigateSubPage }) {
       const q = searchQuery.toLowerCase();
       return (
         (p.name && p.name.toLowerCase().includes(q)) ||
+        (p.contact_person && p.contact_person.toLowerCase().includes(q)) ||
+        (p.contactPerson && p.contactPerson.toLowerCase().includes(q)) ||
         (p.phone && p.phone.toLowerCase().includes(q)) ||
         (p.cnic && p.cnic.toLowerCase().includes(q)) ||
         (p.address && p.address.toLowerCase().includes(q)) ||
@@ -294,6 +299,15 @@ export function PartiesPage({ context, activeSubPage, onNavigateSubPage }) {
                 value={form.name}
                 onChange={(event) => setForm({ ...form, name: event.target.value })}
                 required
+              />
+            </label>
+
+            <label>
+              <span>{t("parties.contact_person", "Contact Person")}</span>
+              <input
+                placeholder={t("parties.contact_person_placeholder", "e.g. Muhammad Asif (Manager)")}
+                value={form.contactPerson || ""}
+                onChange={(event) => setForm({ ...form, contactPerson: event.target.value })}
               />
             </label>
 
@@ -546,6 +560,7 @@ export function PartiesPage({ context, activeSubPage, onNavigateSubPage }) {
                 <thead>
                   <tr>
                     <th style={{ minWidth: "160px", whiteSpace: "nowrap" }}>{t("parties.party_name_label", "Party Name")}</th>
+                    <th style={{ minWidth: "130px", whiteSpace: "nowrap" }}>{t("parties.contact_person", "Contact Person")}</th>
                     <th style={{ minWidth: "95px", whiteSpace: "nowrap" }}>{t("parties.party_type", "Type")}</th>
                     <th style={{ minWidth: "130px", whiteSpace: "nowrap" }}>{t("parties.phone", "Contact Phone")}</th>
                     <th style={{ minWidth: "130px", whiteSpace: "nowrap" }}>{t("parties.cnic", "CNIC / ID")}</th>
@@ -572,6 +587,13 @@ export function PartiesPage({ context, activeSubPage, onNavigateSubPage }) {
                           <small className="muted" style={{ fontSize: "0.76rem" }}>
                             {party.notes}
                           </small>
+                        )}
+                      </td>
+                      <td>
+                        {party.contact_person || party.contactPerson ? (
+                          <span style={{ fontWeight: 600 }}>{party.contact_person || party.contactPerson}</span>
+                        ) : (
+                          <span className="muted">—</span>
                         )}
                       </td>
                       <td>
@@ -667,7 +689,8 @@ export function PartiesPage({ context, activeSubPage, onNavigateSubPage }) {
                                 setEditingParty(party);
                                 setEditForm({
                                   name: party.name || "",
-                                  partyType: party.party_type || "customer",
+                                  contactPerson: party.contact_person || party.contactPerson || "",
+                                              partyType: party.party_type || "customer",
                                   branchId: party.branch_id || "",
                                   phone: party.phone || "",
                                   cnic: party.cnic || "",
@@ -850,6 +873,13 @@ export function PartiesPage({ context, activeSubPage, onNavigateSubPage }) {
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
                 <div>
+                  <span className="muted small" style={{ display: "block" }}>Contact Person</span>
+                  <div style={{ fontWeight: "600", marginTop: "0.2rem" }}>
+                    {selectedParty.contact_person || selectedParty.contactPerson || "Not recorded"}
+                  </div>
+                </div>
+
+                <div>
                   <span className="muted small" style={{ display: "block" }}>Phone Number</span>
                   <div style={{ fontWeight: "600", marginTop: "0.2rem" }}>
                     {selectedParty.phone || "Not recorded"}
@@ -1023,6 +1053,15 @@ export function PartiesPage({ context, activeSubPage, onNavigateSubPage }) {
                       value={editForm.name || ""}
                       onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
                       required
+                    />
+                  </label>
+
+                  <label>
+                    <span>{t("parties.contact_person", "Contact Person")}</span>
+                    <input
+                      placeholder={t("parties.contact_person_placeholder", "e.g. Muhammad Asif (Manager)")}
+                      value={editForm.contactPerson || ""}
+                      onChange={(e) => setEditForm({ ...editForm, contactPerson: e.target.value })}
                     />
                   </label>
 

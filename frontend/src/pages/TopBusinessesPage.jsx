@@ -9,6 +9,7 @@ import {
   TableActionCell,
   TableActionButton
 } from "../components/TableActionColumn.jsx";
+import { ConfirmModal } from "../components/ConfirmModal.jsx";
 
 export function deriveCompanyCode(name) {
   if (!name || !name.trim()) return "";
@@ -108,6 +109,7 @@ export function TopBusinessesPage({ initialView = "companies", initialStatus = "
     name: "",
     code: "",
     address: "",
+    phone: "",
     planId: 1
   });
 
@@ -117,9 +119,14 @@ export function TopBusinessesPage({ initialView = "companies", initialStatus = "
     name: "",
     code: "",
     address: "",
+    phone: "",
     planId: 1,
     isActive: 1
   });
+
+  // Confirmation Modals State
+  const [companyToDelete, setCompanyToDelete] = useState(null);
+  const [branchToDelete, setBranchToDelete] = useState(null);
 
   // Extend Subscription Modal
   const [extendingBranch, setExtendingBranch] = useState(null);
@@ -130,6 +137,11 @@ export function TopBusinessesPage({ initialView = "companies", initialStatus = "
     // Load packages & simple companies for dropdowns
     api.subscriptionPlans().then(setPlansList).catch(() => {});
     api.businesses().then(setAllCompaniesList).catch(() => {});
+    api.topBranches("?page=1&pageSize=10").then((res) => {
+      if (res?.pagination) {
+        setBranchPagination(res.pagination);
+      }
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -363,17 +375,19 @@ export function TopBusinessesPage({ initialView = "companies", initialStatus = "
     }
   }
 
-  async function handleDeleteCompany(company) {
+  function promptDeleteCompany(company) {
     const hasData = Number(company.data_count || 0) > 0;
     if (hasData) {
       setError(`Cannot delete company '${company.name}' because it contains active transaction or inventory records.`);
       return;
     }
+    setCompanyToDelete(company);
+  }
 
-    const confirmed = window.confirm(
-      `Are you sure you want to permanently delete company '${company.name}' (${company.code})?\nThis action cannot be undone.`
-    );
-    if (!confirmed) return;
+  async function executeDeleteCompany() {
+    if (!companyToDelete) return;
+    const company = companyToDelete;
+    setCompanyToDelete(null);
 
     setIsSubmitting(true);
     setError("");
@@ -393,17 +407,19 @@ export function TopBusinessesPage({ initialView = "companies", initialStatus = "
     }
   }
 
-  async function handleDeleteBranch(branch) {
+  function promptDeleteBranch(branch) {
     const hasData = Number(branch.data_count || 0) > 0;
     if (hasData) {
       setError(`Cannot delete branch '${branch.name}' because it contains active transaction or inventory records.`);
       return;
     }
+    setBranchToDelete(branch);
+  }
 
-    const confirmed = window.confirm(
-      `Are you sure you want to permanently delete branch '${branch.name}' (${branch.code})?\nThis action cannot be undone.`
-    );
-    if (!confirmed) return;
+  async function executeDeleteBranch() {
+    if (!branchToDelete) return;
+    const branch = branchToDelete;
+    setBranchToDelete(null);
 
     setIsSubmitting(true);
     setError("");
@@ -659,6 +675,7 @@ export function TopBusinessesPage({ initialView = "companies", initialStatus = "
                               name: "",
                               code: `${c.code}-0${Number(c.branches_count || 0) + 1}`,
                               address: "",
+                              phone: "",
                               planId: plansList[0]?.id || 1
                             });
                             setShowCreateBranchModal(true);
@@ -670,7 +687,7 @@ export function TopBusinessesPage({ initialView = "companies", initialStatus = "
                           icon="🗑️"
                           label="Delete"
                           disabled={Number(c.data_count || 0) > 0}
-                          onClick={() => handleDeleteCompany(c)}
+                          onClick={() => promptDeleteCompany(c)}
                           title={
                             Number(c.data_count || 0) > 0
                               ? "Cannot delete company with active sales, purchases, inventory, or expenses."
@@ -725,6 +742,7 @@ export function TopBusinessesPage({ initialView = "companies", initialStatus = "
                   name: "",
                   code: "",
                   address: "",
+                  phone: "",
                   planId: plansList[0]?.id || 1
                 });
                 setShowCreateBranchModal(true);
@@ -836,7 +854,8 @@ export function TopBusinessesPage({ initialView = "companies", initialStatus = "
                         <td>
                           <strong>{b.name}</strong>
                           <p className="font-mono text-muted small">{b.code}</p>
-                          {b.address && <p className="small muted">{b.address}</p>}
+                          {b.phone && <p className="small muted">📞 {b.phone}</p>}
+                          {b.address && <p className="small muted">📍 {b.address}</p>}
                         </td>
                         <td>
                           <button
@@ -901,6 +920,7 @@ export function TopBusinessesPage({ initialView = "companies", initialStatus = "
                                 name: b.name,
                                 code: b.code,
                                 address: b.address || "",
+                                phone: b.phone || "",
                                 planId: b.plan_id || 1,
                                 isActive: b.is_active
                               });
@@ -924,7 +944,7 @@ export function TopBusinessesPage({ initialView = "companies", initialStatus = "
                             icon="🗑️"
                             label="Delete"
                             disabled={Number(b.data_count || 0) > 0}
-                            onClick={() => handleDeleteBranch(b)}
+                            onClick={() => promptDeleteBranch(b)}
                             title={
                               Number(b.data_count || 0) > 0
                                 ? "Cannot delete branch with active sales, purchases, inventory, or expenses."
@@ -1078,6 +1098,7 @@ export function TopBusinessesPage({ initialView = "companies", initialStatus = "
                         name: "",
                         code: `${selectedCompanyDetail.code}-${String(nextBranchNum).padStart(2, "0")}`,
                         address: "",
+                        phone: "",
                         planId: plansList[0]?.id || 1
                       });
                       setShowCreateBranchModal(true);
@@ -1644,6 +1665,15 @@ export function TopBusinessesPage({ initialView = "companies", initialStatus = "
                 </label>
 
                 <label className="full-span">
+                  <span>Contact Phone</span>
+                  <input
+                    placeholder="e.g. +92 42 1234567"
+                    value={branchForm.phone || ""}
+                    onChange={(e) => setBranchForm({ ...branchForm, phone: e.target.value })}
+                  />
+                </label>
+
+                <label className="full-span">
                   <span>Subscription Package *</span>
                   <SearchableSelect
                     value={branchForm.planId}
@@ -1774,6 +1804,15 @@ export function TopBusinessesPage({ initialView = "companies", initialStatus = "
                 </label>
 
                 <label className="full-span">
+                  <span>Contact Phone</span>
+                  <input
+                    placeholder="e.g. +92 42 1234567"
+                    value={editBranchForm.phone || ""}
+                    onChange={(e) => setEditBranchForm({ ...editBranchForm, phone: e.target.value })}
+                  />
+                </label>
+
+                <label className="full-span">
                   <span>Assigned Package (Fixed for Branch)</span>
                   <div
                     style={{
@@ -1891,6 +1930,45 @@ export function TopBusinessesPage({ initialView = "companies", initialStatus = "
           </div>
         </div>
       )}
+      {/* MODAL: CONFIRM DELETE COMPANY */}
+      <ConfirmModal
+        isOpen={Boolean(companyToDelete)}
+        title="Confirm Company Deletion"
+        message={
+          companyToDelete ? (
+            <span>
+              Are you sure you want to permanently delete company <strong>{companyToDelete.name}</strong> ({companyToDelete.code})?
+              <br /><br />
+              <span className="muted" style={{ fontSize: "0.85rem" }}>This action cannot be undone.</span>
+            </span>
+          ) : null
+        }
+        confirmText="Yes, Delete Company"
+        cancelText="Cancel"
+        isDanger={true}
+        onConfirm={executeDeleteCompany}
+        onCancel={() => setCompanyToDelete(null)}
+      />
+
+      {/* MODAL: CONFIRM DELETE BRANCH */}
+      <ConfirmModal
+        isOpen={Boolean(branchToDelete)}
+        title="Confirm Branch Deletion"
+        message={
+          branchToDelete ? (
+            <span>
+              Are you sure you want to permanently delete branch <strong>{branchToDelete.name}</strong> ({branchToDelete.code})?
+              <br /><br />
+              <span className="muted" style={{ fontSize: "0.85rem" }}>This action cannot be undone.</span>
+            </span>
+          ) : null
+        }
+        confirmText="Yes, Delete Branch"
+        cancelText="Cancel"
+        isDanger={true}
+        onConfirm={executeDeleteBranch}
+        onCancel={() => setBranchToDelete(null)}
+      />
     </div>
   );
 }

@@ -42,6 +42,8 @@ export function ReceiptModal({
     (typeof window !== "undefined" && window.__POS_COMPANY_LOGO__) ||
     null;
   const branchName = data.branch_name || data.branchName || "Main Branch";
+  const branchPhone = data.branch_phone || data.branchPhone || "";
+  const storePhone = branchPhone || data.company_phone || data.companyPhone || data.business_phone || data.businessPhone || (typeof window !== "undefined" && window.__POS_COMPANY_PHONE__) || "";
   const currentDate = new Date().toISOString().slice(0, 10);
 
   function handlePrint() {
@@ -232,6 +234,7 @@ export function ReceiptModal({
                   )}
                 </div>
                 <div style={{ fontSize: "0.80rem", fontWeight: "700" }}>Branch: {branchName}</div>
+                {storePhone && <div style={{ fontSize: "0.74rem", color: "#222" }}>Tel: {storePhone}</div>}
                 <div style={{ fontSize: "0.70rem", color: "#444" }}>POS Billing & Inventory Management</div>
                 <div style={{ margin: "4px 0", borderBottom: "1px dashed #000" }} />
                 <div style={{ fontWeight: "800", fontSize: "0.78rem" }}>*** {thermalBadge} ***</div>
@@ -549,6 +552,11 @@ export function ReceiptModal({
                   <div style={{ color: "#2563eb", fontWeight: "700", fontSize: "0.90rem" }}>
                     Branch: {branchName}
                   </div>
+                  {storePhone && (
+                    <div style={{ fontSize: "0.82rem", color: "#334155", fontWeight: "600" }}>
+                      Tel: <span style={{ direction: "ltr" }}>{storePhone}</span>
+                    </div>
+                  )}
                   <div style={{ fontSize: "0.80rem", color: "#6b7280" }}>
                     Mobile Retail POS, Procurement & Device Repair Center
                   </div>

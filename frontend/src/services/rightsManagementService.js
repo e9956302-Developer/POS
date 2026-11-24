@@ -743,6 +743,14 @@ export async function getRights(targetType, targetId, explicitAllowedPages = nul
               (form.id === "repairs" && (right === "view" || right === "create"))
             );
             rightsMap[k] = allowedForCashier;
+          } else if (targetId === "technician") {
+            const allowedForTech = (
+              (form.id === "repairs" && ["view", "create", "edit", "delete"].includes(right)) ||
+              (form.id === "inventory" && right === "view") ||
+              (form.id === "parties" && right === "view") ||
+              (form.id === "dashboard" && right === "view")
+            );
+            rightsMap[k] = allowedForTech;
           } else {
             rightsMap[k] = true;
           }

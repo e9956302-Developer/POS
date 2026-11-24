@@ -48,6 +48,8 @@ partiesRouter.post(
       branchId,
       partyType,
       name,
+      contactPerson,
+      contact_person,
       phone,
       cnic,
       address,
@@ -70,6 +72,7 @@ partiesRouter.post(
       branchId: branchId || null,
       partyType,
       name: name.trim(),
+      contactPerson: contactPerson || contact_person || null,
       phone: phone || null,
       cnic: cnic || null,
       address: address || null,
@@ -82,11 +85,11 @@ partiesRouter.post(
     try {
       result = await query(
         `INSERT INTO parties (
-           business_id, branch_id, party_type, name, phone, cnic, address, notes,
+           business_id, branch_id, party_type, name, contact_person, phone, cnic, address, notes,
            opening_balance, opening_balance_type, opening_balance_date
          )
          VALUES (
-           :businessId, :branchId, :partyType, :name, :phone, :cnic, :address, :notes,
+           :businessId, :branchId, :partyType, :name, :contactPerson, :phone, :cnic, :address, :notes,
            :openingBalance, :openingBalanceType, :openingBalanceDate
          )`,
         insertPayload
@@ -97,11 +100,11 @@ partiesRouter.post(
         await migrateOpeningBalances();
         result = await query(
           `INSERT INTO parties (
-             business_id, branch_id, party_type, name, phone, cnic, address, notes,
+             business_id, branch_id, party_type, name, contact_person, phone, cnic, address, notes,
              opening_balance, opening_balance_type, opening_balance_date
            )
            VALUES (
-             :businessId, :branchId, :partyType, :name, :phone, :cnic, :address, :notes,
+             :businessId, :branchId, :partyType, :name, :contactPerson, :phone, :cnic, :address, :notes,
              :openingBalance, :openingBalanceType, :openingBalanceDate
            )`,
           insertPayload
@@ -135,6 +138,8 @@ partiesRouter.put(
       branchId,
       partyType,
       name,
+      contactPerson,
+      contact_person,
       phone,
       cnic,
       address,
@@ -150,6 +155,10 @@ partiesRouter.put(
     if (name !== undefined) {
       updates.push("name = :name");
       params.name = name.trim();
+    }
+    if (contactPerson !== undefined || contact_person !== undefined) {
+      updates.push("contact_person = :contactPerson");
+      params.contactPerson = (contactPerson !== undefined ? contactPerson : contact_person) || null;
     }
     if (partyType !== undefined) {
       updates.push("party_type = :partyType");

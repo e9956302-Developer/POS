@@ -10,6 +10,7 @@ import { SearchableSelect } from "../components/SearchableSelect.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
 import { TableActionButton } from "../components/TableActionColumn.jsx";
 import { stripTrailingZeros } from "../utils/numberFormat.js";
+import { ConfirmModal } from "../components/ConfirmModal.jsx";
 
 function highlightMatch(text, query) {
   if (!text) return "";
@@ -181,6 +182,11 @@ export function InventoryPage({ context, activeSubPage = "imei", onNavigateSubPa
 
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [productToDelete, setProductToDelete] = useState(null);
+  const [categoryToDelete, setCategoryToDelete] = useState(null);
+  const [transferToReceive, setTransferToReceive] = useState(null);
+  const [transferToCancel, setTransferToCancel] = useState(null);
+  const [showClearTransferConfirm, setShowClearTransferConfirm] = useState(false);
 
   useEffect(() => {
     if (activeTab === "imei") {
@@ -331,15 +337,19 @@ export function InventoryPage({ context, activeSubPage = "imei", onNavigateSubPa
     }
   }
 
-  async function handleDeleteProduct(product) {
+  function handleDeleteProduct(product) {
     if (!canDelete) {
       setError("Permission denied: You do not have permission to delete products.");
       return;
     }
     if (!product) return;
-    const confirmed = window.confirm(`Are you sure you want to delete product "${product.name}"?`);
-    if (!confirmed) return;
+    setProductToDelete(product);
+  }
 
+  async function confirmDeleteProduct() {
+    if (!productToDelete) return;
+    const product = productToDelete;
+    setProductToDelete(null);
     setError("");
     setMessage("");
     try {
@@ -398,14 +408,19 @@ export function InventoryPage({ context, activeSubPage = "imei", onNavigateSubPa
     }
   }
 
-  async function handleDeleteCategory(cat) {
+  function handleDeleteCategory(cat) {
     if (!canDelete) {
       setError("Permission denied: You do not have permission to delete categories.");
       return;
     }
     if (!cat) return;
-    const confirmed = window.confirm(`Are you sure you want to delete category "${cat.name}"?`);
-    if (!confirmed) return;
+    setCategoryToDelete(cat);
+  }
+
+  async function confirmDeleteCategory() {
+    if (!categoryToDelete) return;
+    const cat = categoryToDelete;
+    setCategoryToDelete(null);
     setError("");
     setMessage("");
     try {
@@ -1097,12 +1112,18 @@ export function InventoryPage({ context, activeSubPage = "imei", onNavigateSubPa
     }
   }
 
-  async function handleReceiveTransfer(id) {
+  function handleReceiveTransfer(id) {
     if (!canEdit) {
       setError("Permission denied: You do not have permission to receive transfers.");
       return;
     }
-    if (!window.confirm("Confirm receiving all items in this transfer?")) return;
+    setTransferToReceive(id);
+  }
+
+  async function confirmReceiveTransfer() {
+    if (!transferToReceive) return;
+    const id = transferToReceive;
+    setTransferToReceive(null);
     setError("");
     setMessage("");
     try {
@@ -1117,12 +1138,18 @@ export function InventoryPage({ context, activeSubPage = "imei", onNavigateSubPa
     }
   }
 
-  async function handleCancelTransfer(id) {
+  function handleCancelTransfer(id) {
     if (!canDelete) {
       setError("Permission denied: You do not have permission to cancel transfers.");
       return;
     }
-    if (!window.confirm("Cancel this transfer and restore stock to source branch?")) return;
+    setTransferToCancel(id);
+  }
+
+  async function confirmCancelTransfer() {
+    if (!transferToCancel) return;
+    const id = transferToCancel;
+    setTransferToCancel(null);
     setError("");
     setMessage("");
     try {
@@ -2565,12 +2592,7 @@ export function InventoryPage({ context, activeSubPage = "imei", onNavigateSubPa
                     <button
                       type="button"
                       className="ghost-btn btn-sm"
-                      onClick={() => {
-                        if (window.confirm(isUrdu ? "کیا آپ تمام اشیاء صاف کرنا چاہتے ہیں؟" : "Clear all items from this transfer?")) {
-                          setTransferForm((prev) => ({ ...prev, items: [] }));
-                          setTransferAwaitingPhoneModel(null);
-                        }
-                      }}
+                      onClick={() => setShowClearTransferConfirm(true)}
                       style={{ color: "#ef4444", fontSize: "0.8rem", padding: "2px 8px" }}
                     >
                       🗑️ {isUrdu ? "تمام صاف کریں" : "Clear All"}
@@ -3267,6 +3289,65 @@ export function InventoryPage({ context, activeSubPage = "imei", onNavigateSubPa
         onClose={() => setShowQRModal(false)}
         items={qrItems}
         companyName={shopName}
+      />
+
+      {/* Confirm Delete Product Modal */}
+      <ConfirmModal
+        isOpen={Boolean(productToDelete)}
+        title="Delete Product"
+        message={`Are you sure you want to delete product "${productToDelete?.name}"? This action cannot be undone.`}
+        confirmLabel="Delete Product"
+        onConfirm={confirmDeleteProduct}
+        onCancel={() => setProductToDelete(null)}
+        variant="danger"
+      />
+
+      {/* Confirm Delete Category Modal */}
+      <ConfirmModal
+        isOpen={Boolean(categoryToDelete)}
+        title="Delete Category"
+        message={`Are you sure you want to delete category "${categoryToDelete?.name}"?`}
+        confirmLabel="Delete Category"
+        onConfirm={confirmDeleteCategory}
+        onCancel={() => setCategoryToDelete(null)}
+        variant="danger"
+      />
+
+      {/* Confirm Receive Transfer Modal */}
+      <ConfirmModal
+        isOpen={Boolean(transferToReceive)}
+        title="Receive Transfer"
+        message="Confirm receiving all items in this transfer? Stock will be credited to destination branch."
+        confirmLabel="Receive Transfer"
+        onConfirm={confirmReceiveTransfer}
+        onCancel={() => setTransferToReceive(null)}
+        variant="primary"
+      />
+
+      {/* Confirm Cancel Transfer Modal */}
+      <ConfirmModal
+        isOpen={Boolean(transferToCancel)}
+        title="Cancel Transfer"
+        message="Cancel this transfer and restore stock to source branch?"
+        confirmLabel="Cancel Transfer"
+        onConfirm={confirmCancelTransfer}
+        onCancel={() => setTransferToCancel(null)}
+        variant="danger"
+      />
+
+      {/* Confirm Clear Transfer Items Modal */}
+      <ConfirmModal
+        isOpen={showClearTransferConfirm}
+        title={isUrdu ? "تمام اشیاء صاف کریں" : "Clear All Items"}
+        message={isUrdu ? "کیا آپ منتقلی کی تمام اشیاء کو صاف کرنا چاہتے ہیں؟" : "Are you sure you want to clear all items from this transfer?"}
+        confirmLabel={isUrdu ? "صاف کریں" : "Clear Items"}
+        onConfirm={() => {
+          setShowClearTransferConfirm(false);
+          setTransferForm((prev) => ({ ...prev, items: [] }));
+          setTransferAwaitingPhoneModel(null);
+        }}
+        onCancel={() => setShowClearTransferConfirm(false)}
+        variant="danger"
       />
     </div>
   );

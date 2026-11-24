@@ -34,7 +34,7 @@ export function getWhatsAppReminderUrl({
 export function openWhatsAppReminder(params) {
   const url = getWhatsAppReminderUrl(params);
   if (!url) {
-    alert("Customer phone number is missing or invalid for WhatsApp.");
+    console.warn("Customer phone number is missing or invalid for WhatsApp.");
     return;
   }
   window.open(url, "_blank", "noopener,noreferrer");

@@ -8,6 +8,8 @@ import { RightsManagementUI } from "../components/RightsManagementUI.jsx";
 import { smoothScrollTo } from "../utils/scroll.js";
 import { PartnerDepositModal, PartnerLedgerModal } from "../components/PartnerTransactionModal.jsx";
 import { PartnerVoucherModal } from "../components/PartnerVoucherModal.jsx";
+import { ConfirmModal } from "../components/ConfirmModal.jsx";
+import { formatRoleName } from "../utils/roles.js";
 
 const permissionMatrix = [
   { pageKey: "dashboard", label: "Dashboard", actions: ["view"] },
@@ -133,7 +135,7 @@ export function AdminPage({ context, activeSubPage = "branches", onNavigateSubPa
 
   // Branch Edit & Delete States
   const [editingBranch, setEditingBranch] = useState(null);
-  const [branchEditForm, setBranchEditForm] = useState({ name: "", code: "", address: "" });
+  const [branchEditForm, setBranchEditForm] = useState({ name: "", code: "", address: "", phone: "" });
   const [deletingBranch, setDeletingBranch] = useState(null);
   const [isDeletingBranch, setIsDeletingBranch] = useState(false);
 
@@ -170,8 +172,9 @@ export function AdminPage({ context, activeSubPage = "branches", onNavigateSubPa
   // Company Role Permissions State
   const [rolePermissionsData, setRolePermissionsData] = useState(null);
   const [selectedRoleForEdit, setSelectedRoleForEdit] = useState("manager");
-  const [roleDeniedPermissions, setRoleDeniedPermissions] = useState({ manager: new Set(), cashier: new Set() });
+  const [roleDeniedPermissions, setRoleDeniedPermissions] = useState({ manager: new Set(), cashier: new Set(), technician: new Set() });
   const [isSavingRolePerms, setIsSavingRolePerms] = useState(false);
+  const [statusToggleTarget, setStatusToggleTarget] = useState(null);
 
   // Forms
   const [businessForm, setBusinessForm] = useState({
@@ -184,7 +187,7 @@ export function AdminPage({ context, activeSubPage = "branches", onNavigateSubPa
     adminPassword: "",
     planId: 1
   });
-  const [branchForm, setBranchForm] = useState({ name: "", code: "", address: "" });
+  const [branchForm, setBranchForm] = useState({ name: "", code: "", address: "", phone: "" });
   const [userForm, setUserForm] = useState({
     fullName: "",
     email: "",
@@ -362,7 +365,11 @@ export function AdminPage({ context, activeSubPage = "branches", onNavigateSubPa
           for (const p of rp.roles.cashier || []) {
             if (!p.isAllowed) cashierDenied.add(permissionKey(p.pageKey, p.actionKey));
           }
-          setRoleDeniedPermissions({ manager: managerDenied, cashier: cashierDenied });
+          const technicianDenied = new Set();
+          for (const p of rp.roles.technician || []) {
+            if (!p.isAllowed) technicianDenied.add(permissionKey(p.pageKey, p.actionKey));
+          }
+          setRoleDeniedPermissions({ manager: managerDenied, cashier: cashierDenied, technician: technicianDenied });
         }
       } catch (err) {
         console.error("Failed to load business role permissions", err);
@@ -389,6 +396,20 @@ export function AdminPage({ context, activeSubPage = "branches", onNavigateSubPa
       context.refreshAll();
     }
   }
+
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (e.key === "Escape") {
+        if (deletingBranch) setDeletingBranch(null);
+        if (deletingUser) setDeletingUser(null);
+        if (statusToggleTarget) setStatusToggleTarget(null);
+        if (editingUser) setEditingUser(null);
+        if (editingPartner) setEditingPartner(null);
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [deletingBranch, deletingUser, statusToggleTarget, editingUser, editingPartner]);
 
   function toggleRolePermission(roleName, pageKey, actionKey) {
     const key = permissionKey(pageKey, actionKey);
@@ -638,7 +659,7 @@ export function AdminPage({ context, activeSubPage = "branches", onNavigateSubPa
         email: userForm.email.trim(),
         branchId: userForm.branchId ? Number(userForm.branchId) : null
       });
-      setMessage(`Staff user ${created.full_name} (${created.role_name}) created`);
+      setMessage(`Staff user ${created.full_name} (${formatRoleName(created.role_name)}) created successfully.`);
       setUserForm({ fullName: "", email: "", password: "", roleName: "cashier", branchId: "" });
       await refreshAdminData();
     } catch (saveError) {
@@ -651,7 +672,8 @@ export function AdminPage({ context, activeSubPage = "branches", onNavigateSubPa
     setBranchEditForm({
       name: b.name || "",
       code: b.code || "",
-      address: b.address || ""
+      address: b.address || "",
+      phone: b.phone || ""
     });
     setError("");
     setMessage("");
@@ -665,7 +687,8 @@ export function AdminPage({ context, activeSubPage = "branches", onNavigateSubPa
     try {
       await api.updateBranch(editingBranch.id, {
         name: branchEditForm.name.trim(),
-        address: branchEditForm.address.trim()
+        address: branchEditForm.address.trim(),
+        phone: branchEditForm.phone ? branchEditForm.phone.trim() : null
       });
       setMessage(`Branch '${branchEditForm.name}' updated successfully.`);
       setEditingBranch(null);
@@ -1198,6 +1221,15 @@ export function AdminPage({ context, activeSubPage = "branches", onNavigateSubPa
                   onChange={(e) => setBranchForm({ ...branchForm, address: e.target.value })}
                 />
               </label>
+              <label className="full-span">
+                Branch Phone
+                <input
+                  placeholder="e.g. +92 42 1234567"
+                  value={branchForm.phone || ""}
+                  disabled={isBranchLimitReached}
+                  onChange={(e) => setBranchForm({ ...branchForm, phone: e.target.value })}
+                />
+              </label>
               <div className="full-span row-actions">
                 <button
                   type="submit"
@@ -1404,6 +1436,7 @@ export function AdminPage({ context, activeSubPage = "branches", onNavigateSubPa
                   >
                     <option value="cashier">Cashier</option>
                     <option value="manager">Branch Manager</option>
+                    <option value="technician">Technician</option>
                   </select>
                 </label>
                 <label>
@@ -1459,7 +1492,8 @@ export function AdminPage({ context, activeSubPage = "branches", onNavigateSubPa
                 return (
                   (u.full_name && u.full_name.toLowerCase().includes(q)) ||
                   (u.email && u.email.toLowerCase().includes(q)) ||
-                  (u.role_name && u.role_name.toLowerCase().includes(q))
+                  (u.role_name && u.role_name.toLowerCase().includes(q)) ||
+                  (formatRoleName(u.role_name).toLowerCase().includes(q))
                 );
               });
               const totalPages = Math.max(1, Math.ceil(filtered.length / staffPageSize));
@@ -1499,8 +1533,8 @@ export function AdminPage({ context, activeSubPage = "branches", onNavigateSubPa
                                   <div className="muted">{user.email}</div>
                                 </td>
                                 <td>
-                                  <span className={`badge ${isSuperAdmin ? "primary" : "neutral"}`} style={{ textTransform: "capitalize" }}>
-                                    {isSuperAdmin ? "Company Admin" : user.role_name}
+                                  <span className={`badge ${isSuperAdmin ? "primary" : "neutral"}`}>
+                                    {formatRoleName(user.role_name)}
                                   </span>
                                 </td>
                                 <td>{branches.find((b) => b.id === user.branch_id)?.name || "All / Global"}</td>
@@ -1513,7 +1547,7 @@ export function AdminPage({ context, activeSubPage = "branches", onNavigateSubPa
                                     <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
                                       <ToggleSwitch
                                         checked={Boolean(user.is_active)}
-                                        onChange={() => toggleUserStatus(user)}
+                                        onChange={() => setStatusToggleTarget(user)}
                                         onLabel="Active"
                                         offLabel="Disabled"
                                         size="sm"
@@ -2492,6 +2526,14 @@ export function AdminPage({ context, activeSubPage = "branches", onNavigateSubPa
                     placeholder="Plaza, street, city..."
                   />
                 </label>
+                <label className="full-span">
+                  <span>Branch Phone</span>
+                  <input
+                    value={branchEditForm.phone || ""}
+                    onChange={(e) => setBranchEditForm({ ...branchEditForm, phone: e.target.value })}
+                    placeholder="e.g. +92 42 1234567"
+                  />
+                </label>
               </div>
               <div className="modal-footer">
                 <button type="button" className="secondary-btn" onClick={() => setEditingBranch(null)}>
@@ -2578,6 +2620,7 @@ export function AdminPage({ context, activeSubPage = "branches", onNavigateSubPa
                   >
                     <option value="cashier">Cashier</option>
                     <option value="manager">Branch Manager</option>
+                    <option value="technician">Technician</option>
                   </select>
                 </label>
                 <label>
@@ -2781,6 +2824,30 @@ export function AdminPage({ context, activeSubPage = "branches", onNavigateSubPa
           companyLogo={companyForm?.logoUrl || context?.companyLogo || context?.session?.business_logo || context?.session?.logo_url}
         />
       )}
+
+      {/* MODAL: CONFIRM STAFF STATUS TOGGLE */}
+      <ConfirmModal
+        isOpen={Boolean(statusToggleTarget)}
+        title={statusToggleTarget?.is_active ? "Confirm Staff Deactivation" : "Confirm Staff Activation"}
+        message={
+          statusToggleTarget ? (
+            <span>
+              Are you sure you want to {statusToggleTarget.is_active ? "deactivate" : "activate"} staff member{" "}
+              <strong>{statusToggleTarget.full_name}</strong> ({formatRoleName(statusToggleTarget.role_name)})?
+              {statusToggleTarget.is_active ? " They will not be able to log in until reactivated." : ""}
+            </span>
+          ) : null
+        }
+        confirmText={statusToggleTarget?.is_active ? "Yes, Deactivate" : "Yes, Activate"}
+        cancelText="Cancel"
+        isDanger={Boolean(statusToggleTarget?.is_active)}
+        onConfirm={async () => {
+          const target = statusToggleTarget;
+          setStatusToggleTarget(null);
+          if (target) await toggleUserStatus(target);
+        }}
+        onCancel={() => setStatusToggleTarget(null)}
+      />
     </div>
   );
 }

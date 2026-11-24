@@ -266,7 +266,7 @@ export function RightsManagementUI({
     try {
       setIsLoading(true);
       let sourceRights = {};
-      if (["manager", "cashier", "admin"].includes(copySource)) {
+      if (["manager", "cashier", "technician", "admin"].includes(copySource)) {
         sourceRights = await getRights("role", copySource);
       } else {
         sourceRights = await getRights("user", copySource);
@@ -337,6 +337,7 @@ export function RightsManagementUI({
     if (targetType === "role") {
       if (targetId === "manager") return "Store Manager (All Outlets)";
       if (targetId === "cashier") return "Cashier / Front-Desk Staff";
+      if (targetId === "technician") return "Technician (Repairs & Spares)";
       return targetId.toUpperCase() + " Role";
     }
     const found = userList.find((u) => String(u.id) === String(targetId));
@@ -428,6 +429,7 @@ export function RightsManagementUI({
                 >
                   <option value="manager">👔 Branch Manager</option>
                   <option value="cashier">🏷️ Cashier</option>
+                  <option value="technician">🔧 Technician</option>
                 </select>
               ) : (
                 <select
@@ -1733,6 +1735,7 @@ export function RightsManagementUI({
                 <optgroup label="Standard Role Templates">
                   <option value="manager">👔 Branch Manager Default Rights</option>
                   <option value="cashier">🏷️ Cashier Default Rights</option>
+                  <option value="technician">🔧 Technician Default Rights</option>
                 </optgroup>
                 {userList.length > 0 && (
                   <optgroup label="Staff Accounts">

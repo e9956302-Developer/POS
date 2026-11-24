@@ -99,7 +99,7 @@ branchesRouter.post(
       throw error;
     }
 
-    const { name, code, address } = req.body;
+    const { name, code, address, phone } = req.body;
     if (!name || !name.trim()) {
       throw badRequest("Branch name is required");
     }
@@ -142,7 +142,7 @@ branchesRouter.post(
 
       // Fetch company's active subscription plan
       const [subs] = await connection.execute(
-        `SELECT sp.id, sp.name, sp.max_branches
+        `SELECT sp.id, sp.name, sp.max_branches, bs.status AS sub_status, bs.subscription_starts_on, bs.current_period_ends_on, bs.trial_ends_on, bs.grace_ends_on
          FROM branch_subscriptions bs
          JOIN subscription_plans sp ON sp.id = bs.plan_id
          WHERE bs.business_id = ?
@@ -164,21 +164,27 @@ branchesRouter.post(
       }
 
       const [branchResult] = await connection.execute(
-        `INSERT INTO branches (business_id, name, code, address) VALUES (?, ?, ?, ?)`,
-        [req.user.business_id, name.trim(), cleanCode, address || null]
+        `INSERT INTO branches (business_id, name, code, address, phone) VALUES (?, ?, ?, ?, ?)`,
+        [req.user.business_id, name.trim(), cleanCode, address || null, phone || null]
       );
 
       const branchId = branchResult.insertId;
-      const planId = activePlan?.id || 1;
 
-      await connection.execute(
-        `INSERT INTO branch_subscriptions
-         (business_id, branch_id, plan_id, status, trial_ends_on, grace_ends_on)
-         SELECT ?, ?, sp.id, 'trialing', DATE_ADD(CURDATE(), INTERVAL sp.trial_days DAY), DATE_ADD(CURDATE(), INTERVAL (sp.trial_days + sp.grace_days) DAY)
-         FROM subscription_plans sp
-         WHERE sp.id = ? AND sp.is_active = 1`,
-        [req.user.business_id, branchId, planId]
-      );
+      if (activePlan && activePlan.sub_status === "active" && activePlan.current_period_ends_on) {
+        await connection.execute(
+          `INSERT INTO branch_subscriptions
+           (business_id, branch_id, plan_id, status, subscription_starts_on, current_period_ends_on, grace_ends_on)
+           VALUES (?, ?, ?, 'active', CURDATE(), ?, ?)`,
+          [req.user.business_id, branchId, activePlan.id, activePlan.current_period_ends_on, activePlan.grace_ends_on || null]
+        );
+      } else if (activePlan && activePlan.sub_status === "trialing" && activePlan.trial_ends_on) {
+        await connection.execute(
+          `INSERT INTO branch_subscriptions
+           (business_id, branch_id, plan_id, status, trial_ends_on, grace_ends_on)
+           VALUES (?, ?, ?, 'trialing', ?, ?)`,
+          [req.user.business_id, branchId, activePlan.id, activePlan.trial_ends_on, activePlan.grace_ends_on || null]
+        );
+      }
 
       return branchId;
     });
@@ -192,7 +198,7 @@ branchesRouter.put(
   "/:id",
   requirePermission("branches", "edit"),
   asyncHandler(async (req, res) => {
-    const { name, code, address } = req.body;
+    const { name, code, address, phone } = req.body;
     if (!name || !name.trim()) {
       throw badRequest("Branch name is required");
     }
@@ -216,8 +222,8 @@ branchesRouter.put(
     }
 
     // Branch code is immutable once added to protect transactions, invoices, and stock integrity
-    const updates = ["name = :name", "address = :address"];
-    const params = { id: req.params.id, name: name.trim(), address: address || null };
+    const updates = ["name = :name", "address = :address", "phone = :phone"];
+    const params = { id: req.params.id, name: name.trim(), address: address || null, phone: phone || null };
 
     await query(`UPDATE branches SET ${updates.join(", ")} WHERE id = :id`, params);
 

@@ -3,7 +3,8 @@ INSERT IGNORE INTO roles (id, name) VALUES
   (2, 'business_super_admin'),
   (3, 'manager'),
   (4, 'cashier'),
-  (5, 'admin');
+  (5, 'admin'),
+  (6, 'technician');
 
 INSERT IGNORE INTO businesses (id, name, code, is_active) VALUES
   (1, 'Demo Mobile Shop', 'DEMO', 1);
