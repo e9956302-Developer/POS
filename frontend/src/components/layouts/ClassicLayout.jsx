@@ -46,6 +46,7 @@ export function ClassicLayout({
   const { isRtl, t } = useLanguage();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [reportMenuOpen, setReportMenuOpen] = useState(false);
   const [manuallyClosedGroups, setManuallyClosedGroups] = useState({});
 
   useEffect(() => {

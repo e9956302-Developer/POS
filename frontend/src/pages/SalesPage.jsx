@@ -1466,6 +1466,12 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
                   } else {
                     addProductToCart(item.rawItem, item.quantity);
                   }
+                  setTimeout(() => {
+                    if (scannerInputRef?.current && typeof scannerInputRef.current.focus === "function") {
+                      scannerInputRef.current.focus();
+                      try { scannerInputRef.current.select?.(); } catch {}
+                    }
+                  }, 50);
                 }}
                 branchId={form.branchId}
                 currentBranchName={currentBranchName}
@@ -1486,7 +1492,6 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
                   className="pos-scanner-bar"
                 >
                   <input
-                    ref={scannerInputRef}
                     value={universalScanInput}
                     onChange={handleInputChange}
                     readOnly

@@ -1443,6 +1443,12 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
                     } else {
                       addProductToCart(item.rawItem, item.unitCost, item.quantity);
                     }
+                    setTimeout(() => {
+                      if (scannerInputRef?.current && typeof scannerInputRef.current.focus === "function") {
+                        scannerInputRef.current.focus();
+                        try { scannerInputRef.current.select?.(); } catch {}
+                      }
+                    }, 50);
                   }}
                   branchId={form.branchId}
                   isUrdu={isUrdu}
@@ -1453,7 +1459,7 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
                   disabled={!canCreate}
                 />
                 <div style={{ display: "none" }} aria-hidden="true">
-                  <input ref={scannerInputRef} value={universalScanInput} onChange={handleInputChange} readOnly />
+                  <input value={universalScanInput} onChange={handleInputChange} readOnly />
                   <button type="button" onClick={handleAddAction}>
                     {isUrdu ? "شامل کریں" : "Add"}
                   </button>

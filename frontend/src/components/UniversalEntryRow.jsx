@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { IMEI_MIN_LENGTH, IMEI_MAX_LENGTH, isImeiFormat } from "../utils/imei.js";
 import { stripTrailingZeros } from "../utils/numberFormat.js";
 
@@ -62,6 +62,26 @@ export function UniversalEntryRow({
   const addBtnRef = addButtonRef;
   const containerRef = comboboxContainerRef;
 
+  const focusScanField = useCallback(() => {
+    const el = internalScannerInputRef.current || (transferScannerInputRef && transferScannerInputRef.current) || (scanFieldRef && scanFieldRef.current);
+    if (el && typeof el.focus === "function") {
+      try {
+        el.focus();
+        el.select?.();
+      } catch (err) {}
+    }
+  }, [transferScannerInputRef, scanFieldRef]);
+
+  // Keep references synchronized to active visible input DOM element
+  useEffect(() => {
+    if (transferScannerInputRef?.current) {
+      internalScannerInputRef.current = transferScannerInputRef.current;
+      if (propScannerInputRef && typeof propScannerInputRef === "object") {
+        propScannerInputRef.current = transferScannerInputRef.current;
+      }
+    }
+  });
+
   // Component States
   const [scanInput, setScanInput] = useState("");
   const [dropdownQuery, setDropdownQuery] = useState("");
@@ -99,6 +119,23 @@ export function UniversalEntryRow({
   function clearError() {
     setInlineError("");
     if (onClearExternalInlineError) onClearExternalInlineError();
+  }
+
+  // Helper to directly add a line item (used when scanning in purchase or sale mode)
+  function handleDirectAdd(itemToAdd) {
+    if (onAddItem) {
+      onAddItem(itemToAdd);
+    }
+    setSelectedEntryItem(null);
+    setPurchaseRate("");
+    setEntryQuantity("1");
+    setScanInput("");
+    setDropdownQuery("");
+    setAwaitingPhoneModel(null);
+    clearError();
+    setTimeout(() => {
+      scanFieldRef.current?.focus();
+    }, 50);
   }
 
   // Highlight matching substring in dropdown row
@@ -381,32 +418,19 @@ export function UniversalEntryRow({
         }
 
         const rawCost = awaitingPhoneModel.costPrice || awaitingPhoneModel.unitCost || "";
-        const defaultRate = rawCost !== "" ? stripTrailingZeros(rawCost) : "";
+        const defaultRate = rawCost !== "" ? Number(stripTrailingZeros(rawCost)) : 0;
 
-        setSelectedEntryItem({
+        handleDirectAdd({
           itemType: "handset",
           modelId: awaitingPhoneModel.id || awaitingPhoneModel.modelId,
           name: awaitingPhoneModel.name,
+          modelTitle: awaitingPhoneModel.name,
           imei: imeiCandidate,
           quantity: 1,
-          purchaseRate: defaultRate,
-          salePrice: awaitingPhoneModel.salePrice || 0,
+          unitCost: defaultRate,
+          unitPrice: awaitingPhoneModel.salePrice || 0,
           rawItem: awaitingPhoneModel.rawItem || awaitingPhoneModel
         });
-        setPurchaseRate(String(defaultRate));
-        setEntryQuantity("1");
-        setAwaitingPhoneModel(null);
-        setScanInput("");
-        setDropdownQuery("");
-        clearError();
-
-        // Focus jumps to Quantity (locked at 1, highlighted)
-        setTimeout(() => {
-          if (qtyFieldRef.current) {
-            qtyFieldRef.current.focus();
-            qtyFieldRef.current.select?.();
-          }
-        }, 50);
         return;
       } else if (mode === "sale") {
         // Sale: must be in stock at this branch
@@ -445,27 +469,17 @@ export function UniversalEntryRow({
           `${unit.company || ""} ${unit.model_name || ""}${unit.variant ? ` (${unit.variant})` : ""}${unit.storage ? ` • ${unit.storage}` : ""}${unit.color ? ` • ${unit.color}` : ""}`.trim() ||
           awaitingPhoneModel.name;
 
-        setSelectedEntryItem({
+        handleDirectAdd({
           itemType: "handset",
           modelId: unit.model_id || awaitingPhoneModel.id,
           name: phoneDisplayName,
+          modelTitle: phoneDisplayName,
           imei: unit.imei,
           quantity: 1,
-          salePrice: unit.sale_price || awaitingPhoneModel.salePrice || 0,
+          unitCost: unit.cost_price,
+          unitPrice: unit.sale_price || awaitingPhoneModel.salePrice || 0,
           rawItem: unit
         });
-        setEntryQuantity("1");
-        setAwaitingPhoneModel(null);
-        setScanInput("");
-        setDropdownQuery("");
-        clearError();
-
-        setTimeout(() => {
-          if (qtyFieldRef.current) {
-            qtyFieldRef.current.focus();
-            qtyFieldRef.current.select?.();
-          }
-        }, 50);
         return;
       } else {
         // Transfer mode: source branch unit stock check
@@ -598,30 +612,19 @@ export function UniversalEntryRow({
             matchedModel.model_name ||
             "Phone Model";
           const rawCost = matchedModel.cost_price ?? matchedModel.unit_cost ?? "";
-          const defaultRate = rawCost !== "" ? stripTrailingZeros(rawCost) : "";
+          const defaultRate = rawCost !== "" ? Number(stripTrailingZeros(rawCost)) : 0;
 
-          setSelectedEntryItem({
+          handleDirectAdd({
             itemType: "handset",
             modelId: matchedModel.id,
             name: fullName,
+            modelTitle: fullName,
             imei: imeiCandidate,
             quantity: 1,
-            purchaseRate: defaultRate,
-            salePrice: matchedModel.sale_price || 0,
+            unitCost: defaultRate,
+            unitPrice: matchedModel.sale_price || 0,
             rawItem: matchedModel
           });
-          setPurchaseRate(String(defaultRate));
-          setEntryQuantity("1");
-          setScanInput("");
-          setDropdownQuery("");
-          clearError();
-
-          setTimeout(() => {
-            if (qtyFieldRef.current) {
-              qtyFieldRef.current.focus();
-              qtyFieldRef.current.select?.();
-            }
-          }, 50);
           return;
         } else {
           // Scanned raw IMEI without model: show "No product found for this code", keep text & focus
@@ -664,26 +667,17 @@ export function UniversalEntryRow({
           `${unit.company || ""} ${unit.model_name || ""}${unit.variant ? ` (${unit.variant})` : ""}${unit.storage ? ` • ${unit.storage}` : ""}${unit.color ? ` • ${unit.color}` : ""}`.trim() ||
           "Mobile Handset";
 
-        setSelectedEntryItem({
+        handleDirectAdd({
           itemType: "handset",
           modelId: unit.model_id,
           name: phoneDisplayName,
+          modelTitle: phoneDisplayName,
           imei: unit.imei,
           quantity: 1,
-          salePrice: unit.sale_price || 0,
+          unitCost: unit.cost_price,
+          unitPrice: unit.sale_price || 0,
           rawItem: unit
         });
-        setEntryQuantity("1");
-        setScanInput("");
-        setDropdownQuery("");
-        clearError();
-
-        setTimeout(() => {
-          if (qtyFieldRef.current) {
-            qtyFieldRef.current.focus();
-            qtyFieldRef.current.select?.();
-          }
-        }, 50);
         return;
       } else {
         // Transfer mode
@@ -762,8 +756,39 @@ export function UniversalEntryRow({
         return;
       }
 
+      if (mode === "sale") {
+        const existingIndex = (currentItems || []).findIndex(
+          (it) =>
+            (it.itemType === "product" || it.productId) &&
+            String(it.productId) === String(matchedProduct.id)
+        );
+        const existingQty = existingIndex >= 0 ? Number(currentItems[existingIndex].quantity || 0) : 0;
+        if (existingQty + 1 > stock) {
+          setInlineError(`${matchedProduct.name} — only ${stock} available at this branch`);
+          setTimeout(() => scanFieldRef.current?.focus(), 50);
+          return;
+        }
+      }
+
       const rawCost = matchedProduct.cost_price ?? matchedProduct.purchase_rate ?? matchedProduct.sale_price ?? "";
-      const defaultRate = rawCost !== "" ? stripTrailingZeros(rawCost) : "";
+      const defaultRate = rawCost !== "" ? Number(stripTrailingZeros(rawCost)) : 0;
+
+      if (mode === "purchase" || mode === "sale") {
+        handleDirectAdd({
+          itemType: "product",
+          productId: Number(matchedProduct.id),
+          productName: matchedProduct.name,
+          name: matchedProduct.name,
+          sku: matchedProduct.sku || "",
+          barcode: matchedProduct.barcode || "",
+          categoryName: matchedProduct.category_name || "Accessory",
+          quantity: 1,
+          unitCost: mode === "purchase" ? defaultRate : matchedProduct.cost_price,
+          unitPrice: matchedProduct.sale_price ?? matchedProduct.salePrice ?? 0,
+          rawItem: matchedProduct
+        });
+        return;
+      }
 
       setSelectedEntryItem({
         itemType: "product",
@@ -778,9 +803,6 @@ export function UniversalEntryRow({
         rawItem: matchedProduct
       });
       setEntryQuantity("1");
-      if (mode === "purchase") {
-        setPurchaseRate(String(defaultRate));
-      }
       setScanInput("");
       setDropdownQuery("");
       clearError();
@@ -808,8 +830,39 @@ export function UniversalEntryRow({
         return;
       }
 
+      if (mode === "sale") {
+        const existingIndex = (currentItems || []).findIndex(
+          (it) =>
+            (it.itemType === "product" || it.productId) &&
+            String(it.productId) === String(matchedByName.id)
+        );
+        const existingQty = existingIndex >= 0 ? Number(currentItems[existingIndex].quantity || 0) : 0;
+        if (existingQty + 1 > stock) {
+          setInlineError(`${matchedByName.name} — only ${stock} available at this branch`);
+          setTimeout(() => scanFieldRef.current?.focus(), 50);
+          return;
+        }
+      }
+
       const rawCost = matchedByName.cost_price ?? matchedByName.purchase_rate ?? matchedByName.sale_price ?? "";
-      const defaultRate = rawCost !== "" ? stripTrailingZeros(rawCost) : "";
+      const defaultRate = rawCost !== "" ? Number(stripTrailingZeros(rawCost)) : 0;
+
+      if (mode === "purchase" || mode === "sale") {
+        handleDirectAdd({
+          itemType: "product",
+          productId: Number(matchedByName.id),
+          productName: matchedByName.name,
+          name: matchedByName.name,
+          sku: matchedByName.sku || "",
+          barcode: matchedByName.barcode || "",
+          categoryName: matchedByName.category_name || "Accessory",
+          quantity: 1,
+          unitCost: mode === "purchase" ? defaultRate : matchedByName.cost_price,
+          unitPrice: matchedByName.sale_price ?? matchedByName.salePrice ?? 0,
+          rawItem: matchedByName
+        });
+        return;
+      }
 
       setSelectedEntryItem({
         itemType: "product",
@@ -824,9 +877,6 @@ export function UniversalEntryRow({
         rawItem: matchedByName
       });
       setEntryQuantity("1");
-      if (mode === "purchase") {
-        setPurchaseRate(String(defaultRate));
-      }
       setScanInput("");
       setDropdownQuery("");
       clearError();
@@ -973,6 +1023,11 @@ export function UniversalEntryRow({
       setDropdownQuery("");
       setAwaitingPhoneModel(null);
       clearError();
+      focusScanField();
+      requestAnimationFrame(focusScanField);
+      setTimeout(focusScanField, 20);
+      setTimeout(focusScanField, 50);
+      setTimeout(focusScanField, 100);
       setTimeout(() => scanFieldRef.current?.focus(), 50);
       return;
     }
@@ -1044,6 +1099,11 @@ export function UniversalEntryRow({
       setDropdownQuery("");
       setAwaitingPhoneModel(null);
       clearError();
+      focusScanField();
+      requestAnimationFrame(focusScanField);
+      setTimeout(focusScanField, 20);
+      setTimeout(focusScanField, 50);
+      setTimeout(focusScanField, 100);
       setTimeout(() => scanFieldRef.current?.focus(), 50);
     }
   }

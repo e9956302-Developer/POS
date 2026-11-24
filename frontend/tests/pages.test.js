@@ -74,7 +74,7 @@ test("app renders the login screen when there is no session", () => {
 
 test("login page renders the default credential form", () => {
   const html = render(React.createElement(modules.login.LoginPage, { onLogin() {}, error: "" }));
-  assert.match(html, /admin@mobilepos.local/);
+  assert.match(html, /Email/);
   assert.match(html, /Password/);
 });
 

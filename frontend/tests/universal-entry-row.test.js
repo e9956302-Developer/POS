@@ -72,16 +72,16 @@ test("P1: Purchase entry row fields [1..5] present in fixed order, Tab disabled,
   assert.match(dropdownSection, /transferScannerInputRef\.current(?:\?\.|\.)focus\(\)/, "Dropdown Left Arrow moves to Scan Field");
 });
 
-test("P2: Purchase scan jumps to Quantity (prefilled 1), Enter to Rate (prefilled/editable), Enter to Add, resets row and returns focus to Scan", () => {
+test("P2: Purchase scan directly adds item with 1 quantity, resets row and returns focus to Scan field", () => {
   const componentSource = fs.readFileSync(universalEntryRowPath, "utf8");
 
-  // Focus jumps to Quantity with prefilled 1 and highlighted select()
-  assert.match(componentSource, /qtyFieldRef\.current\.focus\(\);\s*qtyFieldRef\.current\.select\?\.\(\);/, "Scan jumps focus to Quantity and highlights text");
+  // Scan directly adds to list with quantity 1
+  assert.match(componentSource, /handleDirectAdd\(\{[\s\S]*?quantity:\s*1/, "Scan directly adds item with 1 quantity");
 
   // Rate prefilled from product defined cost/purchase rate
   assert.match(componentSource, /setPurchaseRate\(String\(defaultRate\)\)/, "Purchase rate prefilled from costPrice");
 
-  // Enter on Add button adds line, resets entry row, and returns focus to Scan Field
+  // Adds line, resets entry row, and returns focus to Scan Field
   assert.match(componentSource, /setSelectedEntryItem\(null\)/, "Resets selectedEntryItem on add");
   assert.match(componentSource, /setEntryQuantity\(["']1["']\)/, "Resets quantity to 1 on add");
   assert.match(componentSource, /setPurchaseRate\(["']["']\)/, "Resets purchase rate on add");
@@ -192,13 +192,13 @@ test("S1: Sale entry row fields [1..4] present in fixed order, Tab disabled, Ent
   assert.match(addSection, /qtyFieldRef\.current(?:\?\.|\.)focus\(\)/, "In sale mode, Add Button Left Arrow moves directly to Quantity");
 });
 
-test("S2: Sale scan jumps to Quantity (prefilled 1), Enter to Add, resets row and returns focus to Scan (deliberate rhythm)", () => {
+test("S2: Sale scan directly adds item with 1 quantity, resets row and returns focus to Scan field", () => {
   const componentSource = fs.readFileSync(universalEntryRowPath, "utf8");
 
-  // Scan does not instant-add; it jumps focus to Quantity with prefilled 1
-  assert.match(componentSource, /qtyFieldRef\.current\.focus\(\);\s*qtyFieldRef\.current\.select\?\.\(\);/, "Scan jumps focus to Quantity with text highlighted");
+  // Scan directly adds to list with quantity 1
+  assert.match(componentSource, /handleDirectAdd\(\{[\s\S]*?quantity:\s*1/, "Scan directly adds item with 1 quantity");
 
-  // Enter on Add button executes deliberate add and resets row
+  // Adds line, resets entry row, and returns focus to Scan Field
   assert.match(componentSource, /setSelectedEntryItem\(null\)/, "Resets item selection on add");
   assert.match(componentSource, /setEntryQuantity\(["']1["']\)/, "Resets quantity to 1 on add");
   assert.match(componentSource, /scanFieldRef\.current\?\.focus\(\)/, "Returns focus to scan field on add");
@@ -302,4 +302,30 @@ test("C1-C3: Single shared UniversalEntryRow component used across Purchases, Sa
 
   // 5. Errors always use product/model names, never internal IDs
   assert.doesNotMatch(componentSource, /product_id\s*#|model_id\s*#/, "No raw internal database IDs shown in error messages");
+});
+
+test("D1: Direct product scan in purchase or sale mode adds item directly with quantity 1 and resets scan field", () => {
+  const componentSource = fs.readFileSync(universalEntryRowPath, "utf8");
+
+  // In Flow 0 (awaitingPhoneModel), Flow 1 (QR/IMEI), Flow 2 (Barcode/SKU), Flow 3 (Product Name):
+  // Direct add with quantity: 1 is called in purchase and sale modes
+  assert.match(
+    componentSource,
+    /function handleDirectAdd\(itemToAdd\)\s*\{[\s\S]*?onAddItem\(itemToAdd\);[\s\S]*?setScanInput\(["']["']\);[\s\S]*?scanFieldRef\.current\?\.focus\(\);/,
+    "handleDirectAdd must call onAddItem, reset scan input, and refocus scanField"
+  );
+
+  // Flow 2 Barcode / SKU calls handleDirectAdd for purchase and sale
+  assert.match(
+    componentSource,
+    /if \(mode === ["']purchase["'] \|\| mode === ["']sale["']\)\s*\{\s*handleDirectAdd\(\{[\s\S]*?quantity:\s*1/,
+    "Barcode/SKU exact match directly adds with quantity 1 in purchase and sale modes"
+  );
+
+  // Flow 3 Product Name exact match calls handleDirectAdd for purchase and sale
+  assert.match(
+    componentSource,
+    /if \(mode === ["']purchase["'] \|\| mode === ["']sale["']\)\s*\{\s*handleDirectAdd\(\{[\s\S]*?quantity:\s*1/,
+    "Product Name exact match directly adds with quantity 1 in purchase and sale modes"
+  );
 });
