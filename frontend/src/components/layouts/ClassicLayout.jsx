@@ -45,27 +45,14 @@ export function ClassicLayout({
 }) {
   const { isRtl, t } = useLanguage();
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [purchaseMenuOpen, setPurchaseMenuOpen] = useState(false);
-  const [saleMenuOpen, setSaleMenuOpen] = useState(false);
-  const [inventoryMenuOpen, setInventoryMenuOpen] = useState(false);
-  const [partiesMenuOpen, setPartiesMenuOpen] = useState(false);
-  const [expensesMenuOpen, setExpensesMenuOpen] = useState(false);
-  const [adminMenuOpen, setAdminMenuOpen] = useState(false);
-  const [employeeMenuOpen, setEmployeeMenuOpen] = useState(false);
-  const [reportMenuOpen, setReportMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [manuallyClosedGroups, setManuallyClosedGroups] = useState({});
 
-  const isSalesPage = activeTab === "sales" || activeTab.startsWith("sales_");
+  useEffect(() => {
+    setManuallyClosedGroups({});
+  }, [activeTab]);
 
-  const isPurchaseActive = activeTab === "purchases" || activeTab.startsWith("purchases_");
-  const isSaleActive = activeTab === "sales" || activeTab.startsWith("sales_");
-  const isInventoryActive = activeTab === "inventory" || activeTab.startsWith("inventory_");
-  const isPartiesActive = activeTab === "parties" || activeTab.startsWith("parties_");
-  const isExpensesActive = activeTab === "expenses" || activeTab.startsWith("expenses_");
-  const isAdminActive = activeTab === "admin" || activeTab.startsWith("admin_");
-  const isEmployeeActive = activeTab === "employees" || activeTab.startsWith("employees_");
-  const isReportActive = activeTab === "reports" || activeTab.startsWith("reports_");
+  const isSalesPage = activeTab === "sales" || activeTab.startsWith("sales_");
 
   function toggleSidebar() {
     setIsCollapsed(!isCollapsed);
@@ -129,36 +116,15 @@ export function ClassicLayout({
             {tabs.map((tab) => {
               const isTabActive =
                 tab.key === activeTab ||
-                (tab.key === "purchases" && isPurchaseActive) ||
-                (tab.key === "sales" && isSaleActive) ||
-                (tab.key === "inventory" && isInventoryActive) ||
-                (tab.key === "parties" && isPartiesActive) ||
-                (tab.key === "expenses" && isExpensesActive) ||
-                (tab.key === "admin" && isAdminActive) ||
-                (tab.key === "employees" && isEmployeeActive) ||
-                (tab.key === "reports" && isReportActive);
+                activeTab.startsWith(`${tab.key}_`) ||
+                Boolean(tab.subItems?.some((s) => s.key === activeTab));
 
-              if (tab.subItems) {
-                const defaultSubKey =
-                  tab.key === "purchases"
-                    ? (tab.subItems?.[0]?.key || "purchases_new")
-                    : tab.key === "sales"
-                    ? (tab.subItems?.[0]?.key || "sales_new")
-                    : tab.key === "inventory"
-                    ? (tab.subItems?.[0]?.key || "inventory_imei")
-                    : tab.key === "parties"
-                    ? (tab.subItems?.[0]?.key || "parties_new")
-                    : tab.key === "expenses"
-                    ? (tab.subItems?.[0]?.key || "expenses_entry")
-                    : tab.key === "admin"
-                    ? (tab.subItems?.[0]?.key || "admin_branches")
-                    : tab.key === "employees"
-                    ? (tab.subItems?.[0]?.key || "employees_attendance")
-                    : (tab.subItems?.[0]?.key || "reports_pnl");
+              if (tab.subItems && tab.subItems.length > 0) {
+                const defaultSubKey = tab.subItems[0].key;
 
                 // Sub menu items are ONLY shown when related page is active, otherwise show main menu items only
-                const isManualClosed = manuallyClosedGroups[tab.key] ?? false;
-                const isGroupOpen = isTabActive && !isManualClosed;
+                const isManualClosed = Boolean(manuallyClosedGroups[tab.key]);
+                const isGroupOpen = Boolean(isTabActive && !isManualClosed);
 
                 return (
                   <div key={tab.key} className="nav-group">
@@ -174,7 +140,7 @@ export function ClassicLayout({
                             setIsCollapsed(false);
                           }
                           if (!isTabActive) {
-                            setManuallyClosedGroups((prev) => ({ ...prev, [tab.key]: false }));
+                            setManuallyClosedGroups({});
                             setActiveTab(defaultSubKey);
                             setMobileMenuOpen(false);
                           } else {
@@ -188,7 +154,7 @@ export function ClassicLayout({
                           setIsCollapsed(false);
                         }
                         if (!isTabActive) {
-                          setManuallyClosedGroups((prev) => ({ ...prev, [tab.key]: false }));
+                          setManuallyClosedGroups({});
                           setActiveTab(defaultSubKey);
                           setMobileMenuOpen(false);
                         } else {
@@ -251,6 +217,7 @@ export function ClassicLayout({
                   className={tab.key === activeTab ? "nav-item active" : "nav-item"}
                   onClick={() => {
                     setError("");
+                    setManuallyClosedGroups({});
                     setActiveTab(tab.key);
                     setMobileMenuOpen(false);
                   }}

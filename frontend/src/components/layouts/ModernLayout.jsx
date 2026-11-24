@@ -45,27 +45,14 @@ export function ModernLayout({
 }) {
   const { isRtl, t } = useLanguage();
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [openGroups, setOpenGroups] = useState({
-    purchases: false,
-    sales: false,
-    inventory: false,
-    parties: false,
-    expenses: false,
-    employees: false,
-    reports: false,
-    admin: false
-  });
   const [manuallyClosedGroups, setManuallyClosedGroups] = useState({});
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const isSalesPage = activeTab === "sales" || activeTab.startsWith("sales_");
+  useEffect(() => {
+    setManuallyClosedGroups({});
+  }, [activeTab]);
 
-  function toggleGroup(groupKey) {
-    setOpenGroups((prev) => ({
-      ...prev,
-      [groupKey]: !prev[groupKey]
-    }));
-  }
+  const isSalesPage = activeTab === "sales" || activeTab.startsWith("sales_");
 
   return (
     <div className={`modern-layout-root ${isCollapsed ? "sidebar-collapsed" : ""}`}>
@@ -111,9 +98,9 @@ export function ModernLayout({
                   activeTab.startsWith(`${tab.key}_`) ||
                   tab.subItems.some((s) => s.key === activeTab);
                 const defaultSubKey = tab.subItems[0].key;
-                const isManualClosed = manuallyClosedGroups[tab.key] ?? false;
+                const isManualClosed = Boolean(manuallyClosedGroups[tab.key]);
                 // Sub menu items are ONLY shown when related page is active, otherwise show main menu items only
-                const isGroupOpen = isGroupActive && !isManualClosed;
+                const isGroupOpen = Boolean(isGroupActive && !isManualClosed);
 
                 return (
                   <div key={tab.key} className={`modern-nav-group ${isGroupActive ? "group-active" : ""}`}>
@@ -129,7 +116,7 @@ export function ModernLayout({
                             setIsCollapsed(false);
                           }
                           if (!isGroupActive) {
-                            setManuallyClosedGroups((prev) => ({ ...prev, [tab.key]: false }));
+                            setManuallyClosedGroups({});
                             setActiveTab(defaultSubKey);
                             setMobileMenuOpen(false);
                           } else {
@@ -143,7 +130,7 @@ export function ModernLayout({
                           setIsCollapsed(false);
                         }
                         if (!isGroupActive) {
-                          setManuallyClosedGroups((prev) => ({ ...prev, [tab.key]: false }));
+                          setManuallyClosedGroups({});
                           setActiveTab(defaultSubKey);
                           setMobileMenuOpen(false);
                         } else {
@@ -205,6 +192,7 @@ export function ModernLayout({
                   className={`modern-nav-item ${tab.key === activeTab ? "active" : ""}`}
                   onClick={() => {
                     setError("");
+                    setManuallyClosedGroups({});
                     setActiveTab(tab.key);
                     setMobileMenuOpen(false);
                   }}

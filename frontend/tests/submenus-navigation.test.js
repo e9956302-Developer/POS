@@ -294,3 +294,68 @@ test("Side menu: sub-menu items are only shown when related page is active, othe
   }
 });
 
+test("Navigating from sub-menu page to another menu closes extended sub-menu and keeps inactive menus hidden", () => {
+  const user = { id: 1, role_name: "admin" };
+  const allTabs = modules.app.tabs;
+
+  for (const layoutName of ["classicLayout", "modernLayout", "executiveLayout"]) {
+    const LayoutComponent = modules[layoutName][Object.keys(modules[layoutName])[0]];
+
+    // Step 1: On a sub-menu page (e.g. 'inventory_transfers')
+    const htmlStep1 = render(React.createElement(LayoutComponent, {
+      session: user,
+      activeTab: "inventory_transfers",
+      tabs: allTabs,
+      pageBreadcrumb: { isNested: true, parent: "Inventory", current: "Inter-Branch Stock Transfers" },
+      THEMES: []
+    }));
+
+    // Inventory sub-menu is extended
+    assert.match(htmlStep1, /aria-expanded="true"[^>]*>[\s\S]*?Inventory/i);
+    assert.match(htmlStep1, /Inter-Branch Stock Transfers/);
+    // Other menus are collapsed / hidden normally
+    assert.match(htmlStep1, /aria-expanded="false"[^>]*>[\s\S]*?Expenses/i);
+    assert.match(htmlStep1, /aria-expanded="false"[^>]*>[\s\S]*?Parties/i);
+    assert.match(htmlStep1, /aria-expanded="false"[^>]*>[\s\S]*?Admin/i);
+    assert.doesNotMatch(htmlStep1, /Record Expense/);
+    assert.doesNotMatch(htmlStep1, /Party Master &amp; Registration/);
+
+    // Step 2: Navigate to another menu (e.g. 'invoices' - normal menu without sub-items)
+    const htmlStep2 = render(React.createElement(LayoutComponent, {
+      session: user,
+      activeTab: "invoices",
+      tabs: allTabs,
+      pageBreadcrumb: { isNested: false, current: "Invoices" },
+      THEMES: []
+    }));
+
+    // The previously extended inventory sub-menu is now CLOSED and hidden
+    assert.match(htmlStep2, /aria-expanded="false"[^>]*>[\s\S]*?Inventory/i);
+    assert.doesNotMatch(htmlStep2, /Inter-Branch Stock Transfers/);
+    assert.doesNotMatch(htmlStep2, /Handsets &amp; Serialized IMEIs/);
+    // Other menus remain hidden normally
+    assert.match(htmlStep2, /aria-expanded="false"[^>]*>[\s\S]*?Expenses/i);
+    assert.doesNotMatch(htmlStep2, /Record Expense/);
+
+    // Step 3: Navigate to another grouped menu (e.g. 'expenses_entry')
+    const htmlStep3 = render(React.createElement(LayoutComponent, {
+      session: user,
+      activeTab: "expenses_entry",
+      tabs: allTabs,
+      pageBreadcrumb: { isNested: true, parent: "Expenses", current: "Record Expense" },
+      THEMES: []
+    }));
+
+    // Previous inventory sub-menu is closed and hidden
+    assert.match(htmlStep3, /aria-expanded="false"[^>]*>[\s\S]*?Inventory/i);
+    assert.doesNotMatch(htmlStep3, /Inter-Branch Stock Transfers/);
+    // New expenses menu is extended
+    assert.match(htmlStep3, /aria-expanded="true"[^>]*>[\s\S]*?Expenses/i);
+    assert.match(htmlStep3, /Record Expense/);
+    // All other menus remain hidden normally
+    assert.match(htmlStep3, /aria-expanded="false"[^>]*>[\s\S]*?Parties/i);
+    assert.doesNotMatch(htmlStep3, /Party Master &amp; Registration/);
+  }
+});
+
+
