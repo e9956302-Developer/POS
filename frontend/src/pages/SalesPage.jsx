@@ -2525,7 +2525,7 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
 
       {/* RECEIPT MODAL (80MM THERMAL SLIP & A4 INVOICE) */}
       {receiptOrder && (
-        <div className="modal-backdrop" onClick={() => setReceiptOrder(null)}>
+        <div className="modal-backdrop printable-modal-backdrop" onClick={() => setReceiptOrder(null)}>
           <div className="modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "620px" }}>
             <div className="modal-header no-print">
               <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>

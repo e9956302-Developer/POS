@@ -958,8 +958,26 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
         setReceiptPurchase(fullPurchase);
         setLastSavedPurchase(fullPurchase);
       } catch {
-        setReceiptPurchase(saved);
-        setLastSavedPurchase(saved);
+        const fallbackPurchase = {
+          ...saved,
+          items: saved?.items?.length ? saved.items : (form.items || []).map((it) => ({
+            name: it.name || it.modelTitle || it.productName,
+            model_name: it.name || it.modelTitle,
+            product_name: it.productName || it.name,
+            company: it.rawItem?.company,
+            variant: it.rawItem?.variant,
+            storage: it.rawItem?.storage,
+            color: it.rawItem?.color,
+            imei: it.imei,
+            quantity: it.quantity || 1,
+            unit_cost: it.unitCost,
+            total: (it.unitCost || 0) * (it.quantity || 1)
+          })),
+          vendor_name: (availableVendors || []).find((v) => String(v.id) === String(form.vendorId))?.name || form.purchaserName || "Walk-in Supplier",
+          branch_name: currentBranchName
+        };
+        setReceiptPurchase(fallbackPurchase);
+        setLastSavedPurchase(fallbackPurchase);
       }
 
       setTimeout(() => {

@@ -8,11 +8,19 @@ export function PhoneQRTagModal({ isOpen, onClose, items = [], companyName = "Di
   if (!isOpen || !items || items.length === 0) return null;
 
   function handlePrint() {
+    if (typeof document !== "undefined") {
+      document.body.classList.add("printing-receipt");
+    }
     window.print();
+    setTimeout(() => {
+      if (typeof document !== "undefined") {
+        document.body.classList.remove("printing-receipt");
+      }
+    }, 1000);
   }
 
   return (
-    <div className="modal-overlay" style={{
+    <div className="modal-backdrop printable-modal-backdrop" style={{
       position: "fixed",
       top: 0,
       left: 0,
@@ -38,7 +46,7 @@ export function PhoneQRTagModal({ isOpen, onClose, items = [], companyName = "Di
         border: "1px solid var(--border)"
       }}>
         {/* Modal Header */}
-        <div style={{
+        <div className="modal-header no-print" style={{
           padding: "16px 24px",
           borderBottom: "1px solid var(--border)",
           display: "flex",
@@ -63,7 +71,7 @@ export function PhoneQRTagModal({ isOpen, onClose, items = [], companyName = "Di
         </div>
 
         {/* Modal Controls */}
-        <div style={{
+        <div className="no-print" style={{
           padding: "12px 24px",
           background: "var(--surface-strong)",
           display: "flex",

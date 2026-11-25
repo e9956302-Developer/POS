@@ -54,7 +54,8 @@ purchasesRouter.get(
   "/:id",
   asyncHandler(async (req, res) => {
     const [purchase] = await query(
-      `SELECT po.*, p.name AS vendor_name
+      `SELECT po.*, p.name AS vendor_name, p.phone AS vendor_phone, p.cnic AS vendor_cnic,
+              b.name AS branch_name, b.phone AS branch_phone
        FROM purchase_orders po
        JOIN branches b ON b.id = po.branch_id
        LEFT JOIN parties p ON p.id = po.vendor_id
@@ -361,8 +362,26 @@ purchasesRouter.post(
       return orderResult.insertId;
     });
 
-    const [saved] = await query(`SELECT * FROM purchase_orders WHERE id = :id`, { id: purchase });
-    res.status(201).json(saved);
+    const [saved] = await query(
+      `SELECT po.*, p.name AS vendor_name, p.phone AS vendor_phone, p.cnic AS vendor_cnic,
+              b.name AS branch_name, b.phone AS branch_phone
+       FROM purchase_orders po
+       JOIN branches b ON b.id = po.branch_id
+       LEFT JOIN parties p ON p.id = po.vendor_id
+       WHERE po.id = :id`,
+      { id: purchase }
+    );
+    const savedItems = await query(
+      `SELECT poi.*,
+              mm.company, mm.model_name, mm.variant, mm.color, mm.storage,
+              p.name AS product_name, p.sku AS product_sku
+       FROM purchase_order_items poi
+       LEFT JOIN mobile_models mm ON mm.id = poi.model_id
+       LEFT JOIN products p ON p.id = poi.product_id
+       WHERE poi.purchase_order_id = :id`,
+      { id: purchase }
+    );
+    res.status(201).json({ ...saved, items: savedItems });
   })
 );
 

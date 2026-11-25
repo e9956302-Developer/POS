@@ -11191,20 +11191,34 @@ tr.highlight-pulse > td {
   }
 }
 
-/* Print Isolation for POS Thermal Slips & Invoices */
+/* Print Isolation for POS Thermal Slips, Vouchers & Invoices */
 @media print {
-  body * {
+  body:has(.printable-modal-backdrop) *,
+  body.printing-receipt * {
     visibility: hidden !important;
   }
+
   .printable-receipt-container,
-  .printable-receipt-container * {
+  .printable-receipt-container *,
+  .printable-modal-backdrop,
+  .printable-modal-backdrop *:not(.no-print),
+  #printable-salary-voucher,
+  #printable-salary-voucher *,
+  #printable-partner-voucher,
+  #printable-partner-voucher *,
+  #printable-qr-tags,
+  #printable-qr-tags * {
     visibility: visible !important;
   }
+
   .printable-receipt-container {
     position: absolute !important;
     left: 0 !important;
     top: 0 !important;
     width: 100% !important;
+    max-height: none !important;
+    height: auto !important;
+    overflow: visible !important;
     margin: 0 !important;
     padding: 0 !important;
     background: #ffffff !important;

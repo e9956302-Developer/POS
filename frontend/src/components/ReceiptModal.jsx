@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLanguage } from "../context/LanguageContext.jsx";
 import { openWhatsAppReminder } from "../utils/whatsapp.js";
 
@@ -46,8 +46,31 @@ export function ReceiptModal({
   const storePhone = branchPhone || data.company_phone || data.companyPhone || data.business_phone || data.businessPhone || (typeof window !== "undefined" && window.__POS_COMPANY_PHONE__) || "";
   const currentDate = new Date().toISOString().slice(0, 10);
 
+  useEffect(() => {
+    function handleAfterPrint() {
+      if (typeof document !== "undefined") {
+        document.body.classList.remove("printing-receipt");
+      }
+    }
+    window.addEventListener("afterprint", handleAfterPrint);
+    return () => {
+      window.removeEventListener("afterprint", handleAfterPrint);
+      if (typeof document !== "undefined") {
+        document.body.classList.remove("printing-receipt");
+      }
+    };
+  }, []);
+
   function handlePrint() {
+    if (typeof document !== "undefined") {
+      document.body.classList.add("printing-receipt");
+    }
     window.print();
+    setTimeout(() => {
+      if (typeof document !== "undefined") {
+        document.body.classList.remove("printing-receipt");
+      }
+    }, 1000);
   }
 
   // Determine modal title & slip header based on flow type
@@ -89,9 +112,20 @@ export function ReceiptModal({
   // Extract items list
   const rawItems = Array.isArray(data.items) ? data.items : [];
   const items = rawItems.map((it) => {
-    const name = it.company
-      ? `${it.company} ${it.model_name || it.modelName || ""}`
-      : it.model_name || it.product_name || it.description || (isUrdu ? "پراڈکٹ / اشیاء" : "Item / Product");
+    let name = it.product_name || it.name;
+    if (it.company || it.model_name || it.modelName) {
+      const parts = [
+        it.company,
+        it.model_name || it.modelName,
+        it.variant ? `(${it.variant})` : "",
+        it.storage ? `• ${it.storage}` : "",
+        it.color ? `• ${it.color}` : ""
+      ].filter(Boolean);
+      name = parts.join(" ").trim();
+    }
+    if (!name) {
+      name = it.description || (isUrdu ? "پراڈکٹ / اشیاء" : "Item / Product");
+    }
     const qty = Number(it.quantity || 1);
     const rate = Number(it.refund_rate || it.unit_price || it.unit_cost || it.price || it.rate || 0);
     const amount = Number(it.refund_rate ? it.refund_rate * qty : (it.total || rate * qty));
@@ -120,13 +154,13 @@ export function ReceiptModal({
     : (isUrdu ? "گاہک" : "Customer");
   const partyName = data.customer_name || data.vendor_name || data.purchaser_name || data.party_name || (type === "purchase" ? "Walk-in Supplier" : "Walk-in Customer");
   const partyPhone = data.customer_phone || data.vendor_phone || data.phone || "";
-  const partyCnic = data.purchaser_cnic || data.cnic || "";
+  const partyCnic = data.purchaser_cnic || data.vendor_cnic || data.cnic || "";
 
   // Payment method
   const paymentMethodStr = String(data.payment_method || "CASH").toUpperCase();
 
   return (
-    <div className="modal-backdrop" onClick={onClose} style={{ zIndex: 9999 }}>
+    <div className="modal-backdrop printable-modal-backdrop" onClick={onClose} style={{ zIndex: 9999 }}>
       <div
         className="modal-dialog"
         onClick={(e) => e.stopPropagation()}
