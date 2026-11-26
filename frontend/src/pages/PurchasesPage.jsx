@@ -437,10 +437,17 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
   const balanceAmount = netAmount - paidVal;
   const todayStr = new Date().toISOString().slice(0, 10);
 
-  // Clear Due Date if Balance becomes 0
+  // Clear Due Date if Balance becomes 0, prefill today + 30 days when balance becomes > 0
   useEffect(() => {
-    if (balanceAmount <= 0 && form.dueDate) {
-      setForm((prev) => ({ ...prev, dueDate: "" }));
+    if (balanceAmount <= 0) {
+      if (form.dueDate) {
+        setForm((prev) => ({ ...prev, dueDate: "" }));
+      }
+    } else if (balanceAmount > 0 && !form.dueDate) {
+      const d = new Date();
+      d.setDate(d.getDate() + 30);
+      const plus30 = d.toISOString().slice(0, 10);
+      setForm((prev) => ({ ...prev, dueDate: plus30 }));
     }
   }, [balanceAmount, form.dueDate]);
 
@@ -1444,173 +1451,175 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
 
       {/* 1. MODERN 2-COLUMN PURCHASE INWARD LAYOUT */}
       {activeTab === "new" && (
-        <form onSubmit={handleSubmit} ref={formRef}>
-          <div className="pos-layout">
-            {/* LEFT COLUMN: SCANNER, INTAKE CONTROLS & LIVE PURCHASE CART */}
-            <div className="pos-main-column">
-              {/* ROW 1: Purchase info (Vendor, Purchase Date, Destination Outlet) */}
-              <div
-                className="pos-purchase-row-1"
-                style={{
-                  display: "flex",
-                  alignItems: "flex-end",
-                  gap: "0.5rem",
-                  flexWrap: "wrap",
-                  marginBottom: "0.5rem"
-                }}
-              >
-                {/* 1. Vendor info */}
-                <label style={{ flex: "1.5 1 200px", minWidth: 0, margin: 0 }}>
-                  <span className="muted small" style={{ display: "block", marginBottom: "0.2rem", fontSize: "0.8rem", fontWeight: "600" }}>
-                    {t("purchases.vendor_profile", "Vendor / Supplier")}
-                  </span>
-                  <SearchableSelect
-                    value={form.vendorId}
-                    onChange={handleVendorChange}
-                    placeholder={t("purchases.select_vendor", "Search vendor / supplier...")}
-                  >
-                    <option value="">{t("purchases.select_vendor", "Select vendor / walk in")}</option>
-                    {(vendorOptions || []).map((vendor) => (
-                      <option key={vendor.id} value={vendor.id}>
-                        {vendor.name} {vendor.phone ? `(${vendor.phone})` : ""}
-                      </option>
-                    ))}
-                  </SearchableSelect>
-                </label>
-
-                {/* Pack #15 rule: when no vendor is selected, Purchaser Name and CNIC appear */}
-                {!form.vendorId && (
-                  <>
-                    <label style={{ flex: "1.2 1 180px", minWidth: 0, margin: 0 }}>
-                      <span className="muted small" style={{ display: "block", marginBottom: "0.2rem", fontSize: "0.8rem", fontWeight: "600" }}>
-                        {t("purchases.purchaser_name_label", "Purchaser Name")} <span style={{ color: "var(--danger, #ef4444)" }}>*</span>
-                      </span>
-                      <input
-                        type="text"
-                        value={form.purchaserName}
-                        onChange={(event) => setForm({ ...form, purchaserName: event.target.value })}
-                        placeholder="e.g. Muhammad Ali"
-                        required
-                        style={{ width: "100%", padding: "0.4rem 0.6rem", fontSize: "0.88rem", borderRadius: "10px", border: "1px solid var(--border)", background: "var(--input-bg, var(--surface))", color: "var(--text)", boxSizing: "border-box", minHeight: "42px" }}
-                      />
-                      {purchaserNameError && (
-                        <span className="field-error" style={{ color: "var(--danger, #ef4444)", fontSize: "0.75rem", marginTop: "2px", display: "block" }}>
-                          {purchaserNameError}
-                        </span>
-                      )}
-                    </label>
-
-                    <label style={{ flex: "1.2 1 180px", minWidth: 0, margin: 0 }}>
-                      <span className="muted small" style={{ display: "block", marginBottom: "0.2rem", fontSize: "0.8rem", fontWeight: "600" }}>
-                        {t("purchases.purchaser_cnic_label", "Purchaser CNIC")} <span style={{ color: "var(--danger, #ef4444)" }}>*</span>
-                      </span>
-                      <input
-                        type="text"
-                        value={form.purchaserCnic}
-                        onChange={(event) => setForm({ ...form, purchaserCnic: formatCnic(event.target.value) })}
-                        placeholder="e.g. 42101-1234567-1"
-                        required
-                        style={{ width: "100%", padding: "0.4rem 0.6rem", fontSize: "0.88rem", borderRadius: "10px", border: "1px solid var(--border)", background: "var(--input-bg, var(--surface))", color: "var(--text)", boxSizing: "border-box", minHeight: "42px", direction: "ltr", unicodeBidi: "isolate" }}
-                      />
-                      {purchaserCnicError && (
-                        <span className="field-error" style={{ color: "var(--danger, #ef4444)", fontSize: "0.75rem", marginTop: "2px", display: "block" }}>
-                          {purchaserCnicError}
-                        </span>
-                      )}
-                    </label>
-                  </>
-                )}
-
-                {/* 2. Purchase Date */}
-                <label style={{ flex: "1 1 140px", minWidth: 0, margin: 0 }}>
-                  <span className="muted small" style={{ display: "block", marginBottom: "0.2rem", fontSize: "0.8rem", fontWeight: "600" }}>
-                    {t("purchases.purchase_date", "Purchase Date")} <span style={{ color: "var(--danger, #ef4444)" }}>*</span>
-                  </span>
-                  <input
-                    type="date"
-                    value={form.purchaseDate}
-                    onChange={(event) => setForm({ ...form, purchaseDate: event.target.value })}
-                    required
-                    style={{ width: "100%", padding: "0.4rem 0.6rem", fontSize: "0.88rem", borderRadius: "10px", border: "1px solid var(--border)", background: "var(--input-bg, var(--surface))", color: "var(--text)", boxSizing: "border-box", minHeight: "42px" }}
-                  />
-                </label>
-
-                {/* 3. Destination Outlet */}
-                <label style={{ flex: "1.2 1 170px", minWidth: 0, margin: 0 }}>
-                  <span className="muted small" style={{ display: "block", marginBottom: "0.2rem", fontSize: "0.8rem", fontWeight: "600" }}>
-                    {t("purchases.destination_outlet", "Destination Outlet")} <span style={{ color: "var(--danger, #ef4444)" }}>*</span>
-                  </span>
-                  <select
-                    ref={firstFieldRef}
-                    value={form.branchId}
-                    onChange={(event) => setForm({ ...form, branchId: event.target.value })}
-                    required
-                    style={{ width: "100%", padding: "0.4rem 0.6rem", borderRadius: "10px", fontSize: "0.88rem", border: "1px solid var(--border)", background: "var(--input-bg, var(--surface))", color: "var(--text)", boxSizing: "border-box", minHeight: "42px" }}
-                  >
-                    <option value="">{isUrdu ? "برانچ منتخب کریں" : "Select Branch"}</option>
-                    {(availableBranches || []).map((branch) => (
-                      <option key={branch.id} value={branch.id}>
-                        {branch.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+        <form onSubmit={handleSubmit} ref={formRef} className="pos-screen-layout purchase-counter-form">
+          {/* ROW 1: Vendor / Info Row (one single-line row, min-height 3rem) */}
+          <div className="pos-purchase-row-1 purchase-vendor-row">
+            {/* Supplier / Vendor Profile - flexes widest */}
+            <div className="vendor-row-item vendor-field-supplier">
+              <label htmlFor="purchase-vendor-select" className="vendor-row-label">
+                {t("purchases.vendor_profile", "Supplier")}:
+              </label>
+              <div className="vendor-row-input-wrap">
+                <SearchableSelect
+                  id="purchase-vendor-select"
+                  value={form.vendorId}
+                  onChange={handleVendorChange}
+                  placeholder={t("purchases.select_vendor", "Select vendor / walk in")}
+                >
+                  <option value="">{t("purchases.select_vendor", "Select vendor / walk in")}</option>
+                  {(vendorOptions || []).map((vendor) => (
+                    <option key={vendor.id} value={vendor.id}>
+                      {vendor.name} {vendor.phone ? `(${vendor.phone})` : ""}
+                    </option>
+                  ))}
+                </SearchableSelect>
               </div>
+            </div>
 
-              {/* ROW 2: Universal Entry Row Component */}
-              <div ref={comboboxContainerRef} className="pos-scanner-bar" style={{ width: "100%", marginBottom: "0.5rem" }}>
-                <UniversalEntryRow
-                  ref={scannerInputRef}
-                  onClick={handleAddAction}
-                  mode="purchase"
-                  availableProducts={availableProducts}
-                  availableModels={availableModels}
-                  currentItems={form.items}
-                  onAddItem={(item) => {
-                    if (item.itemType === "handset") {
-                      addPhoneToCart(item.rawItem, item.imei, item.unitCost);
-                    } else {
-                      addProductToCart(item.rawItem, item.unitCost, item.quantity);
-                    }
-                    setTimeout(() => {
-                      if (scannerInputRef?.current && typeof scannerInputRef.current.focus === "function") {
-                        scannerInputRef.current.focus();
-                        try { scannerInputRef.current.select?.(); } catch {}
-                      }
-                    }, 50);
-                  }}
-                  branchId={form.branchId}
-                  isUrdu={isUrdu}
-                  t={t}
-                  api={api}
-                  scannerInputRef={scannerInputRef}
-                  comboboxContainerRef={comboboxContainerRef}
-                  disabled={!canCreate}
-                />
-                <div style={{ display: "none" }} aria-hidden="true">
-                  <input value={universalScanInput} onChange={handleInputChange} readOnly />
-                  <button type="button" onClick={handleAddAction}>
-                    {isUrdu ? "شامل کریں" : "Add"}
-                  </button>
+            {/* Conditional Walk-In Purchaser Name & CNIC */}
+            {!form.vendorId && (
+              <>
+                <div className="vendor-row-item vendor-field-purchaser">
+                  <label htmlFor="purchase-purchaser-name" className="vendor-row-label">
+                    {t("purchases.purchaser_name_label", "Purchaser Name")}: <span style={{ color: "var(--danger, #ef4444)" }}>*</span>
+                  </label>
+                  <div className="vendor-row-input-wrap">
+                    <input
+                      id="purchase-purchaser-name"
+                      type="text"
+                      value={form.purchaserName}
+                      onChange={(event) => setForm({ ...form, purchaserName: event.target.value })}
+                      placeholder="e.g. Muhammad Ali"
+                      required
+                      className="vendor-row-input"
+                    />
+                    {purchaserNameError && (
+                      <span className="field-error" style={{ color: "var(--danger, #ef4444)", fontSize: "0.75rem", display: "block" }}>
+                        {purchaserNameError}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
 
-              {/* ROW 3: Quick-create buttons */}
-              <div
-                className="pos-purchase-row-3"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  marginBottom: "0.75rem",
-                  flexWrap: "wrap"
-                }}
-              >
+                <div className="vendor-row-item vendor-field-cnic">
+                  <label htmlFor="purchase-purchaser-cnic" className="vendor-row-label">
+                    {t("purchases.purchaser_cnic_label", "Purchaser CNIC")}: <span style={{ color: "var(--danger, #ef4444)" }}>*</span>
+                  </label>
+                  <div className="vendor-row-input-wrap">
+                    <input
+                      id="purchase-purchaser-cnic"
+                      type="text"
+                      value={form.purchaserCnic}
+                      onChange={(event) => setForm({ ...form, purchaserCnic: formatCnic(event.target.value) })}
+                      placeholder="e.g. 42101-1234567-1"
+                      required
+                      className="vendor-row-input"
+                      style={{ direction: "ltr", unicodeBidi: "isolate" }}
+                    />
+                    {purchaserCnicError && (
+                      <span className="field-error" style={{ color: "var(--danger, #ef4444)", fontSize: "0.75rem", display: "block" }}>
+                        {purchaserCnicError}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Purchase Date - compact clamp(8rem, 12%, 10rem) */}
+            <div className="vendor-row-item vendor-field-date">
+              <label htmlFor="purchase-date-input" className="vendor-row-label">
+                {t("purchases.purchase_date", "Date")}: <span style={{ color: "var(--danger, #ef4444)" }}>*</span>
+              </label>
+              <div className="vendor-row-input-wrap">
+                <input
+                  id="purchase-date-input"
+                  type="date"
+                  value={form.purchaseDate}
+                  onChange={(event) => setForm({ ...form, purchaseDate: event.target.value })}
+                  required
+                  className="vendor-row-input"
+                />
+              </div>
+            </div>
+
+            {/* Destination Outlet - clamp(10rem, 16%, 14rem) */}
+            <div className="vendor-row-item vendor-field-outlet">
+              <label htmlFor="purchase-outlet-select" className="vendor-row-label">
+                {t("purchases.destination_outlet", "Outlet")}: <span style={{ color: "var(--danger, #ef4444)" }}>*</span>
+              </label>
+              <div className="vendor-row-input-wrap">
+                <select
+                  id="purchase-outlet-select"
+                  ref={firstFieldRef}
+                  value={form.branchId}
+                  onChange={(event) => setForm({ ...form, branchId: event.target.value })}
+                  required
+                  className="vendor-row-input"
+                >
+                  <option value="">{isUrdu ? "برانچ منتخب کریں" : "Select Branch"}</option>
+                  {(availableBranches || []).map((branch) => (
+                    <option key={branch.id} value={branch.id}>
+                      {branch.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* ROW 2: Entry Row (one single-line row, min-height 3rem) */}
+          <div ref={comboboxContainerRef} className="pos-scanner-bar purchase-entry-container">
+            <UniversalEntryRow
+              ref={scannerInputRef}
+              onClick={handleAddAction}
+              mode="purchase"
+              availableProducts={availableProducts}
+              availableModels={availableModels}
+              currentItems={form.items}
+              stagedItem={stagedEntryItem}
+              onAddItem={(item) => {
+                if (item.itemType === "handset") {
+                  addPhoneToCart(item.rawItem, item.imei, item.unitCost);
+                } else {
+                  addProductToCart(item.rawItem, item.unitCost, item.quantity);
+                }
+                setStagedEntryItem(null);
+                focusUniversalScanField();
+              }}
+              branchId={form.branchId}
+              isUrdu={isUrdu}
+              t={t}
+              api={api}
+              scannerInputRef={scannerInputRef}
+              comboboxContainerRef={comboboxContainerRef}
+              disabled={!canCreate}
+            />
+            <div style={{ display: "none" }} aria-hidden="true">
+              <input value={universalScanInput} onChange={handleInputChange} readOnly />
+              <button type="button" onClick={handleAddAction}>
+                {isUrdu ? "شامل کریں" : "Add"}
+              </button>
+            </div>
+          </div>
+
+          {/* ROW 3: Added-Products List taking all remaining height */}
+          <div className="pos-cart-wrap purchase-cart-container">
+            {/* Panel Header (min-height 2rem): Counts on left, quick-add buttons on right */}
+            <div className="pos-cart-header purchase-cart-panel-header">
+              <div className="cart-header-left" style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                <span style={{ fontSize: "1rem" }}>📋</span>
+                <strong style={{ fontSize: "0.85rem" }}>{t("purchases.added_items_title", "Added Purchase Order Items")}</strong>
+                <span className="pos-item-badge product" style={{ marginInlineStart: "0.35rem", fontSize: "0.75rem", padding: "1px 7px" }}>
+                  {purchaseCounts.total} {isUrdu ? "اشیاء" : "items"} ({purchaseCounts.phones} {isUrdu ? "فونز" : "phones"}, {purchaseCounts.accessories} {isUrdu ? "سامان" : "accessories"})
+                </span>
+              </div>
+              <div className="cart-header-right" style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
                 <button
                   type="button"
                   className="secondary-btn btn-sm"
                   onClick={() => setShowQuickModelModal(true)}
-                  style={{ padding: "0.4rem 0.8rem", fontSize: "0.82rem", whiteSpace: "nowrap" }}
+                  style={{ padding: "0.25rem 0.6rem", fontSize: "0.78rem", whiteSpace: "nowrap" }}
                   title={isUrdu ? "نیا فون ماڈل شامل کریں" : "Quick add new phone model"}
                 >
                   📱 {isUrdu ? "نیا ماڈل شامل کریں" : "Quick Add New Model"}
@@ -1619,530 +1628,311 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
                   type="button"
                   className="secondary-btn btn-sm"
                   onClick={() => setShowQuickProductModal(true)}
-                  style={{ padding: "0.4rem 0.8rem", fontSize: "0.82rem", whiteSpace: "nowrap" }}
+                  style={{ padding: "0.25rem 0.6rem", fontSize: "0.78rem", whiteSpace: "nowrap" }}
                   title={isUrdu ? "نیا پروڈکٹ شامل کریں" : "Quick add new accessory/product"}
                 >
                   📦 {isUrdu ? "سامان شامل کریں" : "Add Product/Accessories"}
                 </button>
-              </div>
-
-              {/* Awaiting Phone Model IMEI Scan Banner */}
-              {awaitingPhoneModel && (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "0.65rem 0.95rem",
-                    marginBottom: "0.5rem",
-                    borderRadius: "8px",
-                    background: "rgba(56, 189, 248, 0.12)",
-                    border: "1px solid var(--primary)",
-                    color: "var(--text)",
-                    flexWrap: "wrap",
-                    gap: "0.5rem"
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.88rem", flexWrap: "wrap" }}>
-                    <span style={{ fontSize: "1.1rem" }}>📱</span>
-                    <span>
-                      {isUrdu ? "ماڈل منتخب:" : "Model Selected:"} <strong>{awaitingPhoneModel.name}</strong>
-                    </span>
-                    <span style={{ margin: "0 0.3rem", opacity: 0.5 }}>|</span>
-                    <label style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", margin: 0, fontWeight: "600" }}>
-                      <span>{isUrdu ? "خریداری لاگت (PKR):" : "Batch Cost (PKR):"}</span>
-                      <input
-                        type="number"
-                        step="any"
-                        min="0"
-                        value={awaitingPhoneModel.unitCost || phoneUnitCost}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setPhoneUnitCost(val);
-                          setAwaitingPhoneModel((prev) => ({ ...prev, unitCost: val }));
-                        }}
-                        placeholder="0"
-                        style={{
-                          width: "110px",
-                          padding: "0.25rem 0.5rem",
-                          fontSize: "0.85rem",
-                          borderRadius: "4px",
-                          border: "1px solid var(--border)",
-                          background: "var(--surface)",
-                          fontWeight: "700",
-                          color: "var(--primary)"
-                        }}
-                      />
-                    </label>
-                    <span style={{ margin: "0 0.3rem", opacity: 0.5 }}>|</span>
-                    <span style={{ color: "var(--primary)", fontWeight: 600 }}>
-                      {isUrdu ? "اب اس فون کا 15 ہندسوں کا IMEI بارکوڈ یا QR اسکین کریں" : "Now scan 15-digit IMEI barcode or QR tag"}
-                    </span>
-                  </div>
-
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                    <button
-                      type="button"
-                      className="ghost-btn btn-sm"
-                      onClick={() => setShowBulkPaste(!showBulkPaste)}
-                      style={{ color: "var(--primary)", fontSize: "0.8rem", padding: "2px 8px" }}
-                    >
-                      📋 {showBulkPaste ? (isUrdu ? "چھپائیں" : "Hide Bulk") : (isUrdu ? "بلک پیسٹ" : "Bulk Paste")}
-                    </button>
-                    <button
-                      type="button"
-                      className="ghost-btn btn-sm"
-                      onClick={() => {
-                        setAwaitingPhoneModel(null);
-                        setTimeout(() => scannerInputRef.current?.focus(), 50);
-                      }}
-                      style={{ padding: "2px 8px", fontSize: "0.8rem", color: "#ef4444" }}
-                    >
-                      ✕ {isUrdu ? "ماڈل تبدیل کریں" : "Change Model"}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Optional Bulk Paste Area when active */}
-              {awaitingPhoneModel && showBulkPaste && (
-                <div style={{ marginBottom: "0.75rem", padding: "0.75rem", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "8px" }}>
-                  <textarea
-                    rows={3}
-                    placeholder={t("purchases.bulk_paste_placeholder", "Paste multiple IMEIs from vendor delivery packing list (separated by newlines or commas)...")}
-                    value={bulkImeiText}
-                    onChange={(e) => setBulkImeiText(e.target.value)}
-                    style={{ fontFamily: "var(--font-mono, monospace)", fontSize: "0.85rem", direction: "ltr", width: "100%", marginBottom: "0.4rem" }}
-                  />
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span className="muted small">
-                      {t("purchases.bulk_tip", "Tip: Model and unit cost set above will be automatically applied to all pasted IMEIs.")}
-                    </span>
-                    <button
-                      type="button"
-                      className="primary-btn btn-sm"
-                      onClick={() => {
-                        setSelectedPhoneModelId(awaitingPhoneModel.modelId);
-                        handleAddBulkImeis();
-                      }}
-                      disabled={!bulkImeiText.trim()}
-                    >
-                      ➕ {t("purchases.add_all_pasted", "Add All Pasted IMEIs")}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* LIVE PURCHASE CART TABLE */}
-              <div className="pos-cart-wrap" style={{ marginTop: "1rem" }}>
-                <div className="pos-cart-header">
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                    <span style={{ fontSize: "1.1rem" }}>📋</span>
-                    <strong>{t("purchases.added_items_title", "Added Purchase Order Items")}</strong>
-                    <span className="pos-item-badge product" style={{ marginInlineStart: "0.25rem" }}>
-                      {purchaseCounts.total} {isUrdu ? "اشیاء" : "items"} ({purchaseCounts.phones} {isUrdu ? "فونز" : "phones"}, {purchaseCounts.accessories} {isUrdu ? "سامان" : "accessories"})
-                    </span>
-                  </div>
-                  {form.items.length > 0 && (
-                    <button
-                      type="button"
-                      className="ghost-btn btn-sm"
-                      onClick={() => setForm((prev) => ({ ...prev, items: [] }))}
-                      style={{ color: "var(--danger)" }}
-                    >
-                      🗑️ {t("purchases.clear_items", "Clear All Items")}
-                    </button>
-                  )}
-                </div>
-
-                {form.items.length === 0 ? (
-                  <div className="pos-cart-empty">
-                    <div className="pos-cart-empty-icon">📦</div>
-                    <h4 style={{ margin: "0 0 0.35rem 0" }}>{t("purchases.empty_title", "Purchase order is empty")}</h4>
-                    <p className="muted small" style={{ margin: 0 }}>
-                      {t("purchases.empty_desc", "Select a phone model and scan/paste IMEIs, or choose simple products above to add items to this inward order.")}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="table-wrap" style={{ margin: 0, border: "none", overflowX: "auto", width: "100%" }}>
-                    <table style={{ minWidth: "640px", width: "100%" }}>
-                      <thead>
-                        <tr>
-                          <th style={{ minWidth: "200px", whiteSpace: "nowrap" }}>{t("sales.table_item", "Item & Identification")}</th>
-                          <th style={{ width: "70px", minWidth: "70px", textAlign: "center", whiteSpace: "nowrap" }}>{t("sales.table_qty", "Qty")}</th>
-                          <th style={{ width: "130px", minWidth: "130px", textAlign: isRtl ? "left" : "right", whiteSpace: "nowrap" }}>{t("purchases.unit_cost", "Unit Cost (PKR)")}</th>
-                          <th style={{ width: "120px", minWidth: "120px", textAlign: isRtl ? "left" : "right", whiteSpace: "nowrap" }}>{t("sales.table_subtotal", "Subtotal")}</th>
-                          <th style={{ width: "80px", minWidth: "80px", textAlign: "center", whiteSpace: "nowrap" }}>{t("sales.table_remove", "Remove")}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {form.items.map((item, index) => {
-                          const isPhone = item.itemType === "handset" || item.imei;
-                          const qty = isPhone ? 1 : Number(item.quantity || 1);
-                          const rate = Number(item.unitCost || 0);
-                          const lineSubtotal = qty * rate;
-
-                          return (
-                            <tr key={`${item.imei || item.productId}-${index}`}>
-                              <td>
-                                <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-                                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                                    <span className={`pos-item-badge ${isPhone ? "phone" : "product"}`}>
-                                      {isPhone ? "📱 Handset" : "📦 Product"}
-                                    </span>
-                                    <strong>{item.modelTitle || item.productName || "Item"}</strong>
-                                  </div>
-                                  {isPhone ? (
-                                    <span
-                                      className="muted small"
-                                      style={{
-                                        fontFamily: "var(--font-mono, monospace)",
-                                        fontSize: "0.78rem",
-                                        letterSpacing: "0.5px"
-                                      }}
-                                    >
-                                      IMEI: <strong>{item.imei}</strong>
-                                    </span>
-                                  ) : (
-                                    <span className="muted small" style={{ fontSize: "0.75rem" }}>
-                                      {item.categoryName || "Accessory"}
-                                    </span>
-                                  )}
-                                </div>
-                              </td>
-
-                              <td style={{ textAlign: "center" }}>
-                                {isPhone ? (
-                                  <span className="muted" style={{ fontWeight: "700" }}>
-                                    1
-                                  </span>
-                                ) : (
-                                  <div className="pos-qty-stepper" style={{ display: "inline-flex" }}>
-                                    <button
-                                      type="button"
-                                      className="pos-qty-btn"
-                                      onClick={() => updatePurchaseItemQty(index, Math.max(1, (parseInt(item.quantity, 10) || 1) - 1))}
-                                      title="Decrease quantity"
-                                    >
-                                      -
-                                    </button>
-                                    <input
-                                      type="number"
-                                      min="1"
-                                      step="1"
-                                      className="pos-qty-input"
-                                      value={item.quantity === undefined ? 1 : item.quantity}
-                                      onChange={(e) => updatePurchaseItemQty(index, e.target.value)}
-                                      onBlur={() => {
-                                        const q = Math.max(1, parseInt(item.quantity, 10) || 1);
-                                        updatePurchaseItemQty(index, q);
-                                      }}
-                                      title="Enter quantity (keyboard enabled)"
-                                    />
-                                    <button
-                                      type="button"
-                                      className="pos-qty-btn"
-                                      onClick={() => updatePurchaseItemQty(index, (parseInt(item.quantity, 10) || 1) + 1)}
-                                      title="Increase quantity"
-                                    >
-                                      +
-                                    </button>
-                                  </div>
-                                )}
-                              </td>
-
-                              <td style={{ textAlign: "right" }}>
-                                <input
-                                  type="number"
-                                  step="any"
-                                  min="0"
-                                  value={item.unitCost}
-                                  onChange={(e) => updatePurchaseItemCost(index, e.target.value)}
-                                  onBlur={() => updatePurchaseItemCost(index, stripTrailingZeros(item.unitCost))}
-                                  style={{
-                                    width: "110px",
-                                    textAlign: "right",
-                                    padding: "0.3rem 0.5rem",
-                                    fontWeight: "600"
-                                  }}
-                                />
-                              </td>
-
-                              <td style={{ textAlign: "right", fontWeight: "700" }}>
-                                PKR {lineSubtotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                              </td>
-
-                              <td style={{ textAlign: "center" }}>
-                                <button
-                                  type="button"
-                                  className="ghost-btn"
-                                  onClick={() => removePurchaseItem(index)}
-                                  style={{ color: "var(--danger)", padding: "0.2rem 0.5rem" }}
-                                  title="Remove item"
-                                >
-                                  ✕
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                {form.items.length > 0 && (
+                  <button
+                    type="button"
+                    className="ghost-btn btn-sm"
+                    onClick={() => setForm((prev) => ({ ...prev, items: [] }))}
+                    style={{ color: "var(--danger)", padding: "0.25rem 0.5rem", fontSize: "0.78rem" }}
+                    title={isUrdu ? "تمام اشیاء ہٹائیں" : "Clear all items"}
+                  >
+                    🗑️
+                  </button>
                 )}
               </div>
             </div>
 
-            {/* RIGHT COLUMN: STICKY CHECKOUT & VENDOR SETTLEMENT SIDEBAR */}
-            <div className="pos-checkout-sidebar">
-              {/* Financial Totals & Payment Card */}
-              <div className="pos-checkout-card">
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.4rem" }}>
-                  <span className="muted">{t("sales.subtotal", "Subtotal")} ({purchaseCounts.total} items):</span>
-                  <strong style={{ direction: "ltr", unicodeBidi: "isolate" }}>PKR {subtotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</strong>
-                </div>
+            {/* Fixed-head, internally scrollable table */}
+            <div
+              className="purchase-cart-scroll-body"
+              tabIndex={0}
+              role="region"
+              aria-label="Purchased Items Table"
+              onKeyDown={(e) => {
+                if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  setFocusedRowIndex((prev) => Math.min((form.items?.length || 1) - 1, prev + 1));
+                } else if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setFocusedRowIndex((prev) => Math.max(0, prev - 1));
+                }
+              }}
+            >
+              <table className="purchase-products-table">
+                <thead>
+                  <tr>
+                    <th className="col-item">{t("sales.table_item", "Item & Identification")}</th>
+                    <th className="col-qty">{t("sales.table_qty", "Qty")}</th>
+                    <th className="col-rate">{t("purchases.unit_cost", "Purchase Rate")}</th>
+                    <th className="col-subtotal">{t("sales.table_subtotal", "Subtotal")}</th>
+                    <th className="col-remove">{t("sales.table_remove", "Remove")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {form.items.length === 0 ? (
+                    <tr className="empty-row">
+                      <td colSpan={5} className="empty-cell">
+                        {t("purchases.empty_desc", "Purchase order is empty — scan or add items above")}
+                      </td>
+                    </tr>
+                  ) : (
+                    form.items.map((item, index) => {
+                      const isPhone = item.itemType === "handset" || item.imei;
+                      const qty = isPhone ? 1 : Number(item.quantity || 1);
+                      const rate = Number(item.unitCost || 0);
+                      const lineSubtotal = qty * rate;
+                      const isRowFocused = index === focusedRowIndex;
 
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
-                  <span className="muted">{t("sales.discount", "Discount")} (PKR):</span>
-                  <input
-                    type="number"
-                    min="0"
-                    max={subtotal}
-                    step="any"
-                    value={form.discountAmount === 0 ? "" : form.discountAmount}
-                    onChange={(event) => setForm({ ...form, discountAmount: event.target.value })}
-                    placeholder="0"
-                    style={{ width: "95px", textAlign: "right", padding: "0.25rem 0.4rem", direction: "ltr", unicodeBidi: "isolate" }}
-                  />
-                </div>
-                {discountError && (
-                  <span className="field-error" style={{ color: "var(--danger, #ef4444)", fontSize: "0.78rem", display: "block", marginBottom: "0.3rem" }}>
-                    {discountError}
-                  </span>
-                )}
-
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
-                  <span className="muted">{t("sales.tax", "Tax")} (PKR):</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="any"
-                    value={form.taxAmount === 0 ? "" : form.taxAmount}
-                    onChange={(event) => setForm({ ...form, taxAmount: event.target.value })}
-                    placeholder="0"
-                    style={{ width: "95px", textAlign: "right", padding: "0.25rem 0.4rem", direction: "ltr", unicodeBidi: "isolate" }}
-                  />
-                </div>
-
-                {/* Grand Total Banner */}
-                <div className="pos-total-banner">
-                  <div>
-                    <span className="muted small" style={{ textTransform: "uppercase", fontWeight: "700" }}>{t("sales.total_payable", "Total Payable")}</span>
-                    <div className="pos-total-amount" style={{ direction: "ltr", unicodeBidi: "isolate" }}>
-                      PKR {netAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                    </div>
-                  </div>
-                  <div style={{ textAlign: isRtl ? "left" : "right" }}>
-                    <span className="pos-item-badge phone" style={{ fontSize: "0.78rem" }}>
-                      {purchaseCounts.phones} {language === "ur" ? "موبائل فون" : "Phones"}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Payment Method Pills */}
-                <label style={{ display: "block", marginBottom: "0.3rem" }}>
-                  <span style={{ fontSize: "0.82rem", fontWeight: "600" }}>{t("sales.payment_method", "Payment Method")}</span>
-                  <div className="pos-pill-group">
-                    <button
-                      type="button"
-                      className={`pos-pill-btn ${form.paymentMethod === "cash" ? "active" : ""}`}
-                      onClick={() => setForm({ ...form, paymentMethod: "cash" })}
-                    >
-                      💵 {t("sales.cash", "Cash")}
-                    </button>
-                    <button
-                      type="button"
-                      className={`pos-pill-btn ${form.paymentMethod === "bank_transfer" ? "active" : ""}`}
-                      onClick={() => setForm({ ...form, paymentMethod: "bank_transfer" })}
-                    >
-                      🏦 {t("sales.bank", "Bank")}
-                    </button>
-                    <button
-                      type="button"
-                      className={`pos-pill-btn ${form.paymentMethod === "mobile_wallet" ? "active" : ""}`}
-                      onClick={() => setForm({ ...form, paymentMethod: "mobile_wallet" })}
-                    >
-                      📱 {t("sales.wallet", "Wallet")}
-                    </button>
-                    <button
-                      type="button"
-                      className={`pos-pill-btn ${form.paymentMethod === "cheque" ? "active" : ""}`}
-                      onClick={() => setForm({ ...form, paymentMethod: "cheque" })}
-                    >
-                      📝 {t("sales.cheque", "Cheque")}
-                    </button>
-                  </div>
-                </label>
-
-                {/* Paid Amount */}
-                <label style={{ display: "block", marginTop: "0.6rem" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: "0.82rem", fontWeight: "600" }}>{t("purchases.amount_paid_to_vendor", "Amount Paid to Vendor (PKR)")}</span>
-                    {netAmount > 0 && (
-                      <button
-                        type="button"
-                        className="ghost-btn btn-sm"
-                        onClick={() => setForm((prev) => ({ ...prev, paidAmount: netAmount }))}
-                        style={{ padding: "0 4px", fontSize: "0.75rem", color: "var(--primary)" }}
-                        title="Set paid amount equal to net amount"
-                      >
-                        {t("purchases.paid_in_full", "Paid in Full")}
-                      </button>
-                    )}
-                  </div>
-                  <input
-                    type="number"
-                    min="0"
-                    max={netAmount >= 0 ? netAmount : undefined}
-                    step="any"
-                    value={form.paidAmount === 0 ? "" : form.paidAmount}
-                    onChange={(event) => setForm({ ...form, paidAmount: event.target.value })}
-                    placeholder={`Exact: ${netAmount}`}
-                    style={{ width: "100%", padding: "0.55rem 0.75rem", fontSize: "1rem", fontWeight: "700", marginTop: "0.25rem", direction: "ltr", unicodeBidi: "isolate" }}
-                  />
-                  {paidError && (
-                    <span className="field-error" style={{ color: "var(--danger, #ef4444)", fontSize: "0.8rem", marginTop: "4px", display: "block" }}>
-                      {paidError}
-                    </span>
+                      return (
+                        <tr key={`${item.imei || item.productId}-${index}`} className={isRowFocused ? "is-row-focused" : ""}>
+                          <td className="col-item">
+                            <div className="item-cell-content">
+                              <div className="item-name-row">
+                                <span className={`pos-item-badge ${isPhone ? "phone" : "product"}`}>
+                                  {isPhone ? "📱 Handset" : "📦 Product"}
+                                </span>
+                                <strong className="item-title">{item.modelTitle || item.productName || item.name || "Item"}</strong>
+                              </div>
+                              <div className="item-sub-row">
+                                {isPhone ? (
+                                  <span className="item-sub-imei">
+                                    IMEI: <strong>{item.imei}</strong>
+                                  </span>
+                                ) : (
+                                  <span className="item-sub-meta">
+                                    {item.sku ? `SKU: ${item.sku} • ` : ""}{item.categoryName || "Accessory"}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="col-qty">
+                            {isPhone ? (
+                              <span className="qty-locked">1</span>
+                            ) : (
+                              <input
+                                type="number"
+                                min="1"
+                                step="1"
+                                className="purchase-table-qty-input"
+                                value={item.quantity === undefined ? 1 : item.quantity}
+                                onChange={(e) => updatePurchaseItemQty(index, e.target.value)}
+                                onBlur={() => {
+                                  const q = Math.max(1, parseInt(item.quantity, 10) || 1);
+                                  updatePurchaseItemQty(index, q);
+                                }}
+                                title="Editable quantity"
+                              />
+                            )}
+                          </td>
+                          <td className="col-rate">
+                            <input
+                              type="number"
+                              step="any"
+                              min="0"
+                              className="purchase-table-rate-input"
+                              value={item.unitCost}
+                              onChange={(e) => updatePurchaseItemCost(index, e.target.value)}
+                              onBlur={() => updatePurchaseItemCost(index, stripTrailingZeros(item.unitCost))}
+                              title="Editable purchase rate"
+                            />
+                          </td>
+                          <td className="col-subtotal">
+                            PKR {lineSubtotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                          </td>
+                          <td className="col-remove">
+                            <button
+                              type="button"
+                              className="purchase-row-remove-btn"
+                              onClick={() => removePurchaseItem(index)}
+                              title="Remove item"
+                              aria-label="Remove item"
+                            >
+                              ✕
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
-                </label>
+                </tbody>
+              </table>
+            </div>
+          </div>
 
-                {/* Quick Cash Buttons */}
-                <div className="pos-quick-cash-row">
-                  <button
-                    type="button"
-                    className="pos-quick-cash-btn"
-                    onClick={() => setForm((prev) => ({ ...prev, paidAmount: netAmount }))}
-                  >
-                    {t("purchases.exact_net", "Exact Net")}
-                  </button>
-                  <button
-                    type="button"
-                    className="pos-quick-cash-btn"
-                    onClick={() => setForm((prev) => ({ ...prev, paidAmount: Number(prev.paidAmount || 0) + 1000 }))}
-                    style={{ direction: "ltr", unicodeBidi: "isolate" }}
-                  >
-                    +1,000
-                  </button>
-                  <button
-                    type="button"
-                    className="pos-quick-cash-btn"
-                    onClick={() => setForm((prev) => ({ ...prev, paidAmount: Number(prev.paidAmount || 0) + 5000 }))}
-                    style={{ direction: "ltr", unicodeBidi: "isolate" }}
-                  >
-                    +5,000
-                  </button>
-                  <button
-                    type="button"
-                    className="pos-quick-cash-btn"
-                    onClick={() => setForm((prev) => ({ ...prev, paidAmount: Number(prev.paidAmount || 0) + 10000 }))}
-                    style={{ direction: "ltr", unicodeBidi: "isolate" }}
-                  >
-                    +10,000
-                  </button>
-                </div>
+          {/* ROW 4: Payment Section Strip BELOW the list (always visible, never scrolls) */}
+          <div className="purchase-payment-strip">
+            {/* 1. Subtotal */}
+            <div className="strip-group strip-subtotal">
+              <span className="strip-label">{t("sales.subtotal", "Subtotal")}:</span>
+              <strong className="strip-val">PKR {subtotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</strong>
+            </div>
 
-                {/* Balance status */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.6rem" }}>
-                  <span className="muted small">{t("sales.balance_due", "Balance Due:")}</span>
-                  <strong style={{ color: balanceAmount > 0 ? "var(--danger, #ef4444)" : "var(--success, #10b981)", fontSize: "0.95rem", direction: "ltr", unicodeBidi: "isolate" }}>
-                    PKR {balanceAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                  </strong>
-                </div>
+            {/* 2. Discount (PKR) */}
+            <div className="strip-group strip-discount">
+              <span className="strip-label">{t("sales.discount", "Discount")}:</span>
+              <input
+                type="number"
+                min="0"
+                max={subtotal}
+                step="any"
+                value={form.discountAmount === 0 ? "" : form.discountAmount}
+                onChange={handleDiscountChange}
+                placeholder="0"
+                className="strip-input compact-num"
+                title="Discount in PKR (flat amount)"
+              />
+            </div>
 
-                {/* Credit Due Date if balance remains */}
-                {balanceAmount > 0 && (
-                  <label style={{ display: "block", marginTop: "0.6rem" }}>
-                    <span style={{ fontSize: "0.8rem", color: "var(--warning, #fbbf24)" }}>
-                      {t("sales.credit_due_date", "Credit Due Date")} <span style={{ color: "var(--danger, #ef4444)" }}>*</span>
-                    </span>
-                    <input
-                      type="date"
-                      min={todayStr}
-                      value={form.dueDate}
-                      onChange={(event) => setForm({ ...form, dueDate: event.target.value })}
-                      style={{ width: "100%", padding: "0.4rem 0.6rem", marginTop: "0.2rem" }}
-                      required
-                    />
-                    {dueDateError && (
-                      <span className="field-error" style={{ color: "var(--danger, #ef4444)", fontSize: "0.8rem", marginTop: "4px", display: "block" }}>
-                        {dueDateError}
-                      </span>
-                    )}
-                  </label>
-                )}
+            {/* 3. Tax (PKR) - EXACT ONCE OCCURRENCE OF LABEL */}
+            <div className="strip-group strip-tax">
+              <span className="strip-label">Tax (PKR):</span>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                value={form.taxAmount === 0 ? "" : form.taxAmount}
+                onChange={handleTaxChange}
+                placeholder="0"
+                className="strip-input compact-num"
+                title="Tax in PKR"
+              />
+            </div>
 
-                {/* Order Notes / Terms memo input */}
-                <label style={{ display: "block", marginTop: "0.6rem" }}>
-                  <span className="muted small">{t("purchases.order_notes_label", "Order Notes / Terms")}</span>
+            {/* 4. Net Amount (Read-only, bold, highlighted) */}
+            <div className="strip-group strip-net">
+              <span className="strip-label">{t("sales.net_amount", "Net Amount")}:</span>
+              <strong className="strip-net-val">PKR {netAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</strong>
+            </div>
+
+            {/* 5. Payment Method pills */}
+            <div className="strip-group strip-method">
+              <div className="pos-pill-group compact-pills">
+                <button
+                  type="button"
+                  className={`pos-pill-btn ${form.paymentMethod === "cash" ? "active" : ""}`}
+                  onClick={() => setForm({ ...form, paymentMethod: "cash" })}
+                >
+                  💵 {t("sales.cash", "Cash")}
+                </button>
+                <button
+                  type="button"
+                  className={`pos-pill-btn ${form.paymentMethod === "bank_transfer" ? "active" : ""}`}
+                  onClick={() => setForm({ ...form, paymentMethod: "bank_transfer" })}
+                >
+                  🏦 {t("sales.bank", "Bank")}
+                </button>
+                <button
+                  type="button"
+                  className={`pos-pill-btn ${form.paymentMethod === "mobile_wallet" ? "active" : ""}`}
+                  onClick={() => setForm({ ...form, paymentMethod: "mobile_wallet" })}
+                >
+                  📱 {t("sales.wallet", "Wallet")}
+                </button>
+                <button
+                  type="button"
+                  className={`pos-pill-btn ${form.paymentMethod === "cheque" ? "active" : ""}`}
+                  onClick={() => setForm({ ...form, paymentMethod: "cheque" })}
+                >
+                  📝 {t("sales.cheque", "Cheque")}
+                </button>
+              </div>
+            </div>
+
+            {/* 6. Paid Amount + Exact Net button */}
+            <div className="strip-group strip-paid">
+              <span className="strip-label">{t("sales.paid", "Paid")}:</span>
+              <div className="strip-paid-combo">
+                <input
+                  ref={paidAmountInputRef}
+                  type="number"
+                  min="0"
+                  max={netAmount >= 0 ? netAmount : undefined}
+                  step="any"
+                  value={form.paidAmount === 0 ? "" : form.paidAmount}
+                  onChange={handlePaidAmountChange}
+                  placeholder="0"
+                  className="strip-input paid-input"
+                  title="Paid Amount (PKR) - F9 to focus"
+                />
+                <button
+                  type="button"
+                  className="exact-net-btn"
+                  onClick={handleExactNet}
+                  title="Fill Paid Amount with Net Amount"
+                >
+                  {t("purchases.exact_net", "Exact Net")}
+                </button>
+              </div>
+            </div>
+
+            {/* 7. Balance Due */}
+            <div className="strip-group strip-balance">
+              <span className="strip-label">{t("sales.balance_due", "Balance Due")}:</span>
+              <strong className="strip-bal-val" style={{ color: balanceAmount > 0 ? "var(--danger, #ef4444)" : "var(--success, #10b981)" }}>
+                PKR {balanceAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+              </strong>
+            </div>
+
+            {/* 8. Due Date */}
+            <div className="strip-group strip-due-date">
+              <span className="strip-label">{t("sales.credit_due_date", "Due Date")}:</span>
+              <input
+                type="date"
+                min={todayStr}
+                value={balanceAmount <= 0 ? "" : form.dueDate}
+                onChange={(event) => setForm({ ...form, dueDate: event.target.value })}
+                disabled={balanceAmount <= 0}
+                required={balanceAmount > 0}
+                className="strip-input date-input"
+                style={{
+                  opacity: balanceAmount <= 0 ? 0.45 : 1,
+                  cursor: balanceAmount <= 0 ? "not-allowed" : "pointer"
+                }}
+                title={balanceAmount <= 0 ? "Due date disabled when balance is zero" : "Required when balance remains"}
+              />
+            </div>
+
+            {/* 9. Order Notes / Terms expander */}
+            <div className="strip-group strip-notes">
+              <button
+                type="button"
+                className="ghost-btn btn-sm strip-notes-toggle"
+                onClick={() => setShowNotes(!showNotes)}
+                title="Add order notes / terms"
+              >
+                📝 {showNotes ? (isUrdu ? "نوٹس چھپائیں" : "Notes ▲") : (form.notes ? (isUrdu ? "نوٹس لکھے ہیں" : "Notes (1)") : (isUrdu ? "نوٹس شامل کریں" : "Add order notes / terms"))}
+              </button>
+              {showNotes && (
+                <div className="notes-popover-box">
                   <input
                     type="text"
                     value={form.notes}
                     onChange={(event) => setForm({ ...form, notes: event.target.value })}
                     placeholder="Vendor invoice #, warranty notes..."
-                    style={{ width: "100%", padding: "0.35rem 0.6rem", fontSize: "0.82rem", marginTop: "0.2rem" }}
+                    className="strip-input notes-input"
+                    autoFocus
                   />
-                </label>
-
-                {/* Big Action Button */}
-                <div style={{ marginTop: "1rem" }}>
-                  <button
-                    type="submit"
-                    className="pos-pay-btn"
-                    disabled={!canCreate || form.items.length === 0}
-                  >
-                    <span>💾</span>
-                    <span>
-                      {canCreate
-                        ? t("purchases.save_vendor_purchase", "Save Vendor Purchase • PKR {amount}", { amount: netAmount.toLocaleString(undefined, { maximumFractionDigits: 2 }) })
-                        : t("purchases.save_purchase_restricted", "Save Purchase (Restricted to Manager/Staff)")}
-                    </span>
-                  </button>
                 </div>
+              )}
+            </div>
 
-                {/* Persistent Print Purchase Voucher Button on Entry Form */}
-                {lastSavedPurchase && (
-                  <div style={{ marginTop: "0.6rem" }}>
-                    <button
-                      type="button"
-                      className="secondary-btn"
-                      onClick={() => handleOpenReceipt(lastSavedPurchase)}
-                      style={{
-                        width: "100%",
-                        padding: "0.55rem",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "0.5rem",
-                        background: "#059669",
-                        color: "#ffffff",
-                        borderColor: "#047857",
-                        fontWeight: "700",
-                        fontSize: "0.88rem"
-                      }}
-                    >
-                      <span>🧾</span>
-                      <span>Print Purchase Voucher #{lastSavedPurchase.invoice_number}</span>
-                    </button>
-                  </div>
-                )}
-
-                {!canCreate && (
-                  <div className="alert info" style={{ fontSize: "0.78rem", marginTop: "0.6rem" }}>
-                    ℹ️ <strong>{language === "ur" ? "آپریشنل رول لازمی ہے:" : "Operational Role Required:"}</strong> {t("purchases.operational_role_alert", "Company Super Admins cannot perform purchase entry directly. Purchases must be performed by assigned Branch Managers or authorized inventory staff.")}
-                  </div>
-                )}
-              </div>
+            {/* 10. Save button at the right end */}
+            <div className="strip-group strip-save">
+              <button
+                ref={saveButtonRef}
+                type="submit"
+                className="primary-btn purchase-strip-save-btn"
+                disabled={!canCreate || form.items.length === 0}
+                title={!canCreate ? "Operational role required" : form.items.length === 0 ? "Add at least one item" : "Save Vendor Purchase (F2 or Ctrl+Enter)"}
+              >
+                💾 {isUrdu ? "خریداری محفوظ کریں" : "Save Vendor Purchase"}
+              </button>
             </div>
           </div>
         </form>

@@ -8,7 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const purchasesPagePath = path.resolve(__dirname, "../src/pages/PurchasesPage.jsx");
 
-test("Purchase page — compact top section requirements", () => {
+test("Purchase page — compact inward counter layout requirements", () => {
   const source = fs.readFileSync(purchasesPagePath, "utf8");
 
   // 1. REMOVE: Tall scanner heading block and "Auto-detects..." subtitle
@@ -111,21 +111,21 @@ test("Purchase page — compact top section requirements", () => {
     "Row 2 Add button must render 'Add' label"
   );
 
-  // 4. ROW 3: Quick-create buttons
+  // 4. Cart panel header contains Quick-create buttons
   assert.match(
     source,
-    /pos-purchase-row-3/,
-    "Row 3 container must be present"
+    /purchase-cart-panel-header/,
+    "Cart panel header must be present"
   );
   assert.match(
     source,
     /Quick Add New Model/,
-    "Row 3 must contain 'Quick Add New Model' button"
+    "Cart panel header must contain 'Quick Add New Model' button"
   );
   assert.match(
     source,
     /Add Product\/Accessories/,
-    "Row 3 must contain 'Add Product/Accessories' button"
+    "Cart panel header must contain 'Add Product/Accessories' button"
   );
   assert.match(
     source,
@@ -144,14 +144,31 @@ test("Purchase page — compact top section requirements", () => {
   assert.equal(quickModelMatches.length, 1, "Must have exactly 1 Quick Add Model trigger, no duplicates");
   assert.equal(quickProductMatches.length, 1, "Must have exactly 1 Quick Add Product trigger, no duplicates");
 
-  // 5. Order of rows: Row 1 -> Row 2 -> Row 3 -> Cart Table
+  // 5. Order of sections: Row 1 -> Entry Row (pos-scanner-bar) -> Products List (pos-cart-wrap) -> Payment Strip (purchase-payment-strip)
   const idxRow1 = source.indexOf("pos-purchase-row-1");
   const idxRow2 = source.indexOf("pos-scanner-bar");
-  const idxRow3 = source.indexOf("pos-purchase-row-3");
   const idxCart = source.indexOf("pos-cart-wrap");
+  const idxPayment = source.indexOf("purchase-payment-strip");
 
-  assert.ok(idxRow1 !== -1 && idxRow2 !== -1 && idxRow3 !== -1 && idxCart !== -1, "All 3 rows and cart must be present");
-  assert.ok(idxRow1 < idxRow2, "Row 1 must come before Row 2");
-  assert.ok(idxRow2 < idxRow3, "Row 2 must come before Row 3");
-  assert.ok(idxRow3 < idxCart, "Row 3 must come before pos-cart-wrap");
+  assert.ok(idxRow1 !== -1 && idxRow2 !== -1 && idxCart !== -1 && idxPayment !== -1, "All 4 sections must be present");
+  assert.ok(idxRow1 < idxRow2, "Row 1 must come before Entry Row");
+  assert.ok(idxRow2 < idxCart, "Entry Row must come before pos-cart-wrap");
+  assert.ok(idxCart < idxPayment, "pos-cart-wrap must come before payment strip");
+
+  // 6. Payment strip requirements
+  assert.doesNotMatch(
+    source,
+    /grand\s*total/i,
+    "'Grand Total' must not appear anywhere on this page"
+  );
+  assert.match(
+    source,
+    /Save Vendor Purchase/,
+    "Save button must be labelled 'Save Vendor Purchase'"
+  );
+  assert.match(
+    source,
+    /Exact Net/,
+    "Exact Net button must be present beside Paid Amount"
+  );
 });
