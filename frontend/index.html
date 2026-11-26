@@ -14,17 +14,19 @@
             isAuto = false;
           } else {
             try {
-              var tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-              var h = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hourCycle: 'h23' }).format(new Date()), 10);
-              if (!isNaN(h)) {
-                theme = (h >= 6 && h < 19) ? 'day' : 'night';
+              var localHour = new Date().getHours();
+              if (typeof localHour === 'number' && !isNaN(localHour)) {
+                theme = (localHour >= 6 && localHour < 19) ? 'day' : 'night';
               } else {
-                throw new Error('Invalid hour');
+                throw new Error('Invalid local hour');
               }
             } catch (e1) {
               try {
-                var localHour = new Date().getHours();
-                theme = (localHour >= 6 && localHour < 19) ? 'day' : 'night';
+                var tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                var h = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hourCycle: 'h23', hour12: false }).format(new Date()), 10);
+                if (!isNaN(h)) {
+                  theme = (h >= 6 && h < 19) ? 'day' : 'night';
+                }
               } catch (e2) {
                 if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
                   theme = 'day';

@@ -64,21 +64,24 @@ export function LandingPage({ onGoToLogin, onQuickDemoLogin }) {
   // ---------------------------------------------------------------------------
   const computeAutoTheme = () => {
     try {
-      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const localHour = new Date().getHours();
+      if (typeof localHour === "number" && !isNaN(localHour)) {
+        return localHour >= 6 && localHour < 19 ? "day" : "night";
+      }
+    } catch (e) {}
+
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions?.().timeZone;
       const hourStr = new Intl.DateTimeFormat("en-US", {
-        timeZone: tz,
+        ...(tz ? { timeZone: tz } : {}),
         hour: "numeric",
-        hourCycle: "h23"
+        hourCycle: "h23",
+        hour12: false
       }).format(new Date());
       const hour = parseInt(hourStr, 10);
       if (!isNaN(hour)) {
         return hour >= 6 && hour < 19 ? "day" : "night";
       }
-    } catch (e) {}
-
-    try {
-      const localHour = new Date().getHours();
-      return localHour >= 6 && localHour < 19 ? "day" : "night";
     } catch (e) {}
 
     if (typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches) {
@@ -168,6 +171,16 @@ export function LandingPage({ onGoToLogin, onQuickDemoLogin }) {
     try {
       localStorage.setItem("dm360-theme-mode", nextTheme);
     } catch (e) {}
+  };
+
+  const handleResetToAuto = () => {
+    try {
+      localStorage.removeItem("dm360-theme-mode");
+    } catch (e) {}
+    const autoTheme = computeAutoTheme();
+    setThemeState({ theme: autoTheme, isAuto: true });
+    document.documentElement.setAttribute("data-theme", autoTheme);
+    document.documentElement.setAttribute("data-theme-auto", "true");
   };
 
   // ---------------------------------------------------------------------------
@@ -570,10 +583,26 @@ export function LandingPage({ onGoToLogin, onQuickDemoLogin }) {
                   </span>
                 </span>
               </button>
-              {isAuto && (
-                <span className="theme-auto-badge" title="Auto-selected based on local timezone (06:00–18:59 Day, 19:00–05:59 Night)">
+              {isAuto ? (
+                <button
+                  type="button"
+                  className="theme-auto-badge"
+                  onClick={handleResetToAuto}
+                  title="Auto Day/Night mode active (06:00–18:59 Day, 19:00–05:59 Night) • Click to re-sync"
+                  aria-label="Automatic day/night mode active"
+                >
                   AUTO
-                </span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="theme-reset-auto-btn"
+                  onClick={handleResetToAuto}
+                  title="Reset to automatic Day/Night mode based on time of day"
+                  aria-label="Reset to automatic day/night mode"
+                >
+                  Auto ↺
+                </button>
               )}
             </div>
 

@@ -6622,6 +6622,7 @@ tr.highlight-pulse > td {
 /* Design Tokens: NIGHT Theme (Preserved Brand Look) */
 :root[data-theme="night"],
 :root:not([data-theme="day"]) {
+  color-scheme: dark;
   --dm-bg-page: #070a12;
   --dm-bg-section: #05080f;
   --dm-bg-section-alt: #0a0f1a;
@@ -6676,6 +6677,7 @@ tr.highlight-pulse > td {
 
 /* Design Tokens: DAY Theme (Crisp Light Surfaces, Identical Accents/Buttons) */
 :root[data-theme="day"] {
+  color-scheme: light;
   --dm-bg-page: #f7fafc;
   --dm-bg-section: #f7fafc;
   --dm-bg-section-alt: #ffffff;
@@ -6998,7 +7000,7 @@ tr.highlight-pulse > td {
   animation: none !important;
 }
 
-/* Tiny AUTO Caption */
+/* Tiny AUTO Caption & Reset-to-Auto Button */
 .theme-auto-badge {
   display: inline-flex;
   align-items: center;
@@ -7013,8 +7015,42 @@ tr.highlight-pulse > td {
   border-radius: 4px;
   line-height: 1;
   user-select: none;
-  pointer-events: none;
+  cursor: pointer;
   animation: themeBadgeFadeIn 250ms ease forwards;
+  transition: all 150ms ease;
+}
+
+.theme-auto-badge:hover {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: var(--dm-accent, #38bdf8);
+  transform: scale(1.04);
+}
+
+.theme-reset-auto-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dm-accent, #38bdf8);
+  background: var(--dm-bg-card-subtle, rgba(15, 23, 42, 0.7));
+  border: 1px dashed var(--dm-border-accent, rgba(56, 189, 248, 0.35));
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1;
+  user-select: none;
+  cursor: pointer;
+  animation: themeBadgeFadeIn 250ms ease forwards;
+  transition: all 150ms ease;
+}
+
+.theme-reset-auto-btn:hover {
+  background: rgba(56, 189, 248, 0.15);
+  border-style: solid;
+  border-color: var(--dm-accent, #38bdf8);
+  transform: scale(1.04);
 }
 
 @keyframes themeBadgeFadeIn {

@@ -61,7 +61,7 @@ export function ModernLayout({
   const isPurchaseCounter = activeTab === "purchases_new" || (activeTab === "purchases" && activePurchaseSub !== "history");
   const isSaleCounter = activeTab === "sales_new" || activeTab === "sales_checkout" || activeTab === "sales";
   const isCounter = isPurchaseCounter || isSaleCounter;
-  const isRail = isCounter && !railOverlayOpen;
+  const isRail = false; // Do not auto-hide side menu on creating new sales or new purchase
 
   useEffect(() => {
     if (!isCounter) {
@@ -71,7 +71,7 @@ export function ModernLayout({
   }, [isCounter]);
 
   return (
-    <div className={`modern-layout-root ${isCollapsed || isCounter ? "sidebar-collapsed" : ""} ${isCounter ? "pos-counter-active" : ""}`}>
+    <div className={`modern-layout-root ${isCollapsed ? "sidebar-collapsed" : ""} ${isCounter ? "pos-counter-active" : ""}`}>
       {/* Mobile Backdrop */}
       {mobileMenuOpen && (
         <div
@@ -89,13 +89,13 @@ export function ModernLayout({
       )}
 
       {/* Modern Compact Sidebar (240px expanded / 68px collapsed) */}
-      <aside className={`modern-sidebar ${isCollapsed || isRail ? "collapsed" : ""} ${isRail ? "is-rail" : ""} ${railOverlayOpen ? "rail-overlay" : ""} ${mobileMenuOpen ? "mobile-open" : ""}`}>
+      <aside className={`modern-sidebar ${isCollapsed ? "collapsed" : ""} ${mobileMenuOpen ? "mobile-open" : ""}`}>
         <div className="modern-sidebar-inner">
           {/* Sidebar Brand Header */}
           <div className="modern-sidebar-header">
             <div className="modern-brand-box">
               <span className="modern-brand-icon">⚡</span>
-              {!isCollapsed && !isRail && (
+              {!isCollapsed && (
                 <div className="modern-brand-text">
                   <span className="modern-brand-title">POS Compact</span>
                   <span className="modern-brand-badge">PRO</span>
@@ -112,10 +112,10 @@ export function ModernLayout({
                   setIsCollapsed(!isCollapsed);
                 }
               }}
-              title={isRail ? "Expand Full Sidebar" : (isCollapsed ? "Expand Sidebar (240px)" : "Compact Sidebar (68px)")}
+              title={isCollapsed ? "Expand Sidebar (240px)" : "Compact Sidebar (68px)"}
               aria-label="Toggle compact sidebar"
             >
-              {isRail ? "❯" : (isCollapsed ? "❯" : "❮")}
+              {isCollapsed ? "❯" : "❮"}
             </button>
           </div>
 
@@ -182,7 +182,7 @@ export function ModernLayout({
                       title={tab.label}
                     >
                       <span className="modern-nav-icon">{tab.icon}</span>
-                      {!isCollapsed && !isRail && (
+                      {!isCollapsed && (
                         <>
                           <span className="modern-nav-label">{tab.label}</span>
                           <span
@@ -198,7 +198,7 @@ export function ModernLayout({
                     </button>
 
                     {/* Sub-menu accordion directly inside sidebar */}
-                    {isGroupOpen && !isCollapsed && !isRail && (
+                    {isGroupOpen && !isCollapsed && (
                       <div className="modern-sub-nav-list">
                         {tab.subItems.map((sub) => {
                           const isSubActive =
@@ -243,7 +243,7 @@ export function ModernLayout({
                   type="button"
                 >
                   <span className="modern-nav-icon">{tab.icon}</span>
-                  {!isCollapsed && !isRail && <span className="modern-nav-label">{tab.label}</span>}
+                  {!isCollapsed && <span className="modern-nav-label">{tab.label}</span>}
                 </button>
               );
             })}

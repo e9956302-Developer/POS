@@ -61,7 +61,7 @@ export function ClassicLayout({
   const isPurchaseCounter = activeTab === "purchases_new" || (activeTab === "purchases" && activePurchaseSub !== "history");
   const isSaleCounter = activeTab === "sales_new" || activeTab === "sales_checkout" || activeTab === "sales";
   const isCounter = isPurchaseCounter || isSaleCounter;
-  const isRail = isCounter && !railOverlayOpen;
+  const isRail = false; // Do not auto-hide side menu on creating new sales or new purchase
 
   useEffect(() => {
     if (!isCounter) {
@@ -79,7 +79,7 @@ export function ClassicLayout({
   }
 
   return (
-    <div className={`app-shell layout-classic ${isCollapsed || isCounter ? "sidebar-collapsed" : ""} ${isCounter ? "pos-counter-active" : ""}`}>
+    <div className={`app-shell layout-classic ${isCollapsed ? "sidebar-collapsed" : ""} ${isCounter ? "pos-counter-active" : ""}`}>
       {/* Mobile Sticky Topbar */}
       <div className="mobile-topbar">
         <button
@@ -117,7 +117,7 @@ export function ClassicLayout({
         />
       )}
 
-      <aside className={`sidebar ${isCollapsed || isRail ? "collapsed" : ""} ${isRail ? "is-rail" : ""} ${railOverlayOpen ? "rail-overlay" : ""} ${mobileMenuOpen ? "mobile-open" : ""}`}>
+      <aside className={`sidebar ${isCollapsed ? "collapsed" : ""} ${mobileMenuOpen ? "mobile-open" : ""}`}>
         {/* Frozen Header: Logo, Website Name, Tagline & Collapse Toggle */}
         <div className="sidebar-header">
           <div className="brand-lockup">
@@ -131,10 +131,10 @@ export function ClassicLayout({
             className="collapse-toggle-btn"
             type="button"
             onClick={toggleSidebar}
-            title={isRail ? "Expand full sidebar" : (isCollapsed ? "Expand sidebar (Wide view)" : "Collapse sidebar (Icon view)")}
-            aria-label={isRail ? "Expand sidebar" : (isCollapsed ? "Expand sidebar" : "Collapse sidebar")}
+            title={isCollapsed ? "Expand sidebar (Wide view)" : "Collapse sidebar (Icon view)"}
+            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
-            {isRail ? "»" : (isCollapsed ? "»" : "«")}
+            {isCollapsed ? "»" : "«"}
           </button>
         </div>
 
@@ -206,7 +206,7 @@ export function ClassicLayout({
                       <span className="nav-icon">{tab.icon}</span>
                       <span className="nav-label" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
                         <span>{tab.label}</span>
-                        {!isCollapsed && !isRail && (
+                        {!isCollapsed && (
                           <span
                             className="nav-arrow"
                             style={{
@@ -222,7 +222,7 @@ export function ClassicLayout({
                     </button>
 
                     {/* Sliding Sub-Menu */}
-                    {isGroupOpen && !isCollapsed && !isRail && (
+                    {isGroupOpen && !isCollapsed && (
                       <div className="sub-nav-list">
                         {tab.subItems.map((sub) => {
                           const isSubActive =

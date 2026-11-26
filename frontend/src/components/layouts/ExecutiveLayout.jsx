@@ -61,7 +61,7 @@ export function ExecutiveLayout({
   const isPurchaseCounter = activeTab === "purchases_new" || (activeTab === "purchases" && activePurchaseSub !== "history");
   const isSaleCounter = activeTab === "sales_new" || activeTab === "sales_checkout" || activeTab === "sales";
   const isCounter = isPurchaseCounter || isSaleCounter;
-  const isRail = isCounter && !railOverlayOpen;
+  const isRail = false; // Do not auto-hide side menu on creating new sales or new purchase
 
   useEffect(() => {
     if (!isCounter) {
@@ -85,7 +85,7 @@ export function ExecutiveLayout({
   const userInitial = userName.charAt(0).toUpperCase();
 
   return (
-    <div className={`executive-layout-root ${isCollapsed || isCounter ? "sidebar-collapsed" : ""} ${isCounter ? "pos-counter-active" : ""}`}>
+    <div className={`executive-layout-root ${isCollapsed ? "sidebar-collapsed" : ""} ${isCounter ? "pos-counter-active" : ""}`}>
       {/* Mobile Backdrop */}
       {mobileMenuOpen && (
         <div
@@ -103,13 +103,13 @@ export function ExecutiveLayout({
       )}
 
       {/* Floating Obsidian & Gold Sidebar */}
-      <aside className={`executive-sidebar ${isCollapsed || isRail ? "collapsed" : ""} ${isRail ? "is-rail" : ""} ${railOverlayOpen ? "rail-overlay" : ""} ${mobileMenuOpen ? "mobile-open" : ""}`}>
+      <aside className={`executive-sidebar ${isCollapsed ? "collapsed" : ""} ${mobileMenuOpen ? "mobile-open" : ""}`}>
         <div className="executive-sidebar-inner">
           {/* Brand Header with Gold Accent */}
           <div className="executive-sidebar-header">
             <div className="executive-brand-box">
               <span className="executive-brand-icon">💎</span>
-              {!isCollapsed && !isRail && (
+              {!isCollapsed && (
                 <div className="executive-brand-text">
                   <span className="executive-brand-title">POS Executive</span>
                   <span className="executive-brand-badge">LUXURY</span>
@@ -126,10 +126,10 @@ export function ExecutiveLayout({
                   setIsCollapsed(!isCollapsed);
                 }
               }}
-              title={isRail ? "Expand Sidebar" : (isCollapsed ? "Expand Sidebar" : "Collapse Sidebar")}
+              title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
               aria-label="Toggle executive sidebar"
             >
-              {isRail ? "❯" : (isCollapsed ? "❯" : "❮")}
+              {isCollapsed ? "❯" : "❮"}
             </button>
           </div>
 
@@ -196,7 +196,7 @@ export function ExecutiveLayout({
                       title={tab.label}
                     >
                       <span className="executive-nav-icon">{tab.icon}</span>
-                      {!isCollapsed && !isRail && (
+                      {!isCollapsed && (
                         <>
                           <span className="executive-nav-label">{tab.label}</span>
                           <span
@@ -212,7 +212,7 @@ export function ExecutiveLayout({
                     </button>
 
                     {/* Accordion Sub-items */}
-                    {isGroupOpen && !isCollapsed && !isRail && (
+                    {isGroupOpen && !isCollapsed && (
                       <div className="executive-sub-nav-list">
                         {tab.subItems.map((sub) => {
                           const isSubActive =
@@ -257,7 +257,7 @@ export function ExecutiveLayout({
                   type="button"
                 >
                   <span className="executive-nav-icon">{tab.icon}</span>
-                  {!isCollapsed && !isRail && <span className="executive-nav-label">{tab.label}</span>}
+                  {!isCollapsed && <span className="executive-nav-label">{tab.label}</span>}
                 </button>
               );
             })}
