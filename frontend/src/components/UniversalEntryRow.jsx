@@ -65,7 +65,7 @@ export function UniversalEntryRow({
   const containerRef = comboboxContainerRef;
 
   const focusScanField = useCallback(() => {
-    const el = internalScannerInputRef.current || (transferScannerInputRef && transferScannerInputRef.current) || (scanFieldRef && scanFieldRef.current);
+    const el = (transferScannerInputRef && transferScannerInputRef.current) || (scanFieldRef && scanFieldRef.current) || internalScannerInputRef.current;
     if (el && typeof el.focus === "function") {
       try {
         el.focus();
@@ -162,9 +162,11 @@ export function UniversalEntryRow({
     setDropdownQuery("");
     setAwaitingPhoneModel(null);
     clearError();
-    setTimeout(() => {
-      scanFieldRef.current?.focus();
-    }, 50);
+    focusScanField();
+    requestAnimationFrame(focusScanField);
+    setTimeout(focusScanField, 20);
+    setTimeout(focusScanField, 50);
+    setTimeout(focusScanField, 100);
   }
 
   // Highlight matching substring in dropdown row

@@ -117,7 +117,12 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
   const canDelete = context.can ? context.can("purchases", "delete") : true;
   const canView = context.can ? context.can("purchases", "view") : true;
 
+  const vendorInputRef = useRef(null);
+  const purchaserNameInputRef = useRef(null);
+  const purchaserCnicInputRef = useRef(null);
+  const purchaseDateInputRef = useRef(null);
   const firstFieldRef = useRef(null);
+  const branchSelectRef = firstFieldRef;
   const formRef = useRef(null);
   const paidAmountInputRef = useRef(null);
   const saveButtonRef = useRef(null);
@@ -126,21 +131,49 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
   const [focusedRowIndex, setFocusedRowIndex] = useState(0);
 
   const focusUniversalScanField = useCallback(() => {
+    const doFocus = () => {
+      let el = scannerInputRef.current;
+      if (!el || typeof el.focus !== "function") {
+        el = document.querySelector(".pos-scanner-input");
+      }
+      if (el && typeof el.focus === "function") {
+        try {
+          el.focus();
+          el.select?.();
+        } catch {}
+      }
+    };
+    doFocus();
+    requestAnimationFrame(doFocus);
+    setTimeout(doFocus, 30);
+    setTimeout(doFocus, 80);
+    setTimeout(doFocus, 150);
+  }, []);
+
+  const handleVendorNext = useCallback((e) => {
+    if (e && typeof e.preventDefault === "function") e.preventDefault();
     setTimeout(() => {
-      if (scannerInputRef.current && typeof scannerInputRef.current.focus === "function") {
-        scannerInputRef.current.focus();
-        try { scannerInputRef.current.select?.(); } catch {}
-      } else {
-        const el = document.querySelector(".pos-scanner-input");
-        if (el) el.focus();
+      const purchaserInput = document.querySelector("#purchase-purchaser-name");
+      if (purchaserInput && typeof purchaserInput.focus === "function") {
+        purchaserInput.focus();
+        try { purchaserInput.select?.(); } catch {}
+      } else if (purchaseDateInputRef.current) {
+        purchaseDateInputRef.current.focus();
       }
     }, 40);
   }, []);
 
-  // Default focus on scan field on mount and tab change
+  // Default focus on vendor field on mount and tab change (fallback to scan field)
   useEffect(() => {
     if (activeTab === "new") {
-      focusUniversalScanField();
+      const timer = setTimeout(() => {
+        if (vendorInputRef.current && typeof vendorInputRef.current.focus === "function") {
+          vendorInputRef.current.focus();
+        } else {
+          focusUniversalScanField();
+        }
+      }, 70);
+      return () => clearTimeout(timer);
     }
   }, [activeTab, focusUniversalScanField]);
 
@@ -439,10 +472,8 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
 
   // Clear Due Date if Balance becomes 0, prefill today + 30 days when balance becomes > 0
   useEffect(() => {
-    if (balanceAmount <= 0) {
-      if (form.dueDate) {
-        setForm((prev) => ({ ...prev, dueDate: "" }));
-      }
+    if (balanceAmount <= 0 && form.dueDate) {
+      setForm((prev) => ({ ...prev, dueDate: "" }));
     } else if (balanceAmount > 0 && !form.dueDate) {
       const d = new Date();
       d.setDate(d.getDate() + 30);
@@ -530,12 +561,13 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
 
   // Helper to add simple product into purchase cart
   function addProductToCart(product, customCost = null, customQty = 1) {
-    if (!product || !product.id) return;
+    const prodId = product?.id || product?.productId;
+    if (!product || !prodId) return;
     setError("");
     const rawCost = customCost !== null ? Number(customCost) : Number(product.cost_price ?? product.sale_price ?? 0);
     const cost = stripTrailingZeros(rawCost);
     const qtyToAdd = Math.max(1, Number(customQty || 1));
-    const existingIdx = (form.items || []).findIndex((it) => String(it.productId) === String(product.id));
+    const existingIdx = (form.items || []).findIndex((it) => String(it.productId) === String(prodId));
 
     if (existingIdx >= 0) {
       setForm((prev) => ({
@@ -553,15 +585,16 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
           ...(prev.items || []),
           {
             itemType: "product",
-            productId: Number(product.id),
-            productName: product.name,
-            categoryName: product.category_name || "Accessory",
+            productId: Number(prodId),
+            productName: product.name || product.productName,
+            categoryName: product.category_name || product.categoryName || "Accessory",
             quantity: qtyToAdd,
             unitCost: cost
           }
         ]
       }));
     }
+    focusUniversalScanField();
   }
 
   // Helper to add handset IMEI into purchase cart
@@ -597,6 +630,7 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
         }
       ]
     }));
+    focusUniversalScanField();
     return true;
   }
 
@@ -936,6 +970,7 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
       ...prev,
       items: prev.items.filter((_, idx) => idx !== index)
     }));
+    focusUniversalScanField();
   }
 
   async function handleSubmit(event) {
@@ -1462,8 +1497,10 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
               <div className="vendor-row-input-wrap">
                 <SearchableSelect
                   id="purchase-vendor-select"
+                  inputRef={vendorInputRef}
                   value={form.vendorId}
                   onChange={handleVendorChange}
+                  onSelectNext={handleVendorNext}
                   placeholder={t("purchases.select_vendor", "Select vendor / walk in")}
                 >
                   <option value="">{t("purchases.select_vendor", "Select vendor / walk in")}</option>
@@ -1486,9 +1523,24 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
                   <div className="vendor-row-input-wrap">
                     <input
                       id="purchase-purchaser-name"
+                      ref={purchaserNameInputRef}
                       type="text"
                       value={form.purchaserName}
                       onChange={(event) => setForm({ ...form, purchaserName: event.target.value })}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || (e.key === "Tab" && !e.shiftKey)) {
+                          e.preventDefault();
+                          if (purchaserCnicInputRef.current) {
+                            purchaserCnicInputRef.current.focus();
+                            purchaserCnicInputRef.current.select?.();
+                          } else if (purchaseDateInputRef.current) {
+                            purchaseDateInputRef.current.focus();
+                          }
+                        } else if (e.key === "Tab" && e.shiftKey) {
+                          e.preventDefault();
+                          vendorInputRef.current?.focus();
+                        }
+                      }}
                       placeholder="e.g. Muhammad Ali"
                       required
                       className="vendor-row-input"
@@ -1508,9 +1560,22 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
                   <div className="vendor-row-input-wrap">
                     <input
                       id="purchase-purchaser-cnic"
+                      ref={purchaserCnicInputRef}
                       type="text"
                       value={form.purchaserCnic}
                       onChange={(event) => setForm({ ...form, purchaserCnic: formatCnic(event.target.value) })}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || (e.key === "Tab" && !e.shiftKey)) {
+                          e.preventDefault();
+                          if (purchaseDateInputRef.current) {
+                            purchaseDateInputRef.current.focus();
+                          }
+                        } else if (e.key === "Tab" && e.shiftKey) {
+                          e.preventDefault();
+                          purchaserNameInputRef.current?.focus();
+                          purchaserNameInputRef.current?.select?.();
+                        }
+                      }}
                       placeholder="e.g. 42101-1234567-1"
                       required
                       className="vendor-row-input"
@@ -1534,9 +1599,31 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
               <div className="vendor-row-input-wrap">
                 <input
                   id="purchase-date-input"
+                  ref={purchaseDateInputRef}
                   type="date"
                   value={form.purchaseDate}
                   onChange={(event) => setForm({ ...form, purchaseDate: event.target.value })}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || (e.key === "Tab" && !e.shiftKey)) {
+                      e.preventDefault();
+                      if (firstFieldRef.current) {
+                        firstFieldRef.current.focus();
+                      } else {
+                        focusUniversalScanField();
+                      }
+                    } else if (e.key === "Tab" && e.shiftKey) {
+                      e.preventDefault();
+                      if (!form.vendorId && purchaserCnicInputRef.current) {
+                        purchaserCnicInputRef.current.focus();
+                        purchaserCnicInputRef.current.select?.();
+                      } else if (!form.vendorId && purchaserNameInputRef.current) {
+                        purchaserNameInputRef.current.focus();
+                        purchaserNameInputRef.current.select?.();
+                      } else {
+                        vendorInputRef.current?.focus();
+                      }
+                    }
+                  }}
                   required
                   className="vendor-row-input"
                 />
@@ -1554,6 +1641,15 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
                   ref={firstFieldRef}
                   value={form.branchId}
                   onChange={(event) => setForm({ ...form, branchId: event.target.value })}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || (e.key === "Tab" && !e.shiftKey)) {
+                      e.preventDefault();
+                      focusUniversalScanField();
+                    } else if (e.key === "Tab" && e.shiftKey) {
+                      e.preventDefault();
+                      purchaseDateInputRef.current?.focus();
+                    }
+                  }}
                   required
                   className="vendor-row-input"
                 >
@@ -1574,15 +1670,17 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
               ref={scannerInputRef}
               onClick={handleAddAction}
               mode="purchase"
+              autoFocus={false}
               availableProducts={availableProducts}
               availableModels={availableModels}
               currentItems={form.items}
               stagedItem={stagedEntryItem}
               onAddItem={(item) => {
-                if (item.itemType === "handset") {
-                  addPhoneToCart(item.rawItem, item.imei, item.unitCost);
+                if (item.itemType === "handset" || item.imei) {
+                  addPhoneToCart(item.rawItem || item, item.imei, item.unitCost);
                 } else {
-                  addProductToCart(item.rawItem, item.unitCost, item.quantity);
+                  const prod = item.rawItem || (availableProducts || []).find((p) => String(p.id) === String(item.productId)) || item;
+                  addProductToCart(prod, item.unitCost, item.quantity);
                 }
                 setStagedEntryItem(null);
                 focusUniversalScanField();
@@ -1726,6 +1824,12 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
                                   const q = Math.max(1, parseInt(item.quantity, 10) || 1);
                                   updatePurchaseItemQty(index, q);
                                 }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.target.blur();
+                                    focusUniversalScanField();
+                                  }
+                                }}
                                 title="Editable quantity"
                               />
                             )}
@@ -1739,6 +1843,12 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
                               value={item.unitCost}
                               onChange={(e) => updatePurchaseItemCost(index, e.target.value)}
                               onBlur={() => updatePurchaseItemCost(index, stripTrailingZeros(item.unitCost))}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.target.blur();
+                                  focusUniversalScanField();
+                                }
+                              }}
                               title="Editable purchase rate"
                             />
                           </td>
@@ -1791,7 +1901,7 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
 
             {/* 3. Tax (PKR) - EXACT ONCE OCCURRENCE OF LABEL */}
             <div className="strip-group strip-tax">
-              <span className="strip-label">Tax (PKR):</span>
+              <span className="strip-label">{t("sales.tax", "Tax (PKR)")}:</span>
               <input
                 type="number"
                 min="0"
@@ -1806,12 +1916,12 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
 
             {/* 4. Net Amount (Read-only, bold, highlighted) */}
             <div className="strip-group strip-net">
-              <span className="strip-label">{t("sales.net_amount", "Net Amount")}:</span>
+              <span className="strip-label">{t("sales.total_payable", "Net Amount")}:</span>
               <strong className="strip-net-val">PKR {netAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</strong>
             </div>
 
             {/* 5. Payment Method pills */}
-            <div className="strip-group strip-method">
+            <div className="strip-group strip-method" title={t("sales.payment_method", "Payment Method")}>
               <div className="pos-pill-group compact-pills">
                 <button
                   type="button"
@@ -1846,7 +1956,7 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
 
             {/* 6. Paid Amount + Exact Net button */}
             <div className="strip-group strip-paid">
-              <span className="strip-label">{t("sales.paid", "Paid")}:</span>
+              <span className="strip-label">{t("purchases.amount_paid_to_vendor", "Paid")}:</span>
               <div className="strip-paid-combo">
                 <input
                   ref={paidAmountInputRef}
@@ -1931,8 +2041,13 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
                 disabled={!canCreate || form.items.length === 0}
                 title={!canCreate ? "Operational role required" : form.items.length === 0 ? "Add at least one item" : "Save Vendor Purchase (F2 or Ctrl+Enter)"}
               >
-                💾 {isUrdu ? "خریداری محفوظ کریں" : "Save Vendor Purchase"}
+                💾 {canCreate ? (isUrdu ? "خریداری محفوظ کریں" : "Save Vendor Purchase") : t("purchases.save_purchase_restricted", "Save Purchase (Restricted to Manager/Staff)")}
               </button>
+              {!canCreate && (
+                <div className="alert info" style={{ fontSize: "0.74rem", marginTop: "0.35rem", padding: "0.35rem 0.5rem" }}>
+                  ℹ️ <strong>Operational Role Required:</strong> {t("purchases.operational_role_required", "Purchases must be recorded by assigned Branch Managers and Staff.")}
+                </div>
+              )}
             </div>
           </div>
         </form>

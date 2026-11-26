@@ -219,7 +219,7 @@ export function SearchableSelect({
     }
 
     if (!isOpen) {
-      if (e.key === "Enter" || e.key === "Tab") {
+      if (e.key === "Enter" || (e.key === "Tab" && !e.shiftKey)) {
         if (onSelectNext) {
           e.preventDefault();
           onSelectNext(e);
@@ -256,6 +256,16 @@ export function SearchableSelect({
       setSearchQuery("");
       if (inputRef.current) inputRef.current.blur();
     } else if (e.key === "Tab") {
+      if (e.shiftKey) {
+        setIsOpen(false);
+        setIsTyping(false);
+        setSearchQuery("");
+        return;
+      }
+      const highlighted = filteredOptions[highlightedIndex];
+      if (isTyping && highlighted) {
+        handleSelectOption(highlighted);
+      }
       setIsOpen(false);
       setIsTyping(false);
       setSearchQuery("");
