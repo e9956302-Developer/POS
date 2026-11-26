@@ -119,6 +119,65 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
 
   const firstFieldRef = useRef(null);
   const formRef = useRef(null);
+  const paidAmountInputRef = useRef(null);
+  const saveButtonRef = useRef(null);
+  const [stagedEntryItem, setStagedEntryItem] = useState(null);
+  const [showNotes, setShowNotes] = useState(false);
+  const [focusedRowIndex, setFocusedRowIndex] = useState(0);
+
+  const focusUniversalScanField = useCallback(() => {
+    setTimeout(() => {
+      if (scannerInputRef.current && typeof scannerInputRef.current.focus === "function") {
+        scannerInputRef.current.focus();
+        try { scannerInputRef.current.select?.(); } catch {}
+      } else {
+        const el = document.querySelector(".pos-scanner-input");
+        if (el) el.focus();
+      }
+    }, 40);
+  }, []);
+
+  // Default focus on scan field on mount and tab change
+  useEffect(() => {
+    if (activeTab === "new") {
+      focusUniversalScanField();
+    }
+  }, [activeTab, focusUniversalScanField]);
+
+  // Global Keyboard shortcuts: F8, F9, F2, Ctrl+Enter, Esc
+  useEffect(() => {
+    if (activeTab !== "new") return;
+    const handleKeyDown = (e) => {
+      if (e.key === "F8") {
+        e.preventDefault();
+        focusUniversalScanField();
+      } else if (e.key === "F9") {
+        e.preventDefault();
+        if (paidAmountInputRef.current) {
+          paidAmountInputRef.current.focus();
+          paidAmountInputRef.current.select?.();
+        }
+      } else if (e.key === "F2" || ((e.ctrlKey || e.metaKey) && e.key === "Enter")) {
+        e.preventDefault();
+        if (formRef.current) {
+          if (typeof formRef.current.requestSubmit === "function") {
+            formRef.current.requestSubmit();
+          } else {
+            handleSubmit(e);
+          }
+        }
+      } else if (e.key === "Escape") {
+        const dropdownOpen = document.querySelector(".pos-attached-dropdown");
+        if (!dropdownOpen) {
+          e.preventDefault();
+          focusUniversalScanField();
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activeTab, focusUniversalScanField]);
+
   const [productsList, setProductsList] = useState(context?.products || []);
   const [modelsList, setModelsList] = useState(context?.models || []);
 
@@ -378,12 +437,64 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
   const balanceAmount = netAmount - paidVal;
   const todayStr = new Date().toISOString().slice(0, 10);
 
-  // CHANGE 4: Clear Due Date if Balance becomes 0
+  // Clear Due Date if Balance becomes 0
   useEffect(() => {
     if (balanceAmount <= 0 && form.dueDate) {
       setForm((prev) => ({ ...prev, dueDate: "" }));
     }
   }, [balanceAmount, form.dueDate]);
+
+  // Adjust paid amount if Net Amount decreases below paid amount
+  useEffect(() => {
+    if (form.paidAmount !== "" && Number(form.paidAmount) > netAmount) {
+      setForm((prev) => ({ ...prev, paidAmount: netAmount }));
+    }
+  }, [netAmount]);
+
+  const handlePaidAmountChange = (e) => {
+    const raw = e.target.value;
+    if (raw === "") {
+      setForm((prev) => ({ ...prev, paidAmount: "" }));
+      setError("");
+      return;
+    }
+    const val = Number(raw);
+    if (val > netAmount) {
+      setForm((prev) => ({ ...prev, paidAmount: netAmount }));
+      setError(`Paid Amount (PKR ${val.toLocaleString()}) cannot exceed Net Amount (PKR ${netAmount.toLocaleString()}) — capped at Net Amount`);
+    } else {
+      setForm((prev) => ({ ...prev, paidAmount: Math.max(0, val) }));
+      setError("");
+    }
+  };
+
+  const handleExactNet = () => {
+    setForm((prev) => ({ ...prev, paidAmount: netAmount }));
+    setError("");
+  };
+
+  const handleDiscountChange = (e) => {
+    const raw = e.target.value;
+    if (raw === "") {
+      setForm((prev) => ({ ...prev, discountAmount: "" }));
+      return;
+    }
+    let val = Number(raw);
+    if (isNaN(val) || val < 0) val = 0;
+    if (val > subtotal) val = subtotal;
+    setForm((prev) => ({ ...prev, discountAmount: val }));
+  };
+
+  const handleTaxChange = (e) => {
+    const raw = e.target.value;
+    if (raw === "") {
+      setForm((prev) => ({ ...prev, taxAmount: "" }));
+      return;
+    }
+    let val = Number(raw);
+    if (isNaN(val) || val < 0) val = 0;
+    setForm((prev) => ({ ...prev, taxAmount: val }));
+  };
 
   // Inline error conditions
   const discountError = discountVal < 0
@@ -2670,12 +2781,21 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
         isOpen={showQuickProductModal}
         onClose={() => setShowQuickProductModal(false)}
         onCreated={(newProd) => {
-          addProductToCart(newProd);
+          setStagedEntryItem({
+            itemType: "product",
+            productId: Number(newProd.id),
+            name: newProd.name,
+            sku: newProd.sku || "",
+            barcode: newProd.barcode || "",
+            categoryName: newProd.category_name || "Accessory",
+            costPrice: newProd.cost_price || "",
+            salePrice: newProd.sale_price || 0,
+            rawItem: newProd
+          });
           setProductsList((prev) => [...prev, newProd]);
           if (context.setProducts) {
             context.setProducts([...(context.products || []), newProd]);
           }
-          setTimeout(() => scannerInputRef.current?.focus(), 50);
         }}
         branchId={form.branchId}
       />
@@ -2686,17 +2806,20 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
         onClose={() => setShowQuickModelModal(false)}
         onCreated={(newModel) => {
           const modelTitle = `${newModel.company} ${newModel.model_name}${newModel.variant ? ` (${newModel.variant})` : ""}${newModel.storage ? ` • ${newModel.storage}` : ""}${newModel.color ? ` • ${newModel.color}` : ""}`.trim() || "Mobile Handset";
-          setAwaitingPhoneModel({
+          setStagedEntryItem({
+            itemType: "phone_model",
             modelId: newModel.id,
             name: modelTitle,
             modelTitle,
-            unitCost: newModel.cost_price || ""
+            costPrice: newModel.cost_price || "",
+            unitCost: newModel.cost_price || "",
+            salePrice: newModel.sale_price || 0,
+            rawItem: newModel
           });
           setModelsList((prev) => [...prev, newModel]);
           if (context.setModels) {
             context.setModels([...(context.models || []), newModel]);
           }
-          setTimeout(() => scannerInputRef.current?.focus(), 50);
         }}
       />
 

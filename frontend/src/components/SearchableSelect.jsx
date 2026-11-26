@@ -27,7 +27,9 @@ export function SearchableSelect({
   style = {},
   allowClear = true,
   autoFocus = false,
-  inputRef: externalInputRef = null
+  inputRef: externalInputRef = null,
+  onKeyDown: propOnKeyDown = null,
+  onSelectNext = null
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -211,7 +213,19 @@ export function SearchableSelect({
   function handleKeyDown(e) {
     if (disabled) return;
 
+    if (propOnKeyDown) {
+      propOnKeyDown(e);
+      if (e.defaultPrevented) return;
+    }
+
     if (!isOpen) {
+      if (e.key === "Enter" || e.key === "Tab") {
+        if (onSelectNext) {
+          e.preventDefault();
+          onSelectNext(e);
+          return;
+        }
+      }
       if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
         e.preventDefault();
         setIsOpen(true);
@@ -228,10 +242,12 @@ export function SearchableSelect({
       setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : Math.max(filteredOptions.length - 1, 0)));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      if (filteredOptions[highlightedIndex]) {
-        handleSelectOption(filteredOptions[highlightedIndex]);
-      } else if (filteredOptions.length > 0) {
-        handleSelectOption(filteredOptions[0]);
+      const selected = filteredOptions[highlightedIndex] || filteredOptions[0];
+      if (selected) {
+        handleSelectOption(selected);
+      }
+      if (onSelectNext) {
+        onSelectNext(e);
       }
     } else if (e.key === "Escape") {
       e.preventDefault();
@@ -243,6 +259,10 @@ export function SearchableSelect({
       setIsOpen(false);
       setIsTyping(false);
       setSearchQuery("");
+      if (onSelectNext) {
+        e.preventDefault();
+        onSelectNext(e);
+      }
     }
   }
 

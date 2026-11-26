@@ -18,6 +18,7 @@ export function ClassicLayout({
   handleSwitchBranch,
   activeTab,
   setActiveTab,
+  activePurchaseSub = "new",
   setError,
   tabs,
   pageBreadcrumb,
@@ -48,19 +49,37 @@ export function ClassicLayout({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [reportMenuOpen, setReportMenuOpen] = useState(false);
   const [manuallyClosedGroups, setManuallyClosedGroups] = useState({});
+  const [railOverlayOpen, setRailOverlayOpen] = useState(false);
+  const [railFlyoutTab, setRailFlyoutTab] = useState(null);
+  const [flyoutPosition, setFlyoutPosition] = useState({ top: 100 });
 
   useEffect(() => {
     setManuallyClosedGroups({});
   }, [activeTab]);
 
   const isSalesPage = activeTab === "sales" || activeTab.startsWith("sales_");
+  const isPurchaseCounter = activeTab === "purchases_new" || (activeTab === "purchases" && activePurchaseSub !== "history");
+  const isSaleCounter = activeTab === "sales_new" || activeTab === "sales_checkout" || activeTab === "sales";
+  const isCounter = isPurchaseCounter || isSaleCounter;
+  const isRail = isCounter && !railOverlayOpen;
+
+  useEffect(() => {
+    if (!isCounter) {
+      setRailOverlayOpen(false);
+      setRailFlyoutTab(null);
+    }
+  }, [isCounter]);
 
   function toggleSidebar() {
-    setIsCollapsed(!isCollapsed);
+    if (isCounter) {
+      setRailOverlayOpen(!railOverlayOpen);
+    } else {
+      setIsCollapsed(!isCollapsed);
+    }
   }
 
   return (
-    <div className={`app-shell layout-classic ${isCollapsed ? "sidebar-collapsed" : ""}`}>
+    <div className={`app-shell layout-classic ${isCollapsed || isCounter ? "sidebar-collapsed" : ""} ${isCounter ? "pos-counter-active" : ""}`}>
       {/* Mobile Sticky Topbar */}
       <div className="mobile-topbar">
         <button
@@ -90,7 +109,15 @@ export function ClassicLayout({
         <div className="sidebar-backdrop" onClick={() => setMobileMenuOpen(false)} />
       )}
 
-      <aside className={`sidebar ${isCollapsed ? "collapsed" : ""} ${mobileMenuOpen ? "mobile-open" : ""}`}>
+      {railOverlayOpen && (
+        <div
+          className="rail-overlay-backdrop"
+          onClick={() => setRailOverlayOpen(false)}
+          style={{ position: "fixed", inset: 0, zIndex: 1040, background: "rgba(0,0,0,0.4)" }}
+        />
+      )}
+
+      <aside className={`sidebar ${isCollapsed || isRail ? "collapsed" : ""} ${isRail ? "is-rail" : ""} ${railOverlayOpen ? "rail-overlay" : ""} ${mobileMenuOpen ? "mobile-open" : ""}`}>
         {/* Frozen Header: Logo, Website Name, Tagline & Collapse Toggle */}
         <div className="sidebar-header">
           <div className="brand-lockup">
@@ -104,10 +131,10 @@ export function ClassicLayout({
             className="collapse-toggle-btn"
             type="button"
             onClick={toggleSidebar}
-            title={isCollapsed ? "Expand sidebar (Wide view)" : "Collapse sidebar (Icon view)"}
-            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={isRail ? "Expand full sidebar" : (isCollapsed ? "Expand sidebar (Wide view)" : "Collapse sidebar (Icon view)")}
+            aria-label={isRail ? "Expand sidebar" : (isCollapsed ? "Expand sidebar" : "Collapse sidebar")}
           >
-            {isCollapsed ? "»" : "«"}
+            {isRail ? "»" : (isCollapsed ? "»" : "«")}
           </button>
         </div>
 
@@ -137,6 +164,12 @@ export function ClassicLayout({
                         if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
                           e.preventDefault();
                           setError("");
+                          if (isRail) {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            setFlyoutPosition({ top: Math.max(10, Math.min(window.innerHeight - 200, rect.top)) });
+                            setRailFlyoutTab(railFlyoutTab === tab.key ? null : tab.key);
+                            return;
+                          }
                           if (isCollapsed) {
                             setIsCollapsed(false);
                           }
@@ -149,8 +182,14 @@ export function ClassicLayout({
                           }
                         }
                       }}
-                      onClick={() => {
+                      onClick={(e) => {
                         setError("");
+                        if (isRail) {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          setFlyoutPosition({ top: Math.max(10, Math.min(window.innerHeight - 200, rect.top)) });
+                          setRailFlyoutTab(railFlyoutTab === tab.key ? null : tab.key);
+                          return;
+                        }
                         if (isCollapsed) {
                           setIsCollapsed(false);
                         }
@@ -167,7 +206,7 @@ export function ClassicLayout({
                       <span className="nav-icon">{tab.icon}</span>
                       <span className="nav-label" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
                         <span>{tab.label}</span>
-                        {!isCollapsed && (
+                        {!isCollapsed && !isRail && (
                           <span
                             className="nav-arrow"
                             style={{
@@ -183,7 +222,7 @@ export function ClassicLayout({
                     </button>
 
                     {/* Sliding Sub-Menu */}
-                    {isGroupOpen && !isCollapsed && (
+                    {isGroupOpen && !isCollapsed && !isRail && (
                       <div className="sub-nav-list">
                         {tab.subItems.map((sub) => {
                           const isSubActive =
@@ -219,6 +258,7 @@ export function ClassicLayout({
                   onClick={() => {
                     setError("");
                     setManuallyClosedGroups({});
+                    setRailFlyoutTab(null);
                     setActiveTab(tab.key);
                     setMobileMenuOpen(false);
                   }}
@@ -231,6 +271,79 @@ export function ClassicLayout({
               );
             })}
           </nav>
+
+          {/* Rail Flyout Sub-menu Panel */}
+          {isRail && railFlyoutTab && (() => {
+            const tabObj = tabs.find((t) => t.key === railFlyoutTab);
+            if (!tabObj || !tabObj.subItems) return null;
+            return (
+              <>
+                <div
+                  className="rail-flyout-backdrop"
+                  onClick={() => setRailFlyoutTab(null)}
+                  style={{ position: "fixed", inset: 0, zIndex: 1040 }}
+                />
+                <div
+                  className="sidebar-rail-flyout"
+                  style={{
+                    position: "fixed",
+                    left: isRtl ? "auto" : "68px",
+                    right: isRtl ? "68px" : "auto",
+                    top: `${flyoutPosition.top}px`,
+                    zIndex: 1050,
+                    background: "var(--surface)",
+                    border: "1px solid var(--border)",
+                    borderRadius: "8px",
+                    boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+                    padding: "6px",
+                    minWidth: "220px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "2px"
+                  }}
+                >
+                  <div style={{ fontSize: "0.78rem", fontWeight: 700, padding: "4px 8px", color: "var(--text-muted)", borderBottom: "1px solid var(--border)", marginBottom: "4px" }}>
+                    {tabObj.icon} {tabObj.label}
+                  </div>
+                  {tabObj.subItems.map((sub) => {
+                    const isSubActive =
+                      activeTab === sub.key ||
+                      (activeTab === tabObj.key && sub.key === tabObj.subItems[0].key);
+                    return (
+                      <button
+                        key={sub.key}
+                        type="button"
+                        className={`nav-item sub-nav-item ${isSubActive ? "active" : ""}`}
+                        onClick={() => {
+                          setError("");
+                          setActiveTab(sub.key);
+                          setRailFlyoutTab(null);
+                        }}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          width: "100%",
+                          padding: "6px 8px",
+                          borderRadius: "6px",
+                          fontSize: "0.82rem",
+                          fontWeight: isSubActive ? 700 : 500,
+                          background: isSubActive ? "var(--primary-subtle, rgba(56, 189, 248, 0.15))" : "transparent",
+                          color: isSubActive ? "var(--primary, #38bdf8)" : "var(--text)",
+                          border: "none",
+                          cursor: "pointer",
+                          textAlign: isRtl ? "right" : "left"
+                        }}
+                      >
+                        <span className="sub-nav-icon">{sub.icon}</span>
+                        <span className="nav-label sub-nav-label">{sub.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            );
+          })()}
 
           <div className="sidebar-footer">
             <div className="sidebar-footer-expanded">

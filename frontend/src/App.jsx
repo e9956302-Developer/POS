@@ -1969,6 +1969,8 @@ function AppContent() {
         handleSwitchBranch={handleSwitchBranch}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
+        activePurchaseSub={activePurchaseSub}
+        activeSaleSub={activeSaleSub}
         setError={setError}
         tabs={localizedTabs}
         pageBreadcrumb={pageBreadcrumb}

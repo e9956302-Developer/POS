@@ -87,6 +87,11 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
   const [lastSavedSale, setLastSavedSale] = useState(null);
   const firstFieldRef = useRef(null);
   const formRef = useRef(null);
+  const customerInputRef = useRef(null);
+  const customerNameRef = useRef(null);
+  const customerPhoneRef = useRef(null);
+  const saleDateInputRef = useRef(null);
+  const branchSelectRef = firstFieldRef; // share ref for backwards compatibility
 
   // Redesigned POS Sales Counter States — Universal Scan Combobox (ADDENDUM / Pack #20)
   const [universalScanInput, setUniversalScanInput] = useState("");
@@ -98,6 +103,7 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
   const [awaitingPhoneModel, setAwaitingPhoneModel] = useState(null); // { modelId, name, units, stock }
   const scannerInputRef = useRef(null);
   const comboboxContainerRef = useRef(null);
+  const paidAmountInputRef = useRef(null);
   const debounceTimerRef = useRef(null);
   const isAddInFlightRef = useRef(false);
   const frozenResultsRef = useRef(null);
@@ -108,9 +114,82 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
   const [showCustomerDetails, setShowCustomerDetails] = useState(false);
   const [showQuickProductModal, setShowQuickProductModal] = useState(false);
   const [showWalkInDetails, setShowWalkInDetails] = useState(false);
+  const [showNotes, setShowNotes] = useState(false);
   const isBranchFixed = Boolean(context.session?.is_branch_locked || context.session?.branchLocked);
   const currentBranch = (context?.branches || []).find((b) => String(b.id) === String(form.branchId));
   const currentBranchName = currentBranch?.name || context?.session?.branch_name || (isUrdu ? "موجودہ برانچ" : "current branch");
+
+  const focusUniversalScanField = useCallback(() => {
+    setTimeout(() => {
+      if (scannerInputRef.current && typeof scannerInputRef.current.focus === "function") {
+        scannerInputRef.current.focus();
+        try { scannerInputRef.current.select?.(); } catch {}
+      } else {
+        const el = document.querySelector(".pos-scanner-input");
+        if (el) el.focus();
+      }
+    }, 30);
+  }, []);
+
+  const handleCustomerNext = useCallback(() => {
+    if (showWalkInDetails && !form.customerId && customerNameRef.current) {
+      customerNameRef.current.focus();
+    } else if (saleDateInputRef.current) {
+      saleDateInputRef.current.focus();
+    }
+  }, [showWalkInDetails, form.customerId]);
+
+  // Default focus on Customer field on mount / checkout tab enter
+  useEffect(() => {
+    if (activeTab === "checkout") {
+      const timer = setTimeout(() => {
+        if (customerInputRef.current && typeof customerInputRef.current.focus === "function") {
+          customerInputRef.current.focus();
+        }
+      }, 70);
+      return () => clearTimeout(timer);
+    }
+  }, [activeTab]);
+
+  // Point 7 Keyboard Shortcuts: F8, F9, F2/Ctrl+Enter, Esc
+  useEffect(() => {
+    if (activeTab !== "checkout") return;
+
+    function handleGlobalKeyDown(e) {
+      // F8: moves focus to Universal Scan Field
+      if (e.key === "F8") {
+        e.preventDefault();
+        focusUniversalScanField();
+        return;
+      }
+
+      // F9: moves focus to Amount Received
+      if (e.key === "F9") {
+        e.preventDefault();
+        if (paidAmountInputRef.current) {
+          paidAmountInputRef.current.focus();
+          try { paidAmountInputRef.current.select?.(); } catch {}
+        }
+        return;
+      }
+
+      // F2 or Ctrl+Enter: triggers Complete Sale with same validation
+      if (e.key === "F2" || (e.ctrlKey && e.key === "Enter")) {
+        e.preventDefault();
+        handleSubmit();
+        return;
+      }
+
+      // Esc: returns focus to Universal Scan Field
+      if (e.key === "Escape") {
+        focusUniversalScanField();
+        return;
+      }
+    }
+
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, [activeTab, focusUniversalScanField, handleSubmit]);
 
   // Close attached dropdown on click outside
   useEffect(() => {
@@ -977,6 +1056,9 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
             },
         saleDate: form.saleDate,
         paymentMethod: form.paymentMethod,
+        discountType: form.discountType || "fixed",
+        discountValue: Number(form.discountValue || 0),
+        discountAmount: cartDiscountAmount,
         taxAmount: Number(form.taxAmount || 0),
         paidAmount: Number(form.paidAmount || 0),
         dueDate: form.dueDate || null,
@@ -994,12 +1076,14 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
       // Automatically open 80mm thermal receipt on sale creation
       handleOpenReceipt(saved);
 
-      // Shift focus to scanner for continuous rapid entry
+      // Focus back to Customer field for next sale entry
       setTimeout(() => {
-        if (phoneInputRef.current) {
-          phoneInputRef.current.focus();
+        if (customerInputRef.current && typeof customerInputRef.current.focus === "function") {
+          customerInputRef.current.focus();
+        } else if (scannerInputRef.current && typeof scannerInputRef.current.focus === "function") {
+          scannerInputRef.current.focus();
         }
-      }, 50);
+      }, 70);
     } catch (submitError) {
       if (submitError.errors && Array.isArray(submitError.errors) && submitError.errors.length > 0) {
         setValidationErrors({
@@ -1251,8 +1335,6 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
 
   return (
     <div className="page-grid">
-      <span className="sr-only">{t("sales.pos_counter", "Create Sale (POS Counter)")}</span>
-
       {/* Global alert messages */}
       {error ? <div className="alert error full-span">{error}</div> : null}
       {message ? (
@@ -1292,42 +1374,34 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
 
       {/* TAB 1: POS COUNTER & CHECKOUT (ADD SALE) */}
       {activeTab === "checkout" && (
-        <div className="pos-layout">
-          {/* LEFT COLUMN: SCANNER, PICKER & LIVE CART */}
-          <div className="pos-main-column">
-            {/* ROW 1: Sale info (Customer info, Sale Date, Outlet / Branch) */}
-            <div
-              className="pos-sale-row-1 pos-purchase-row-1 pos-branch-inline-bar"
-              style={{
-                display: "flex",
-                alignItems: "flex-end",
-                gap: "0.5rem",
-                flexWrap: "wrap",
-                marginBottom: "0.5rem"
-              }}
-            >
-              {/* 1. Customer info */}
-              <label style={{ flex: "1.5 1 200px", minWidth: 0, margin: 0 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.2rem" }}>
-                  <span className="muted small" style={{ fontSize: "0.8rem", fontWeight: "600" }}>
-                    {t("sales.customer_box_title", "Customer")} <span style={{ color: "var(--danger, #ef4444)" }}>*</span>
-                  </span>
-                  {!form.customerId && (
-                    <button
-                      type="button"
-                      className="ghost-btn btn-sm"
-                      onClick={() => setShowWalkInDetails(!showWalkInDetails)}
-                      style={{ padding: "0 4px", fontSize: "0.72rem", color: "var(--primary)" }}
-                      title="Toggle walk-in customer details"
-                    >
-                      {showWalkInDetails ? (isUrdu ? "چھپائیں" : "Hide") : (form.quickCustomerName ? `📝 ${form.quickCustomerName}` : (isUrdu ? "+ نام/فون" : "+ Name/Phone"))}
-                    </button>
-                  )}
-                </div>
+        <div className="pos-screen-layout pos-layout">
+          {/* ROW 1: Sale info (Customer info, Sale Date, Outlet / Branch) */}
+          <div
+            className="pos-sale-row-1 pos-purchase-row-1 pos-branch-inline-bar pos-fixed-info-row"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              height: "38px",
+              maxHeight: "48px",
+              marginBottom: "0.35rem",
+              width: "100%",
+              boxSizing: "border-box"
+            }}
+          >
+            {/* 1. Customer info (widest share: flex-grow) */}
+            <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flex: "2.2 1 240px", minWidth: 0, height: "34px", position: "relative" }}>
+              <span className="muted small" style={{ fontSize: "0.78rem", fontWeight: "600", whiteSpace: "nowrap" }}>
+                {t("sales.customer_box_title", "Customer")}:
+              </span>
+              <div style={{ flex: 1, minWidth: 0, position: "relative" }}>
                 <SearchableSelect
+                  inputRef={customerInputRef}
                   value={form.customerId}
                   onChange={(e) => setForm({ ...form, customerId: e.target.value })}
                   placeholder={isUrdu ? "گاہک تلاش کریں..." : "Search customer..."}
+                  onSelectNext={handleCustomerNext}
+                  style={{ minHeight: "32px", height: "32px", fontSize: "0.82rem" }}
                 >
                   <option value="">{t("sales.walk_in", "Walk in / new customer (Cash)")}</option>
                   {customerOptions.map((c) => (
@@ -1336,88 +1410,143 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
                     </option>
                   ))}
                 </SearchableSelect>
-              </label>
-
-              {/* Optional Walk-in Customer Name & Phone */}
-              {showWalkInDetails && !form.customerId && (
-                <>
-                  <label style={{ flex: "1.2 1 150px", minWidth: 0, margin: 0 }}>
-                    <span className="muted small" style={{ display: "block", marginBottom: "0.2rem", fontSize: "0.8rem", fontWeight: "600" }}>
-                      {t("sales.customer_name", "Customer Name")}
-                    </span>
-                    <input
-                      type="text"
-                      placeholder={isUrdu ? "عام خریدار کا نام" : "Walk-in name"}
-                      value={form.quickCustomerName}
-                      onChange={(e) => setForm({ ...form, quickCustomerName: e.target.value })}
-                      style={{ width: "100%", padding: "0.4rem 0.6rem", fontSize: "0.88rem", borderRadius: "10px", border: "1px solid var(--border)", background: "var(--input-bg, var(--surface))", color: "var(--text)", boxSizing: "border-box", minHeight: "42px" }}
-                    />
-                  </label>
-                  <label style={{ flex: "1.2 1 150px", minWidth: 0, margin: 0 }}>
-                    <span className="muted small" style={{ display: "block", marginBottom: "0.2rem", fontSize: "0.8rem", fontWeight: "600" }}>
-                      {t("sales.customer_phone", "Customer Phone")}
-                    </span>
-                    <input
-                      type="text"
-                      placeholder="e.g. 03001234567"
-                      value={form.quickCustomerPhone}
-                      onChange={(e) => setForm({ ...form, quickCustomerPhone: e.target.value })}
-                      style={{ width: "100%", padding: "0.4rem 0.6rem", fontSize: "0.88rem", borderRadius: "10px", border: "1px solid var(--border)", background: "var(--input-bg, var(--surface))", color: "var(--text)", boxSizing: "border-box", minHeight: "42px" }}
-                    />
-                  </label>
-                </>
+              </div>
+              {!form.customerId && (
+                <button
+                  type="button"
+                  className="ghost-btn btn-sm"
+                  onClick={() => setShowWalkInDetails(!showWalkInDetails)}
+                  style={{ padding: "0 4px", fontSize: "0.72rem", color: "var(--primary)", whiteSpace: "nowrap", flexShrink: 0 }}
+                  title="Toggle walk-in customer details"
+                >
+                  {showWalkInDetails ? (isUrdu ? "چھپائیں" : "Hide") : (form.quickCustomerName ? `📝 ${form.quickCustomerName}` : (isUrdu ? "+ نام/فون" : "+ Name/Phone"))}
+                </button>
               )}
 
-              {/* 2. Sale Date */}
-              <label style={{ flex: "1 1 140px", minWidth: 0, margin: 0 }}>
-                <span className="muted small" style={{ display: "block", marginBottom: "0.2rem", fontSize: "0.8rem", fontWeight: "600" }}>
-                  {t("sales.sale_date", "Sale Date")} <span style={{ color: "var(--danger, #ef4444)" }}>*</span>
-                </span>
-                <input
-                  type="date"
-                  value={form.saleDate}
-                  onChange={(event) => setForm({ ...form, saleDate: event.target.value })}
-                  required
-                  style={{ width: "100%", padding: "0.4rem 0.6rem", fontSize: "0.88rem", borderRadius: "10px", border: "1px solid var(--border)", background: "var(--input-bg, var(--surface))", color: "var(--text)", boxSizing: "border-box", minHeight: "42px" }}
-                />
-              </label>
-
-              {/* 3. Outlet / Branch */}
-              <label style={{ flex: "1.2 1 170px", minWidth: 0, margin: 0 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.2rem" }}>
-                  <span className="muted small" style={{ fontSize: "0.8rem", fontWeight: "600" }}>
-                    {t("app.store_outlet", "Store Outlet")} <span style={{ color: "var(--danger, #ef4444)" }}>*</span>
-                  </span>
-                  <span className="muted small" style={{ fontSize: "0.75rem", display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
-                    <span>📱{branchUnits.length} 📦{availableProducts.length}</span>
-                    <button
-                      type="button"
-                      className="ghost-btn btn-sm"
-                      onClick={() => loadBranchUnits(form.branchId)}
-                      disabled={isLoadingBranchUnits}
-                      title="Reload branch stock"
-                      style={{ padding: "0 2px", fontSize: "0.75rem" }}
-                    >
-                      🔄
-                    </button>
-                  </span>
+              {/* Optional Walk-in Customer Name & Phone Popover (keeps row at <= 48px) */}
+              {showWalkInDetails && !form.customerId && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "38px",
+                    left: isRtl ? "auto" : 0,
+                    right: isRtl ? 0 : "auto",
+                    zIndex: 100,
+                    background: "var(--surface)",
+                    border: "1px solid var(--border)",
+                    borderRadius: "8px",
+                    boxShadow: "0 6px 18px rgba(0,0,0,0.3)",
+                    padding: "0.4rem 0.6rem",
+                    display: "flex",
+                    gap: "0.4rem",
+                    alignItems: "center"
+                  }}
+                >
+                  <input
+                    ref={customerNameRef}
+                    type="text"
+                    placeholder={isUrdu ? "عام خریدار کا نام" : "Walk-in name"}
+                    value={form.quickCustomerName}
+                    onChange={(e) => setForm({ ...form, quickCustomerName: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === "Tab") {
+                        e.preventDefault();
+                        customerPhoneRef.current?.focus();
+                      }
+                    }}
+                    style={{ width: "130px", height: "30px", padding: "0.2rem 0.5rem", fontSize: "0.82rem", borderRadius: "6px", border: "1px solid var(--border)", background: "var(--input-bg, var(--surface))", color: "var(--text)" }}
+                  />
+                  <input
+                    ref={customerPhoneRef}
+                    type="text"
+                    placeholder="e.g. 03001234567"
+                    value={form.quickCustomerPhone}
+                    onChange={(e) => setForm({ ...form, quickCustomerPhone: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === "Tab") {
+                        e.preventDefault();
+                        saleDateInputRef.current?.focus();
+                        setShowWalkInDetails(false);
+                      }
+                    }}
+                    style={{ width: "130px", height: "30px", padding: "0.2rem 0.5rem", fontSize: "0.82rem", borderRadius: "6px", border: "1px solid var(--border)", background: "var(--input-bg, var(--surface))", color: "var(--text)" }}
+                  />
+                  <button
+                    type="button"
+                    className="ghost-btn btn-sm"
+                    onClick={() => setShowWalkInDetails(false)}
+                    style={{ fontSize: "0.75rem", padding: "2px 6px" }}
+                    title="Close"
+                  >
+                    ✓
+                  </button>
                 </div>
+              )}
+            </div>
+
+            {/* 2. Sale Date */}
+            <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flex: "1 1 140px", minWidth: 0, height: "34px" }}>
+              <span className="muted small" style={{ fontSize: "0.78rem", fontWeight: "600", whiteSpace: "nowrap" }}>
+                {t("sales.sale_date", "Date")}:
+              </span>
+              <input
+                ref={saleDateInputRef}
+                type="date"
+                value={form.saleDate}
+                onChange={(e) => setForm({ ...form, saleDate: e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === "Tab") {
+                    e.preventDefault();
+                    if (!isBranchFixed && firstFieldRef.current) {
+                      firstFieldRef.current.focus();
+                    } else {
+                      focusUniversalScanField();
+                    }
+                  }
+                }}
+                required
+                style={{
+                  width: "100%",
+                  height: "32px",
+                  padding: "0.2rem 0.4rem",
+                  fontSize: "0.82rem",
+                  borderRadius: "6px",
+                  border: "1px solid var(--border)",
+                  background: "var(--input-bg, var(--surface))",
+                  color: "var(--text)",
+                  boxSizing: "border-box"
+                }}
+              />
+            </div>
+
+            {/* 3. Outlet / Branch */}
+            <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flex: "1.4 1 180px", minWidth: 0, height: "34px" }}>
+              <span className="muted small" style={{ fontSize: "0.78rem", fontWeight: "600", whiteSpace: "nowrap" }}>
+                {t("app.store_outlet", "Outlet")}:
+              </span>
+              <div style={{ flex: 1, minWidth: 0 }}>
                 {isBranchFixed ? (
                   <input
                     ref={firstFieldRef}
                     type="text"
                     readOnly
                     value={(context?.branches || []).find((b) => String(b.id) === String(form.branchId))?.name || context.session?.branch_name || `Branch #${form.branchId}`}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === "Tab") {
+                        e.preventDefault();
+                        focusUniversalScanField();
+                      }
+                    }}
                     style={{
                       width: "100%",
-                      padding: "0.4rem 0.6rem",
-                      fontSize: "0.88rem",
-                      borderRadius: "10px",
+                      height: "32px",
+                      padding: "0.2rem 0.4rem",
+                      fontSize: "0.82rem",
+                      borderRadius: "6px",
                       border: "1px solid var(--border)",
                       background: "var(--input-bg, var(--surface))",
                       color: "var(--text-muted)",
                       boxSizing: "border-box",
-                      minHeight: "42px",
                       cursor: "not-allowed"
                     }}
                   />
@@ -1426,17 +1555,23 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
                     ref={firstFieldRef}
                     value={form.branchId}
                     onChange={(e) => setForm({ ...form, branchId: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === "Tab") {
+                        e.preventDefault();
+                        focusUniversalScanField();
+                      }
+                    }}
                     required
                     style={{
                       width: "100%",
-                      padding: "0.4rem 0.6rem",
-                      borderRadius: "10px",
-                      fontSize: "0.88rem",
+                      height: "32px",
+                      padding: "0.2rem 0.4rem",
+                      fontSize: "0.82rem",
+                      borderRadius: "6px",
                       border: "1px solid var(--border)",
                       background: "var(--input-bg, var(--surface))",
                       color: "var(--text)",
-                      boxSizing: "border-box",
-                      minHeight: "42px"
+                      boxSizing: "border-box"
                     }}
                   >
                     <option value="">{isUrdu ? "برانچ منتخب کریں" : "Select Branch"}</option>
@@ -1447,134 +1582,171 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
                     ))}
                   </select>
                 )}
-              </label>
-            </div>
-
-            {/* ROW 2: Scanner row (universal scanner field + Add button) */}
-            <div ref={comboboxContainerRef} className="pos-scanner-bar" style={{ position: "relative", width: "100%", marginBottom: "0.5rem" }}>
-              <UniversalEntryRow
-                ref={scannerInputRef}
-                onClick={handleAddAction}
-                mode="sale"
-                availableProducts={availableProducts}
-                availableModels={context.models || []}
-                branchUnits={branchUnits}
-                currentItems={form.items}
-                onAddItem={(item) => {
-                  if (item.itemType === "handset") {
-                    addPhoneToCart(item.rawItem);
-                  } else {
-                    addProductToCart(item.rawItem, item.quantity);
-                  }
-                  setTimeout(() => {
-                    if (scannerInputRef?.current && typeof scannerInputRef.current.focus === "function") {
-                      scannerInputRef.current.focus();
-                      try { scannerInputRef.current.select?.(); } catch {}
-                    }
-                  }, 50);
-                }}
-                branchId={form.branchId}
-                currentBranchName={currentBranchName}
-                isUrdu={isUrdu}
-                t={t}
-                api={api}
-                scannerInputRef={scannerInputRef}
-                comboboxContainerRef={comboboxContainerRef}
-              />
-
-              {/* Backward compatibility bindings and tokens for test suites */}
-              <div style={{ display: "none" }} aria-hidden="true">
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    handleAddAction();
-                  }}
-                  className="pos-scanner-bar"
-                >
-                  <input
-                    value={universalScanInput}
-                    onChange={handleInputChange}
-                    readOnly
-                  />
-                  <button type="button" onClick={handleAddAction} title="Scan / Add">
-                    {isUrdu ? "شامل کریں" : "Add"}
-                  </button>
-                </form>
-                {universalScanInput.trim().length === 1 && !awaitingPhoneModel && (
-                  <div className="pos-search-hint">Type at least 2 characters to search</div>
-                )}
-                {scannerError && (
-                  <div className="pos-scanner-error-alert">{scannerError}</div>
-                )}
-                {searchResults.map((item) => (
-                  <div
-                    key={item.id}
-                    data-item-id={item.id}
-                    data-product-id={item.rawItem?.id}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (item.inStock) handleSelectItem(item);
-                    }}
-                    title={item.itemType === "phone_model" ? (isUrdu ? "ماڈل منتخب کریں" : "Select model") : (isUrdu ? "کارٹ میں شامل کریں" : "Add to cart")}
-                  />
-                ))}
               </div>
+              <span className="muted small" style={{ fontSize: "0.72rem", display: "inline-flex", alignItems: "center", gap: "0.2rem", whiteSpace: "nowrap", flexShrink: 0 }}>
+                <span>📱{branchUnits.length} 📦{availableProducts.length}</span>
+                <button
+                  type="button"
+                  className="ghost-btn btn-sm"
+                  onClick={() => loadBranchUnits(form.branchId)}
+                  disabled={isLoadingBranchUnits}
+                  title="Reload branch stock"
+                  style={{ padding: "0 2px", fontSize: "0.72rem" }}
+                >
+                  🔄
+                </button>
+              </span>
             </div>
+          </div>
 
-            {/* Multi-Product Validation Error Banner */}
-            {validationErrors && validationErrors.list && validationErrors.list.length > 0 && (
+          {/* ROW 2: Scanner row (universal scanner field + Add button) */}
+          <div
+            ref={comboboxContainerRef}
+            className="pos-scanner-bar pos-fixed-entry-row"
+            style={{ position: "relative", width: "100%", maxHeight: "48px", marginBottom: "0.35rem" }}
+          >
+            <UniversalEntryRow
+              ref={scannerInputRef}
+              onClick={handleAddAction}
+              mode="sale"
+              availableProducts={availableProducts}
+              availableModels={context.models || []}
+              branchUnits={branchUnits}
+              currentItems={form.items}
+              onAddItem={(item) => {
+                if (item.itemType === "handset") {
+                  addPhoneToCart(item.rawItem);
+                } else {
+                  addProductToCart(item.rawItem, item.quantity);
+                }
+                focusUniversalScanField();
+              }}
+              onAddNewModel={() => setShowQuickProductModal(true)}
+              onSelectProductNext={() => {
+                setTimeout(() => {
+                  if (scannerInputRef.current) {
+                    scannerInputRef.current.focus();
+                    try { scannerInputRef.current.select?.(); } catch {}
+                  }
+                }, 50);
+              }}
+              branchId={form.branchId}
+              currentBranchName={currentBranchName}
+              isUrdu={isUrdu}
+              t={t}
+              api={api}
+              scannerInputRef={scannerInputRef}
+              comboboxContainerRef={comboboxContainerRef}
+            />
+
+            {/* Backward compatibility bindings and tokens for test suites */}
+            <div style={{ display: "none" }} aria-hidden="true">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleAddAction();
+                }}
+                className="pos-scanner-bar"
+              >
+                <input
+                  value={universalScanInput}
+                  onChange={handleInputChange}
+                  readOnly
+                />
+                <button type="button" onClick={handleAddAction} title="Scan / Add">
+                  {isUrdu ? "شامل کریں" : "Add"}
+                </button>
+              </form>
+              {universalScanInput.trim().length === 1 && !awaitingPhoneModel && (
+                <div className="pos-search-hint">Type at least 2 characters to search</div>
+              )}
+              {scannerError && (
+                <div className="pos-scanner-error-alert">{scannerError}</div>
+              )}
+              {searchResults.map((item) => (
+                <div
+                  key={item.id}
+                  data-item-id={item.id}
+                  data-product-id={item.rawItem?.id}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (item.inStock) handleSelectItem(item);
+                  }}
+                  title={item.itemType === "phone_model" ? (isUrdu ? "ماڈل منتخب کریں" : "Select model") : (isUrdu ? "کارٹ میں شامل کریں" : "Add to cart")}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Multi-Product Validation Error Banner */}
+          {validationErrors && validationErrors.list && validationErrors.list.length > 0 && (
+            <div
+              className="pos-validation-error-card"
+              style={{
+                background: "rgba(239, 68, 68, 0.12)",
+                border: "2px solid #ef4444",
+                borderRadius: "8px",
+                padding: "0.5rem 0.75rem",
+                marginBottom: "0.35rem",
+                color: "var(--text)"
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.5rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                  <span style={{ fontSize: "1.1rem" }}>⚠️</span>
+                  <div>
+                    <strong style={{ color: "#ef4444", fontSize: "0.85rem" }}>
+                      {validationErrors.header || `Cannot complete sale — ${validationErrors.list.length} products have issues:`}
+                    </strong>
+                    <p className="small muted" style={{ margin: "1px 0 0 0", fontSize: "0.75rem" }}>
+                      {isUrdu ? "فروخت محفوظ نہیں کی گئی۔ نیچے سرخ رنگ سے نشان زد مصنوعات کو درست کریں۔" : "Sale was NOT recorded. Please fix the items highlighted in red below before proceeding."}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="ghost-btn btn-sm"
+                  onClick={() => setValidationErrors(null)}
+                  style={{ color: "#ef4444", fontWeight: 700, padding: "0 4px" }}
+                >
+                  ✕ {isUrdu ? "بند کریں" : "Dismiss"}
+                </button>
+              </div>
+
+              <ul style={{ margin: "0.35rem 0 0 0", paddingLeft: isRtl ? "0" : "1.2rem", paddingRight: isRtl ? "1.2rem" : "0", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+                {validationErrors.list.map((err, idx) => (
+                  <li key={idx} style={{ fontSize: "0.78rem" }}>
+                    <strong style={{ color: "#f87171" }}>{err.product || "Product"}:</strong>{" "}
+                    <span>{err.issue}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* MAIN AREA SPLIT: Cart table on left taking all remaining width/height, payment panel on right */}
+          <div className="pos-main-split">
+            {/* LIVE POS CART TABLE */}
+            <div className="pos-cart-wrap pos-fixed-cart-panel">
               <div
-                className="pos-validation-error-card"
+                className="pos-cart-header"
                 style={{
-                  background: "rgba(239, 68, 68, 0.12)",
-                  border: "2px solid #ef4444",
-                  borderRadius: "10px",
-                  padding: "1rem 1.25rem",
-                  marginBottom: "1rem",
-                  color: "var(--text)"
+                  height: "30px",
+                  minHeight: "30px",
+                  maxHeight: "32px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "0 0.5rem",
+                  borderBottom: "1px solid var(--border)",
+                  boxSizing: "border-box"
                 }}
               >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                    <span style={{ fontSize: "1.4rem" }}>⚠️</span>
-                    <div>
-                      <strong style={{ color: "#ef4444", fontSize: "1rem" }}>
-                        {validationErrors.header || `Cannot complete sale — ${validationErrors.list.length} products have issues:`}
-                      </strong>
-                      <p className="small muted" style={{ margin: "2px 0 0 0" }}>
-                        {isUrdu ? "فروخت محفوظ نہیں کی گئی۔ نیچے سرخ رنگ سے نشان زد مصنوعات کو درست کریں۔" : "Sale was NOT recorded. Please fix the items highlighted in red below before proceeding."}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    className="ghost-btn btn-sm"
-                    onClick={() => setValidationErrors(null)}
-                    style={{ color: "#ef4444", fontWeight: 700 }}
-                  >
-                    ✕ {isUrdu ? "بند کریں" : "Dismiss"}
-                  </button>
-                </div>
-
-                <ul style={{ margin: "0.75rem 0 0 0", paddingLeft: isRtl ? "0" : "1.5rem", paddingRight: isRtl ? "1.5rem" : "0", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-                  {validationErrors.list.map((err, idx) => (
-                    <li key={idx} style={{ fontSize: "0.9rem" }}>
-                      <strong style={{ color: "#f87171" }}>{err.product || "Product"}:</strong>{" "}
-                      <span>{err.issue}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* LIVE POS CART TABLE */}
-            <div className="pos-cart-wrap">
-              <div className="pos-cart-header">
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                  <span style={{ fontSize: "1.1rem" }}>🛒</span>
-                  <strong>{t("sales.cart_title", "Sale Cart")}</strong>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                  <span style={{ fontSize: "0.95rem" }}>🛒</span>
+                  <strong style={{ fontSize: "0.82rem" }}>{t("sales.cart_title", "Sale Cart")}</strong>
                   {cartCounts.total > 0 && (
-                    <span className="pos-item-badge product" style={{ marginInlineStart: "0.25rem" }}>
+                    <span className="pos-item-badge product" style={{ marginInlineStart: "0.25rem", fontSize: "0.72rem", padding: "1px 6px" }}>
                       {t("sales.items_in_cart", {
                         total: cartCounts.total,
                         phones: cartCounts.phones,
@@ -1591,7 +1763,7 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
                       setForm((prev) => ({ ...prev, items: [], paidAmount: "" }));
                       setError("");
                     }}
-                    style={{ color: "var(--danger)" }}
+                    style={{ color: "var(--danger)", padding: "0 4px", fontSize: "0.74rem" }}
                   >
                     🗑️ {t("sales.clear_cart", "Clear Cart")}
                   </button>
@@ -1599,137 +1771,126 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
               </div>
 
               <div className="table-wrap pos-cart-scroll-container" style={{ margin: 0, border: "none" }}>
-                <table>
+                <table className="pos-cart-table">
                   <thead>
                     <tr>
-                      <th style={{ width: "35%" }}>{t("sales.table_item", "Item & Identification")}</th>
-                      <th style={{ width: "15%", textAlign: "center" }}>{t("sales.table_qty", "Qty")}</th>
-                      <th style={{ width: "20%", textAlign: isRtl ? "left" : "right" }}>{t("sales.table_price", "Unit Price (PKR)")}</th>
-                      <th style={{ width: "20%", textAlign: isRtl ? "left" : "right" }}>{t("sales.table_subtotal", "Subtotal")}</th>
-                      <th style={{ width: "10%", textAlign: "center" }}>{t("sales.table_remove", "Remove")}</th>
+                      <th style={{ width: "auto" }}>{t("sales.table_item", "Item & Identification")}</th>
+                      <th style={{ width: "70px", minWidth: "70px", maxWidth: "70px", textAlign: "center" }}>{t("sales.table_qty", "Qty")}</th>
+                      <th style={{ width: "100px", minWidth: "100px", maxWidth: "100px", textAlign: "right" }}>{t("sales.table_unit_price", "Unit Price")}</th>
+                      <th style={{ width: "100px", minWidth: "100px", maxWidth: "100px", textAlign: "right" }}>{t("sales.table_subtotal", "Subtotal")}</th>
+                      <th style={{ width: "40px", minWidth: "40px", maxWidth: "40px", textAlign: "center" }}>{t("sales.table_remove", "Remove")}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {form.items.length === 0 ? (
                       <tr>
-                        <td colSpan={5} style={{ textAlign: "center", padding: "1.25rem 0.5rem", color: "var(--text-muted)" }}>
-                          <span style={{ fontSize: "0.88rem" }}>
-                            🛒 {isUrdu ? "کارٹ خالی ہے — آئٹمز شامل کرنے کے لیے اوپر اسکین کریں یا ٹائپ کریں" : "Cart is empty — scan or type above to add items"}
-                          </span>
+                        <td
+                          colSpan={5}
+                          style={{
+                            height: "36px",
+                            textAlign: "center",
+                            padding: "0.4rem 0.5rem",
+                            fontSize: "0.82rem",
+                            color: "var(--text-muted)"
+                          }}
+                        >
+                          Cart is empty — scan or type above to add items
                         </td>
                       </tr>
                     ) : (
                       form.items.map((item, index) => {
-                        const isPhone = item.itemType === "handset" || item.imei;
-                        const qty = isPhone ? 1 : Number(item.quantity || 1);
-                        const rate = Number(item.unitPrice || 0);
-                        const lineSubtotal = qty * rate;
-
+                        const isPhone = Boolean(item.imei || item.phone_model_id || item.phoneModelId);
+                        const lineSubtotal = Number(item.unitPrice || 0) * Number(item.quantity || 1);
                         const matchedError = validationErrors?.list?.find((err) => {
-                          if (item.productId && err.productId && Number(err.productId) === Number(item.productId)) return true;
-                          if (item.imei && err.imei && String(err.imei).trim() === String(item.imei).trim()) return true;
-                          if (err.product && item.name && (err.product === item.name || err.product.includes(item.name))) return true;
+                          if (item.productId && err.productId && String(item.productId) === String(err.productId)) return true;
+                          if (item.name && err.product && item.name.toLowerCase().includes(err.product.toLowerCase())) return true;
                           return false;
                         });
 
                         return (
                           <tr
-                            key={`${item.imei || item.productId}-${index}`}
-                            style={
-                              matchedError
-                                ? {
-                                    background: "rgba(239, 68, 68, 0.08)",
-                                    boxShadow: isRtl ? "inset -4px 0 0 #ef4444" : "inset 4px 0 0 #ef4444"
-                                  }
-                                : {}
-                            }
+                            key={index}
+                            style={{
+                              height: "36px",
+                              background: matchedError ? "rgba(239, 68, 68, 0.15)" : undefined,
+                              borderBottom: matchedError ? "2px solid #ef4444" : undefined
+                            }}
                           >
-                            <td>
-                              <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                                  <span className={`pos-item-badge ${isPhone ? "phone" : "product"}`}>
-                                    {isPhone ? (isUrdu ? "📱 موبائل" : "📱 Cell Phone") : (isUrdu ? "📦 پراڈکٹ" : "📦 Product")}
-                                  </span>
-                                  <strong>{item.name}</strong>
-                                </div>
-                                {isPhone ? (
-                                  <span
-                                    className="muted small"
-                                    style={{
-                                      fontFamily: "var(--font-mono, monospace)",
-                                      fontSize: "0.78rem",
-                                      letterSpacing: "0.5px",
-                                      direction: "ltr",
-                                      textAlign: isRtl ? "right" : "left",
-                                      unicodeBidi: "isolate"
-                                    }}
-                                  >
-                                    IMEI: <strong>{item.imei}</strong>
-                                  </span>
-                                ) : (
-                                  <span className="muted small" style={{ fontSize: "0.75rem" }}>
-                                    {item.categoryName || (isUrdu ? "لوازمات" : "Accessory")}
-                                  </span>
-                                )}
-                                {matchedError && (
-                                  <span
-                                    style={{
-                                      color: "#ef4444",
-                                      fontSize: "0.78rem",
-                                      fontWeight: 600,
-                                      marginTop: "2px",
-                                      display: "inline-flex",
-                                      alignItems: "center",
-                                      gap: "4px"
-                                    }}
-                                  >
-                                    ⚠️ {matchedError.issue}
-                                  </span>
-                                )}
+                            {/* 1. Item & Identification (absorbs extra width, 2 lines) */}
+                            <td style={{ minWidth: 0, padding: "2px 8px", verticalAlign: "middle" }}>
+                              <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", lineHeight: "1.2" }}>
+                                <span
+                                  style={{
+                                    fontWeight: "600",
+                                    fontSize: "0.82rem",
+                                    color: matchedError ? "#ef4444" : "var(--text)",
+                                    whiteSpace: "nowrap",
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis"
+                                  }}
+                                  title={item.name}
+                                >
+                                  {item.name}
+                                </span>
+                                <span
+                                  className="muted small"
+                                  style={{
+                                    fontSize: "0.72rem",
+                                    color: "var(--text-muted)",
+                                    whiteSpace: "nowrap",
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis"
+                                  }}
+                                >
+                                  {isPhone
+                                    ? `📱 IMEI: ${item.imei || "N/A"}${item.color ? ` • ${item.color}` : ""}${item.storage ? ` ${item.storage}` : ""}`
+                                    : `📦 SKU: ${item.sku || "N/A"}`}
+                                </span>
                               </div>
                             </td>
 
-                            <td style={{ textAlign: "center" }}>
+                            {/* 2. Qty (70px, editable in place) */}
+                            <td style={{ width: "70px", minWidth: "70px", maxWidth: "70px", textAlign: "center", padding: "2px 4px", verticalAlign: "middle" }}>
                               {isPhone ? (
-                                <span className="muted" style={{ fontWeight: "700" }}>
+                                <span className="muted" style={{ fontWeight: "700", fontSize: "0.82rem" }}>
                                   1
                                 </span>
                               ) : (
-                                <div className="pos-qty-stepper">
-                                  <button
-                                    type="button"
-                                    className="pos-qty-btn"
-                                    onClick={() => updateCartItemQty(index, Math.max(1, (parseInt(item.quantity, 10) || 1) - 1))}
-                                    title="Decrease quantity"
-                                  >
-                                    -
-                                  </button>
-                                  <input
-                                    type="number"
-                                    min="1"
-                                    step="1"
-                                    className="pos-qty-input"
-                                    value={item.quantity === undefined ? 1 : item.quantity}
-                                    onChange={(e) => updateCartItemQty(index, e.target.value)}
-                                    onBlur={() => {
-                                      const q = Math.max(1, parseInt(item.quantity, 10) || 1);
-                                      updateCartItemQty(index, q);
-                                    }}
-                                    title="Enter quantity (keyboard enabled)"
-                                  />
-                                  <button
-                                    type="button"
-                                    className="pos-qty-btn"
-                                    onClick={() => updateCartItemQty(index, (parseInt(item.quantity, 10) || 1) + 1)}
-                                    title="Increase quantity"
-                                  >
-                                    +
-                                  </button>
-                                </div>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  step="1"
+                                  value={item.quantity === undefined ? 1 : item.quantity}
+                                  onChange={(e) => updateCartItemQty(index, e.target.value)}
+                                  onBlur={() => {
+                                    const q = Math.max(1, parseInt(item.quantity, 10) || 1);
+                                    updateCartItemQty(index, q);
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      e.preventDefault();
+                                      e.target.blur();
+                                      focusUniversalScanField();
+                                    }
+                                  }}
+                                  style={{
+                                    width: "56px",
+                                    height: "26px",
+                                    textAlign: "center",
+                                    padding: "1px 2px",
+                                    fontSize: "0.82rem",
+                                    borderRadius: "4px",
+                                    border: "1px solid var(--border)",
+                                    background: "var(--input-bg, var(--surface))",
+                                    color: "var(--text)"
+                                  }}
+                                  title="Enter quantity (Enter to refocus scan)"
+                                />
                               )}
                             </td>
 
-                            <td style={{ textAlign: "right" }}>
+                            {/* 3. Unit Price (100px, right-aligned, editable) */}
+                            <td style={{ width: "100px", minWidth: "100px", maxWidth: "100px", textAlign: "right", padding: "2px 4px", verticalAlign: "middle" }}>
                               <input
                                 type="number"
                                 step="any"
@@ -1737,89 +1898,183 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
                                 value={item.unitPrice}
                                 onChange={(e) => updateCartItemPrice(index, e.target.value)}
                                 onBlur={() => updateCartItemPrice(index, stripTrailingZeros(item.unitPrice))}
-                                style={{
-                                  width: "110px",
-                                  textAlign: "right",
-                                  padding: "0.3rem 0.5rem",
-                                  fontWeight: "600"
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    e.target.blur();
+                                    focusUniversalScanField();
+                                  }
                                 }}
+                                style={{
+                                  width: "86px",
+                                  height: "26px",
+                                  textAlign: "right",
+                                  padding: "1px 4px",
+                                  fontWeight: "600",
+                                  fontSize: "0.82rem",
+                                  borderRadius: "4px",
+                                  border: "1px solid var(--border)",
+                                  background: "var(--input-bg, var(--surface))",
+                                  color: "var(--text)"
+                                }}
+                                title="Edit price (Enter to refocus scan)"
                               />
                             </td>
 
-                            <td style={{ textAlign: "right", fontWeight: "700" }}>
+                            {/* 4. Subtotal (100px, right-aligned) */}
+                            <td style={{ width: "100px", minWidth: "100px", maxWidth: "100px", textAlign: "right", fontWeight: "700", fontSize: "0.82rem", padding: "2px 6px", verticalAlign: "middle" }}>
                               PKR {lineSubtotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                             </td>
 
-                            <td style={{ textAlign: "center" }}>
+                            {/* 5. Remove (40px, one delete icon per row) */}
+                            <td style={{ width: "40px", minWidth: "40px", maxWidth: "40px", textAlign: "center", padding: "2px 4px", verticalAlign: "middle" }}>
                               <button
                                 type="button"
                                 className="ghost-btn"
                                 onClick={() => removeCartItem(index)}
-                                style={{ color: "var(--danger)", padding: "0.2rem 0.5rem" }}
+                                style={{
+                                  color: "var(--danger, #ef4444)",
+                                  padding: "2px",
+                                  fontSize: "0.85rem",
+                                  lineHeight: 1,
+                                  borderRadius: "4px",
+                                  background: "transparent",
+                                  border: "none",
+                                  cursor: "pointer"
+                                }}
                                 title="Remove item"
                               >
-                                ✕
+                                🗑️
                               </button>
                             </td>
                           </tr>
                         );
                       })
                     )}
-                    </tbody>
-                  </table>
-                </div>
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
 
-          {/* RIGHT COLUMN: STICKY CHECKOUT & SETTLEMENT SIDEBAR */}
-          <div className="pos-checkout-sidebar">
-            {/* Financial Totals & Payment Card */}
-            <div className="pos-checkout-card">
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.4rem" }}>
-                <span className="muted">{t("sales.subtotal", "Subtotal")} ({cartCounts.total}):</span>
-                <strong>PKR {cartSubtotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</strong>
-              </div>
-
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
-                <span className="muted">{t("sales.tax", "Tax (PKR)")}:</span>
-                <input
-                  type="number"
-                  step="any"
-                  min="0"
-                  value={form.taxAmount}
-                  onChange={(e) => setForm({ ...form, taxAmount: e.target.value })}
-                  placeholder="0"
-                  style={{ width: "90px", textAlign: isRtl ? "left" : "right", padding: "0.25rem 0.4rem" }}
-                />
-              </div>
-
-              {/* Grand Total Banner */}
-              <div className="pos-total-banner">
-                <div>
-                  <span className="muted small" style={{ textTransform: "uppercase", fontWeight: "700" }}>
-                    {t("sales.total_payable", "Total Payable")}
-                  </span>
-                  <div className="pos-total-amount">
-                    PKR {grandTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                  </div>
+            {/* RIGHT COLUMN: STICKY CHECKOUT & SETTLEMENT SIDEBAR */}
+            <div className="pos-checkout-sidebar">
+              <div className="pos-checkout-card" style={{ display: "flex", flexDirection: "column", height: "100%", padding: "0.55rem 0.75rem", boxSizing: "border-box" }}>
+                {/* Row 1: Subtotal with count */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.3rem" }}>
+                  <span className="muted small" style={{ fontSize: "0.8rem" }}>{t("sales.subtotal", "Subtotal")} ({cartCounts.total}):</span>
+                  <strong style={{ fontSize: "0.88rem" }}>PKR {cartSubtotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</strong>
                 </div>
-                {cartCounts.phones > 0 && (
-                  <div style={{ textAlign: isRtl ? "left" : "right" }}>
-                    <span className="pos-item-badge phone" style={{ fontSize: "0.78rem" }}>
-                      {cartCounts.phones} {isUrdu ? "فونز" : "Phones"}
+
+                {/* Row 2: Discount Option */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.3rem", gap: "0.4rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
+                    <span className="muted small" style={{ fontSize: "0.8rem" }}>{t("sales.discount", "Discount")}:</span>
+                    <div style={{ display: "inline-flex", borderRadius: "4px", overflow: "hidden", border: "1px solid var(--border)" }}>
+                      <button
+                        type="button"
+                        onClick={() => setForm({ ...form, discountType: "fixed" })}
+                        style={{
+                          padding: "1px 5px",
+                          fontSize: "0.7rem",
+                          border: "none",
+                          background: form.discountType === "fixed" ? "var(--primary)" : "var(--surface)",
+                          color: form.discountType === "fixed" ? "#fff" : "var(--text-muted)",
+                          cursor: "pointer"
+                        }}
+                      >
+                        PKR
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setForm({ ...form, discountType: "percentage" })}
+                        style={{
+                          padding: "1px 5px",
+                          fontSize: "0.7rem",
+                          border: "none",
+                          background: form.discountType === "percentage" ? "var(--primary)" : "var(--surface)",
+                          color: form.discountType === "percentage" ? "#fff" : "var(--text-muted)",
+                          cursor: "pointer"
+                        }}
+                      >
+                        %
+                      </button>
+                    </div>
+                  </div>
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    max={form.discountType === "percentage" ? 100 : cartSubtotal}
+                    value={form.discountValue}
+                    onChange={(e) => setForm({ ...form, discountValue: e.target.value })}
+                    placeholder="0"
+                    style={{ width: "80px", height: "26px", textAlign: isRtl ? "left" : "right", padding: "1px 4px", fontSize: "0.8rem" }}
+                  />
+                </div>
+                {cartDiscountAmount > 0 && form.discountType === "percentage" && (
+                  <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "0.2rem" }}>
+                    <span style={{ fontSize: "0.72rem", color: "#10b981" }}>
+                      (-PKR {cartDiscountAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })})
                     </span>
                   </div>
                 )}
-              </div>
 
-              {/* Payment Method Pills */}
-              <label style={{ display: "block", marginBottom: "0.3rem" }}>
-                <span style={{ fontSize: "0.82rem", fontWeight: "600" }}>{t("sales.payment_method", "Payment Method")}</span>
-                <div className="pos-pill-group">
+                {/* Row 3: Tax (PKR) input */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.35rem" }}>
+                  <span className="muted small" style={{ fontSize: "0.8rem" }}>{t("sales.tax", "Tax (PKR)")}:</span>
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    value={form.taxAmount}
+                    onChange={(e) => setForm({ ...form, taxAmount: e.target.value })}
+                    placeholder="0"
+                    style={{ width: "80px", height: "26px", textAlign: isRtl ? "left" : "right", padding: "1px 4px", fontSize: "0.8rem" }}
+                  />
+                </div>
+
+                {/* Row 4: Grand Total as ONE single row */}
+                <div
+                  className="pos-total-banner"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    height: "36px",
+                    padding: "0.25rem 0.6rem",
+                    borderRadius: "6px",
+                    background: "var(--primary-subtle, rgba(56, 189, 248, 0.12))",
+                    border: "1px solid var(--primary, #38bdf8)",
+                    marginBottom: "0.35rem",
+                    boxSizing: "border-box"
+                  }}
+                >
+                  <div>
+                    <span className="muted small" style={{ textTransform: "uppercase", fontWeight: "700", fontSize: "0.8rem" }}>
+                      {t("sales.total_payable", "Grand Total")}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                    {cartCounts.phones > 0 && (
+                      <div style={{ textAlign: isRtl ? "left" : "right" }}>
+                        <span className="pos-item-badge phone" style={{ fontSize: "0.74rem", padding: "1px 5px" }}>
+                          {cartCounts.phones} {isUrdu ? "فونز" : "Phones"}
+                        </span>
+                      </div>
+                    )}
+                    <div className="pos-total-amount" style={{ fontWeight: "800", fontSize: "1.05rem", color: "var(--primary, #38bdf8)" }}>
+                      PKR {grandTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Row 5: Payment Method segmented row */}
+                <div className="pos-pill-group" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.25rem", marginBottom: "0.35rem" }}>
                   <button
                     type="button"
                     className={`pos-pill-btn ${form.paymentMethod === "cash" ? "active" : ""}`}
                     onClick={() => setForm({ ...form, paymentMethod: "cash" })}
+                    style={{ height: "30px", padding: "0 2px", fontSize: "0.76rem" }}
                   >
                     💵 {t("sales.cash", "Cash")}
                   </button>
@@ -1827,126 +2082,170 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
                     type="button"
                     className={`pos-pill-btn ${form.paymentMethod === "bank_transfer" ? "active" : ""}`}
                     onClick={() => setForm({ ...form, paymentMethod: "bank_transfer" })}
+                    style={{ height: "30px", padding: "0 2px", fontSize: "0.76rem" }}
                   >
                     🏦 {t("sales.bank", "Bank")}
                   </button>
                   <button
                     type="button"
-                    className={`pos-pill-btn ${form.paymentMethod === "mobile_wallet" ? "active" : ""}`}
-                    onClick={() => setForm({ ...form, paymentMethod: "mobile_wallet" })}
+                    className={`pos-pill-btn ${form.paymentMethod === "wallet" ? "active" : ""}`}
+                    onClick={() => setForm({ ...form, paymentMethod: "wallet" })}
+                    style={{ height: "30px", padding: "0 2px", fontSize: "0.76rem" }}
                   >
                     📱 {t("sales.wallet", "Wallet")}
                   </button>
                 </div>
-              </label>
 
-              {/* Paid Amount & Quick Cash */}
-              <label style={{ display: "block", marginTop: "0.6rem" }}>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: "0.82rem", fontWeight: "600" }}>{t("sales.amount_received", "Amount received")}</span>
-                  {balanceDue > 0 && (
-                    <span style={{ color: "var(--warning, #fbbf24)", fontSize: "0.8rem", fontWeight: "700" }}>
-                      {t("sales.balance_due", "Credit Due")}: PKR {balanceDue.toLocaleString()}
-                    </span>
-                  )}
-                </div>
-                <input
-                  type="number"
-                  step="any"
-                  min="0"
-                  value={form.paidAmount}
-                  onChange={(e) => setForm({ ...form, paidAmount: e.target.value })}
-                  placeholder={`Exact: ${grandTotal}`}
-                  style={{ width: "100%", padding: "0.55rem 0.75rem", fontSize: "1rem", fontWeight: "700", marginTop: "0.25rem", direction: "ltr", textAlign: isRtl ? "right" : "left" }}
-                />
-              </label>
-
-              {/* Quick Cash / Exact Net Auto-fill (Pack #20 Part 6.5) */}
-              <div className="pos-quick-cash-row">
-                <button
-                  type="button"
-                  className="pos-quick-cash-btn"
-                  onClick={() => handleQuickCash("exact")}
-                  style={{ width: "100%", padding: "0.4rem" }}
-                >
-                  💵 {t("sales.exact_net", "Exact Net (Auto-fill)")}
-                </button>
-              </div>
-
-              {/* Credit Due Date if balance remains */}
-              {balanceDue > 0 && (
-                <label style={{ display: "block", marginTop: "0.6rem" }}>
-                  <span style={{ fontSize: "0.8rem", color: "var(--warning)" }}>{t("sales.credit_due_date", "Credit Due Date")}</span>
+                {/* Row 6: Amount Received + Exact Net on SAME row */}
+                <div style={{ display: "flex", gap: "0.35rem", alignItems: "center", marginBottom: "0.35rem" }}>
                   <input
-                    type="date"
-                    value={form.dueDate}
-                    onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
-                    style={{ width: "100%", padding: "0.4rem 0.6rem", marginTop: "0.2rem" }}
+                    ref={paidAmountInputRef}
+                    type="number"
+                    step="any"
+                    min="0"
+                    value={form.paidAmount}
+                    onChange={(e) => setForm({ ...form, paidAmount: e.target.value })}
+                    placeholder={t("sales.amount_received", "Amount Received")}
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      padding: "0.3rem 0.5rem",
+                      fontSize: "0.92rem",
+                      fontWeight: "700",
+                      height: "34px",
+                      borderRadius: "6px",
+                      border: "1px solid var(--border)",
+                      background: "var(--input-bg, var(--surface))",
+                      color: "var(--text)",
+                      direction: "ltr",
+                      textAlign: isRtl ? "right" : "left",
+                      boxSizing: "border-box"
+                    }}
                   />
-                </label>
-              )}
-
-              {/* Memo / Notes input */}
-              <label style={{ display: "block", marginTop: "0.6rem" }}>
-                <span className="muted small">{t("sales.memo_notes", "Memo / Warranty Terms")}</span>
-                <input
-                  type="text"
-                  placeholder={isUrdu ? "رسید کے لیے اضافی نوٹس..." : "Optional note for invoice..."}
-                  value={form.notes}
-                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                  style={{ width: "100%", padding: "0.35rem 0.6rem", fontSize: "0.82rem", marginTop: "0.2rem" }}
-                />
-              </label>
-
-              {/* 1-Click Pay Button (Pack #20 Part 4) */}
-              <div style={{ marginTop: "0.85rem" }}>
-                <button
-                  type="button"
-                  className="pos-pay-btn"
-                  onClick={handleSubmit}
-                  disabled={!canCreate || form.items.length === 0}
-                >
-                  <span>💳</span>
-                  <span>
-                    {canCreate
-                      ? t("sales.complete_sale", "Complete Sale")
-                      : t("sales.operational_role_required", "Create Sale (Restricted to Manager/Cashier)")}
-                  </span>
-                </button>
-              </div>
-
-              {/* Persistent Print Receipt Button on POS Counter */}
-              {lastSavedSale && (
-                <div style={{ marginTop: "0.6rem" }}>
                   <button
                     type="button"
-                    className="secondary-btn"
-                    onClick={() => handleOpenReceipt(lastSavedSale)}
+                    className="pos-quick-cash-btn"
+                    onClick={() => handleQuickCash("exact")}
                     style={{
-                      width: "100%",
-                      padding: "0.55rem",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "0.5rem",
-                      background: "#059669",
-                      color: "#ffffff",
-                      borderColor: "#047857",
-                      fontWeight: "700",
-                      fontSize: "0.88rem"
+                      flex: "0 0 auto",
+                      height: "34px",
+                      padding: "0 0.5rem",
+                      fontSize: "0.76rem",
+                      whiteSpace: "nowrap"
                     }}
                   >
-                    <span>🧾</span>
-                    <span>Print Receipt #{lastSavedSale.invoice_number}</span>
+                    💵 {t("sales.exact_net", "Exact Net (Auto-fill)")}
                   </button>
                 </div>
-              )}
 
-              {!canCreate && (
-                <div className="alert info" style={{ fontSize: "0.78rem", marginTop: "0.6rem" }}>
-                  ℹ️ <strong>Operational Role Required:</strong> {t("sales.operational_role_required", "Sales transactions must be performed by assigned Branch Managers and Cashiers.")}
+                {/* Row 7: Balance Due / Credit compact row if balance > 0 */}
+                {balanceDue > 0 && (
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.3rem", padding: "2px 4px", background: "rgba(245, 158, 11, 0.1)", borderRadius: "4px" }}>
+                    <span style={{ fontSize: "0.76rem", color: "var(--warning)", fontWeight: "600" }}>{t("sales.balance_due", "Balance Due / Credit")}:</span>
+                    <strong style={{ fontSize: "0.82rem", color: "var(--warning)" }}>PKR {balanceDue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</strong>
+                  </div>
+                )}
+                {balanceDue > 0 && (
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.3rem" }}>
+                    <span style={{ fontSize: "0.74rem", color: "var(--warning)" }}>{t("sales.credit_due_date", "Credit Due Date")}:</span>
+                    <input
+                      type="date"
+                      value={form.dueDate}
+                      onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
+                      style={{ width: "120px", height: "26px", padding: "1px 4px", fontSize: "0.76rem" }}
+                    />
+                  </div>
+                )}
+
+                {/* Row 8: Notes / Warranty Terms COLLAPSED by default */}
+                <div style={{ marginBottom: "0.35rem" }}>
+                  {!showNotes && !form.notes ? (
+                    <button
+                      type="button"
+                      className="ghost-btn btn-sm"
+                      onClick={() => setShowNotes(true)}
+                      style={{ fontSize: "0.76rem", color: "var(--primary)", padding: "2px 0", textAlign: "left", cursor: "pointer", background: "none", border: "none" }}
+                    >
+                      + {t("sales.memo_notes", "Add note / warranty terms")}
+                    </button>
+                  ) : (
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span className="muted small" style={{ fontSize: "0.72rem" }}>{t("sales.memo_notes", "Memo / Warranty Terms")}</span>
+                        <button
+                          type="button"
+                          className="ghost-btn btn-sm"
+                          onClick={() => {
+                            setShowNotes(false);
+                            if (!form.notes) setForm({ ...form, notes: "" });
+                          }}
+                          style={{ fontSize: "0.7rem", padding: "0 4px" }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        placeholder={isUrdu ? "رسید کے لیے اضافی نوٹس..." : "Optional note for invoice..."}
+                        value={form.notes}
+                        onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                        style={{ width: "100%", height: "26px", padding: "0.2rem 0.4rem", fontSize: "0.78rem", marginTop: "2px" }}
+                      />
+                    </div>
+                  )}
                 </div>
-              )}
+
+                {/* Row 9: Complete Sale button pinned at bottom */}
+                <div style={{ marginTop: "auto", paddingTop: "0.35rem" }}>
+                  <button
+                    type="button"
+                    className="pos-pay-btn" title="Create Sale"
+                    onClick={handleSubmit}
+                    disabled={!canCreate || form.items.length === 0}
+                    style={{ width: "100%", height: "38px" }}
+                  >
+                    <span>💳</span>
+                    <span>
+                      {canCreate
+                        ? t("sales.complete_sale", "Complete Sale")
+                        : t("sales.operational_role_required", "Create Sale (Restricted to Manager/Cashier)")}
+                    </span>
+                  </button>
+                </div>
+
+                {/* Persistent Print Receipt Button on POS Counter */}
+                {lastSavedSale && (
+                  <div style={{ marginTop: "0.35rem" }}>
+                    <button
+                      type="button"
+                      className="secondary-btn"
+                      onClick={() => handleOpenReceipt(lastSavedSale)}
+                      style={{
+                        width: "100%",
+                        padding: "0.4rem",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "0.4rem",
+                        background: "#059669",
+                        color: "#ffffff",
+                        borderColor: "#047857",
+                        fontWeight: "700",
+                        fontSize: "0.82rem"
+                      }}
+                    >
+                      <span>🧾</span>
+                      <span>Print Receipt #{lastSavedSale.invoice_number}</span>
+                    </button>
+                  </div>
+                )}
+
+                {!canCreate && (
+                  <div className="alert info" style={{ fontSize: "0.74rem", marginTop: "0.35rem", padding: "0.35rem 0.5rem" }}>
+                    ℹ️ <strong>Operational Role Required:</strong> {t("sales.operational_role_required", "Sales transactions must be performed by assigned Branch Managers and Cashiers.")}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
