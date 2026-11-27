@@ -163,15 +163,11 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
     }, 40);
   }, []);
 
-  // Default focus on vendor field on mount and tab change (fallback to scan field)
+  // Default focus on Universal Scan Field on mount and tab change
   useEffect(() => {
     if (activeTab === "new") {
       const timer = setTimeout(() => {
-        if (vendorInputRef.current && typeof vendorInputRef.current.focus === "function") {
-          vendorInputRef.current.focus();
-        } else {
-          focusUniversalScanField();
-        }
+        focusUniversalScanField();
       }, 70);
       return () => clearTimeout(timer);
     }
@@ -438,8 +434,8 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
     setForm((prev) => ({
       ...prev,
       vendorId: vId,
-      purchaserName: vId ? "" : prev.purchaserName,
-      purchaserCnic: vId ? "" : prev.purchaserCnic
+      purchaserName: vId ? "" : (prev.vendorId ? "" : prev.purchaserName),
+      purchaserCnic: vId ? "" : (prev.vendorId ? "" : prev.purchaserCnic)
     }));
   }
 
@@ -1487,10 +1483,10 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
       {/* 1. MODERN 2-COLUMN PURCHASE INWARD LAYOUT */}
       {activeTab === "new" && (
         <form onSubmit={handleSubmit} ref={formRef} className="pos-screen-layout purchase-counter-form">
-          {/* ROW 1: Vendor / Info Row (one single-line row, min-height 3rem) */}
-          <div className="pos-purchase-row-1 purchase-vendor-row">
+          {/* ROW 1: Supplier / Vendor Profile (flexes widest), Purchaser Name, Purchaser CNIC */}
+          <div className="pos-purchase-row-1 purchase-vendor-row purchase-info-row purchase-info-row-1">
             {/* Supplier / Vendor Profile - flexes widest */}
-            <div className="vendor-row-item vendor-field-supplier">
+            <div className={`vendor-row-item vendor-field-supplier ${form.vendorId ? "supplier-full-width" : ""}`}>
               <label htmlFor="purchase-vendor-select" className="vendor-row-label">
                 {t("purchases.vendor_profile", "Supplier")}:
               </label>
@@ -1590,8 +1586,10 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
                 </div>
               </>
             )}
+          </div>
 
-            {/* Purchase Date - compact clamp(8rem, 12%, 10rem) */}
+          {/* ROW 2: Purchase Date (compact, clamp(8rem, 12%, 10rem)), Destination Outlet (clamp(11rem, 18%, 15rem)) */}
+          <div className="pos-purchase-row-2 purchase-info-row purchase-info-row-2">
             <div className="vendor-row-item vendor-field-date">
               <label htmlFor="purchase-date-input" className="vendor-row-label">
                 {t("purchases.purchase_date", "Date")}: <span style={{ color: "var(--danger, #ef4444)" }}>*</span>
@@ -1630,7 +1628,6 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
               </div>
             </div>
 
-            {/* Destination Outlet - clamp(10rem, 16%, 14rem) */}
             <div className="vendor-row-item vendor-field-outlet">
               <label htmlFor="purchase-outlet-select" className="vendor-row-label">
                 {t("purchases.destination_outlet", "Outlet")}: <span style={{ color: "var(--danger, #ef4444)" }}>*</span>
@@ -1701,353 +1698,376 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
             </div>
           </div>
 
-          {/* ROW 3: Added-Products List taking all remaining height */}
-          <div className="pos-cart-wrap purchase-cart-container">
-            {/* Panel Header (min-height 2rem): Counts on left, quick-add buttons on right */}
-            <div className="pos-cart-header purchase-cart-panel-header">
-              <div className="cart-header-left" style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                <span style={{ fontSize: "1rem" }}>📋</span>
-                <strong style={{ fontSize: "0.85rem" }}>{t("purchases.added_items_title", "Added Purchase Order Items")}</strong>
-                <span className="pos-item-badge product" style={{ marginInlineStart: "0.35rem", fontSize: "0.75rem", padding: "1px 7px" }}>
-                  {purchaseCounts.total} {isUrdu ? "اشیاء" : "items"} ({purchaseCounts.phones} {isUrdu ? "فونز" : "phones"}, {purchaseCounts.accessories} {isUrdu ? "سامان" : "accessories"})
-                </span>
-              </div>
-              <div className="cart-header-right" style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                <button
-                  type="button"
-                  className="secondary-btn btn-sm"
-                  onClick={() => setShowQuickModelModal(true)}
-                  style={{ padding: "0.25rem 0.6rem", fontSize: "0.78rem", whiteSpace: "nowrap" }}
-                  title={isUrdu ? "نیا فون ماڈل شامل کریں" : "Quick add new phone model"}
-                >
-                  📱 {isUrdu ? "نیا ماڈل شامل کریں" : "Quick Add New Model"}
-                </button>
-                <button
-                  type="button"
-                  className="secondary-btn btn-sm"
-                  onClick={() => setShowQuickProductModal(true)}
-                  style={{ padding: "0.25rem 0.6rem", fontSize: "0.78rem", whiteSpace: "nowrap" }}
-                  title={isUrdu ? "نیا پروڈکٹ شامل کریں" : "Quick add new accessory/product"}
-                >
-                  📦 {isUrdu ? "سامان شامل کریں" : "Add Product/Accessories"}
-                </button>
-                {form.items.length > 0 && (
+          {/* MAIN AREA SPLIT: Added-Products List on left, Payment details panel on right */}
+          <div className="pos-main-split purchase-main-split">
+            {/* Added-Products List taking all remaining height */}
+            <div className="pos-cart-wrap purchase-cart-container">
+              {/* Panel Header (min-height 2rem): Counts on left, quick-add buttons on right */}
+              <div className="pos-cart-header purchase-cart-panel-header">
+                <div className="cart-header-left" style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                  <span style={{ fontSize: "1rem" }}>📋</span>
+                  <strong style={{ fontSize: "0.85rem" }}>{t("purchases.added_items_title", "Added Purchase Order Items")}</strong>
+                  <span className="pos-item-badge product" style={{ marginInlineStart: "0.35rem", fontSize: "0.75rem", padding: "1px 7px" }}>
+                    {purchaseCounts.total} {isUrdu ? "اشیاء" : "items"} ({purchaseCounts.phones} {isUrdu ? "فونز" : "phones"}, {purchaseCounts.accessories} {isUrdu ? "سامان" : "accessories"})
+                  </span>
+                </div>
+                <div className="cart-header-right" style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
                   <button
                     type="button"
-                    className="ghost-btn btn-sm"
-                    onClick={() => setForm((prev) => ({ ...prev, items: [] }))}
-                    style={{ color: "var(--danger)", padding: "0.25rem 0.5rem", fontSize: "0.78rem" }}
-                    title={isUrdu ? "تمام اشیاء ہٹائیں" : "Clear all items"}
+                    className="secondary-btn btn-sm"
+                    onClick={() => setShowQuickModelModal(true)}
+                    style={{ padding: "0.25rem 0.6rem", fontSize: "0.78rem", whiteSpace: "nowrap" }}
+                    title={isUrdu ? "نیا فون ماڈل شامل کریں" : "Quick add new phone model"}
                   >
-                    🗑️
+                    📱 {isUrdu ? "نیا ماڈل شامل کریں" : "Quick Add New Model"}
                   </button>
-                )}
+                  <button
+                    type="button"
+                    className="secondary-btn btn-sm"
+                    onClick={() => setShowQuickProductModal(true)}
+                    style={{ padding: "0.25rem 0.6rem", fontSize: "0.78rem", whiteSpace: "nowrap" }}
+                    title={isUrdu ? "نیا پروڈکٹ شامل کریں" : "Quick add new accessory/product"}
+                  >
+                    📦 {isUrdu ? "سامان شامل کریں" : "Add Product/Accessories"}
+                  </button>
+                  {form.items.length > 0 && (
+                    <button
+                      type="button"
+                      className="ghost-btn btn-sm"
+                      onClick={() => setForm((prev) => ({ ...prev, items: [] }))}
+                      style={{ color: "var(--danger)", padding: "0.25rem 0.5rem", fontSize: "0.78rem" }}
+                      title={isUrdu ? "تمام اشیاء ہٹائیں" : "Clear all items"}
+                    >
+                      🗑️
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
 
-            {/* Fixed-head, internally scrollable table */}
-            <div
-              className="purchase-cart-scroll-body"
-              tabIndex={0}
-              role="region"
-              aria-label="Purchased Items Table"
-              onKeyDown={(e) => {
-                if (e.key === "ArrowDown") {
-                  e.preventDefault();
-                  setFocusedRowIndex((prev) => Math.min((form.items?.length || 1) - 1, prev + 1));
-                } else if (e.key === "ArrowUp") {
-                  e.preventDefault();
-                  setFocusedRowIndex((prev) => Math.max(0, prev - 1));
-                }
-              }}
-            >
-              <table className="purchase-products-table">
-                <thead>
-                  <tr>
-                    <th className="col-item">{t("sales.table_item", "Item & Identification")}</th>
-                    <th className="col-qty">{t("sales.table_qty", "Qty")}</th>
-                    <th className="col-rate">{t("purchases.unit_cost", "Purchase Rate")}</th>
-                    <th className="col-subtotal">{t("sales.table_subtotal", "Subtotal")}</th>
-                    <th className="col-remove">{t("sales.table_remove", "Remove")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {form.items.length === 0 ? (
-                    <tr className="empty-row">
-                      <td colSpan={5} className="empty-cell">
-                        {t("purchases.empty_desc", "Purchase order is empty — scan or add items above")}
-                      </td>
+              {/* Fixed-head, internally scrollable table */}
+              <div
+                className="purchase-cart-scroll-body"
+                tabIndex={0}
+                role="region"
+                aria-label="Purchased Items Table"
+                onKeyDown={(e) => {
+                  if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    setFocusedRowIndex((prev) => Math.min((form.items?.length || 1) - 1, prev + 1));
+                  } else if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    setFocusedRowIndex((prev) => Math.max(0, prev - 1));
+                  }
+                }}
+              >
+                <table className="purchase-products-table">
+                  <colgroup>
+                    <col className="col-item" />
+                    <col className="col-qty" />
+                    <col className="col-rate" />
+                    <col className="col-subtotal" />
+                    <col className="col-remove" />
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th className="col-item">{t("sales.table_item", "Item & Identification")}</th>
+                      <th className="col-qty">{t("sales.table_qty", "Qty")}</th>
+                      <th className="col-rate">{t("purchases.unit_cost", "Purchase Rate")}</th>
+                      <th className="col-subtotal">{t("sales.table_subtotal", "Subtotal")}</th>
+                      <th className="col-remove">{t("sales.table_remove", "Remove")}</th>
                     </tr>
-                  ) : (
-                    form.items.map((item, index) => {
-                      const isPhone = item.itemType === "handset" || item.imei;
-                      const qty = isPhone ? 1 : Number(item.quantity || 1);
-                      const rate = Number(item.unitCost || 0);
-                      const lineSubtotal = qty * rate;
-                      const isRowFocused = index === focusedRowIndex;
+                  </thead>
+                  <tbody>
+                    {form.items.length === 0 ? (
+                      <tr className="empty-row">
+                        <td colSpan={5} className="empty-cell">
+                          {t("purchases.empty_desc", "No items in purchase yet. Scan barcode/IMEI or select product above.")}
+                        </td>
+                      </tr>
+                    ) : (
+                      form.items.map((item, index) => {
+                        const isPhone = item.itemType === "handset" || item.imei;
+                        const qty = isPhone ? 1 : Number(item.quantity || 1);
+                        const rate = Number(item.unitCost || 0);
+                        const lineSubtotal = qty * rate;
+                        const isRowFocused = index === focusedRowIndex;
 
-                      return (
-                        <tr key={`${item.imei || item.productId}-${index}`} className={isRowFocused ? "is-row-focused" : ""}>
-                          <td className="col-item">
-                            <div className="item-cell-content">
-                              <div className="item-name-row">
-                                <span className={`pos-item-badge ${isPhone ? "phone" : "product"}`}>
-                                  {isPhone ? "📱 Handset" : "📦 Product"}
-                                </span>
-                                <strong className="item-title">{item.modelTitle || item.productName || item.name || "Item"}</strong>
-                              </div>
-                              <div className="item-sub-row">
-                                {isPhone ? (
-                                  <span className="item-sub-imei">
-                                    IMEI: <strong>{item.imei}</strong>
+                        return (
+                          <tr key={`${item.imei || item.productId}-${index}`} className={isRowFocused ? "is-row-focused" : ""}>
+                            <td className="col-item">
+                              <div className="item-cell-content">
+                                <div className="item-name-row">
+                                  <span className={`pos-item-badge ${isPhone ? "phone" : "product"}`}>
+                                    {isPhone ? "📱 Handset" : "📦 Product"}
                                   </span>
-                                ) : (
-                                  <span className="item-sub-meta">
-                                    {item.sku ? `SKU: ${item.sku} • ` : ""}{item.categoryName || "Accessory"}
-                                  </span>
-                                )}
+                                  <strong className="item-title">{item.modelTitle || item.productName || item.name || "Item"}</strong>
+                                </div>
+                                <div className="item-sub-row">
+                                  {isPhone ? (
+                                    <span className="item-sub-imei">
+                                      IMEI: <strong>{item.imei}</strong>
+                                    </span>
+                                  ) : (
+                                    <span className="item-sub-meta">
+                                      {item.sku ? `SKU: ${item.sku} • ` : ""}{item.categoryName || "Accessory"}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          </td>
-                          <td className="col-qty">
-                            {isPhone ? (
-                              <span className="qty-locked">1</span>
-                            ) : (
+                            </td>
+                            <td className="col-qty">
+                              {isPhone ? (
+                                <span className="qty-locked">1</span>
+                              ) : (
+                                <input
+                                  type="number"
+                                  min="1"
+                                  step="1"
+                                  className="purchase-table-qty-input"
+                                  value={item.quantity === undefined ? 1 : item.quantity}
+                                  onChange={(e) => updatePurchaseItemQty(index, e.target.value)}
+                                  onBlur={() => {
+                                    const q = Math.max(1, parseInt(item.quantity, 10) || 1);
+                                    updatePurchaseItemQty(index, q);
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      e.target.blur();
+                                      focusUniversalScanField();
+                                    }
+                                  }}
+                                  title="Editable quantity"
+                                />
+                              )}
+                            </td>
+                            <td className="col-rate">
                               <input
                                 type="number"
-                                min="1"
-                                step="1"
-                                className="purchase-table-qty-input"
-                                value={item.quantity === undefined ? 1 : item.quantity}
-                                onChange={(e) => updatePurchaseItemQty(index, e.target.value)}
-                                onBlur={() => {
-                                  const q = Math.max(1, parseInt(item.quantity, 10) || 1);
-                                  updatePurchaseItemQty(index, q);
-                                }}
+                                step="any"
+                                min="0"
+                                className="purchase-table-rate-input"
+                                value={item.unitCost}
+                                onChange={(e) => updatePurchaseItemCost(index, e.target.value)}
+                                onBlur={() => updatePurchaseItemCost(index, stripTrailingZeros(item.unitCost))}
                                 onKeyDown={(e) => {
                                   if (e.key === "Enter") {
                                     e.target.blur();
                                     focusUniversalScanField();
                                   }
                                 }}
-                                title="Editable quantity"
+                                title="Editable purchase rate"
                               />
-                            )}
-                          </td>
-                          <td className="col-rate">
-                            <input
-                              type="number"
-                              step="any"
-                              min="0"
-                              className="purchase-table-rate-input"
-                              value={item.unitCost}
-                              onChange={(e) => updatePurchaseItemCost(index, e.target.value)}
-                              onBlur={() => updatePurchaseItemCost(index, stripTrailingZeros(item.unitCost))}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  e.target.blur();
-                                  focusUniversalScanField();
-                                }
-                              }}
-                              title="Editable purchase rate"
-                            />
-                          </td>
-                          <td className="col-subtotal">
-                            PKR {lineSubtotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                          </td>
-                          <td className="col-remove">
-                            <button
-                              type="button"
-                              className="purchase-row-remove-btn"
-                              onClick={() => removePurchaseItem(index)}
-                              title="Remove item"
-                              aria-label="Remove item"
-                            >
-                              ✕
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })
+                            </td>
+                            <td className="col-subtotal">
+                              PKR {lineSubtotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                            </td>
+                            <td className="col-remove">
+                              <button
+                                type="button"
+                                className="purchase-row-remove-btn"
+                                onClick={() => removePurchaseItem(index)}
+                                title="Remove item"
+                                aria-label="Remove item"
+                              >
+                                ✕
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* PAYMENT DETAILS PANEL — RIGHT SIDE OF LIST, FIXED CLAMP WIDTH */}
+            <div className="pos-checkout-sidebar purchase-checkout-panel purchase-payment-strip">
+              <div className="purchase-checkout-card">
+                <div className="purchase-checkout-body">
+                  {/* 1. Subtotal */}
+                  <div className="purchase-pay-row purchase-pay-subtotal">
+                    <span className="pay-row-label">
+                      {t("sales.subtotal", "Subtotal")} ({purchaseCounts.total} {isUrdu ? "اشیاء" : "items"}):
+                    </span>
+                    <strong className="pay-row-val">
+                      PKR {subtotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                    </strong>
+                  </div>
+
+                  {/* 2. Discount (PKR) input */}
+                  <div className="purchase-pay-row purchase-pay-discount">
+                    <span className="pay-row-label">{t("sales.discount", "Discount (PKR)")}:</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max={subtotal}
+                      step="any"
+                      value={form.discountAmount === 0 ? "" : form.discountAmount}
+                      onChange={handleDiscountChange}
+                      placeholder="0"
+                      className="pay-row-input compact-num"
+                      title="Discount in PKR (flat amount)"
+                    />
+                  </div>
+
+                  {/* 3. Tax (PKR) input - EXACT ONCE OCCURRENCE OF LABEL */}
+                  <div className="purchase-pay-row purchase-pay-tax">
+                    <span className="pay-row-label">{t("sales.tax", "Tax (PKR)")}:</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={form.taxAmount === 0 ? "" : form.taxAmount}
+                      onChange={handleTaxChange}
+                      placeholder="0"
+                      className="pay-row-input compact-num"
+                      title="Tax in PKR"
+                    />
+                  </div>
+
+                  {/* 4. Net Amount as ONE single row */}
+                  <div className="purchase-pay-row purchase-pay-net">
+                    <span className="pay-row-label net-label">{t("sales.total_payable", "Net Amount")}:</span>
+                    <strong className="pay-net-val">
+                      PKR {netAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                    </strong>
+                  </div>
+
+                  {/* 5. Payment Method as one segmented row */}
+                  <div className="purchase-pay-row purchase-pay-method" title={t("sales.payment_method", "Payment Method")}>
+                    <div className="pos-pill-group purchase-pill-grid">
+                      <button
+                        type="button"
+                        className={`pos-pill-btn ${form.paymentMethod === "cash" ? "active" : ""}`}
+                        onClick={() => setForm({ ...form, paymentMethod: "cash" })}
+                      >
+                        💵 {t("sales.cash", "Cash")}
+                      </button>
+                      <button
+                        type="button"
+                        className={`pos-pill-btn ${form.paymentMethod === "bank_transfer" ? "active" : ""}`}
+                        onClick={() => setForm({ ...form, paymentMethod: "bank_transfer" })}
+                      >
+                        🏦 {t("sales.bank", "Bank")}
+                      </button>
+                      <button
+                        type="button"
+                        className={`pos-pill-btn ${form.paymentMethod === "mobile_wallet" ? "active" : ""}`}
+                        onClick={() => setForm({ ...form, paymentMethod: "mobile_wallet" })}
+                      >
+                        📱 {t("sales.wallet", "Wallet")}
+                      </button>
+                      <button
+                        type="button"
+                        className={`pos-pill-btn ${form.paymentMethod === "cheque" ? "active" : ""}`}
+                        onClick={() => setForm({ ...form, paymentMethod: "cheque" })}
+                      >
+                        📝 {t("sales.cheque", "Cheque")}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 6. Paid Amount (PKR) input with compact Exact Net button on SAME row */}
+                  <div className="purchase-pay-row purchase-pay-paid">
+                    <span className="pay-row-label">{t("purchases.amount_paid_to_vendor", "Paid")}:</span>
+                    <div className="pay-paid-combo">
+                      <input
+                        ref={paidAmountInputRef}
+                        type="number"
+                        min="0"
+                        max={netAmount >= 0 ? netAmount : undefined}
+                        step="any"
+                        value={form.paidAmount === 0 ? "" : form.paidAmount}
+                        onChange={handlePaidAmountChange}
+                        placeholder="0"
+                        className="pay-row-input paid-input"
+                        title="Paid Amount (PKR) - F9 to focus"
+                      />
+                      <button
+                        type="button"
+                        className="exact-net-btn"
+                        onClick={handleExactNet}
+                        title="Fill Paid Amount with Net Amount"
+                      >
+                        {t("purchases.exact_net", "Exact Net")}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 7. Balance Due (read-only, label + amount) */}
+                  <div className="purchase-pay-row purchase-pay-balance">
+                    <span className="pay-row-label">{t("sales.balance_due", "Balance Due")}:</span>
+                    <strong
+                      className="pay-bal-val"
+                      style={{ color: balanceAmount > 0 ? "var(--danger, #ef4444)" : "var(--success, #10b981)" }}
+                    >
+                      PKR {balanceAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                    </strong>
+                  </div>
+
+                  {/* 8. Due Date */}
+                  <div className="purchase-pay-row purchase-pay-due-date">
+                    <span className="pay-row-label">{t("sales.credit_due_date", "Due Date")}:</span>
+                    <input
+                      type="date"
+                      min={todayStr}
+                      value={balanceAmount <= 0 ? "" : form.dueDate}
+                      onChange={(event) => setForm({ ...form, dueDate: event.target.value })}
+                      disabled={balanceAmount <= 0}
+                      required={balanceAmount > 0}
+                      className="pay-row-input date-input"
+                      style={{
+                        opacity: balanceAmount <= 0 ? 0.45 : 1,
+                        cursor: balanceAmount <= 0 ? "not-allowed" : "pointer"
+                      }}
+                      title={balanceAmount <= 0 ? "Due date disabled when balance is zero" : "Required when balance remains"}
+                    />
+                  </div>
+
+                  {/* 9. Order Notes / Terms expander */}
+                  <div className="purchase-pay-row purchase-pay-notes">
+                    <button
+                      type="button"
+                      className="ghost-btn btn-sm purchase-notes-toggle"
+                      onClick={() => setShowNotes(!showNotes)}
+                      title="Add order notes / terms"
+                    >
+                      📝 {showNotes ? (isUrdu ? "نوٹس چھپائیں" : "Notes ▲") : (form.notes ? (isUrdu ? "نوٹس لکھے ہیں" : "Notes (1)") : (isUrdu ? "نوٹس شامل کریں" : "Add order notes / terms"))}
+                    </button>
+                    {showNotes && (
+                      <div className="purchase-notes-popover">
+                        <input
+                          type="text"
+                          value={form.notes}
+                          onChange={(event) => setForm({ ...form, notes: event.target.value })}
+                          placeholder="Vendor invoice #, warranty notes..."
+                          className="pay-row-input notes-input"
+                          autoFocus
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 10. Save button pinned at bottom of panel, full width of panel */}
+                <div className="purchase-checkout-footer">
+                  <button
+                    ref={saveButtonRef}
+                    type="submit"
+                    className="primary-btn purchase-panel-save-btn"
+                    disabled={!canCreate || form.items.length === 0}
+                    title={!canCreate ? "Operational role required" : form.items.length === 0 ? "Add at least one item" : "Save Vendor Purchase (F2 or Ctrl+Enter)"}
+                  >
+                    {canCreate ? (isUrdu ? "خریداری محفوظ کریں" : "Save Vendor Purchase") : t("purchases.save_purchase_restricted", "Save Purchase (Restricted to Manager/Staff)")}
+                  </button>
+                  {!canCreate && (
+                    <div className="alert info" style={{ fontSize: "0.74rem", marginTop: "0.35rem", padding: "0.35rem 0.5rem" }}>
+                      ℹ️ <strong>Operational Role Required:</strong> {t("purchases.operational_role_required", "Purchases must be recorded by assigned Branch Managers and Staff.")}
+                    </div>
                   )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* ROW 4: Payment Section Strip BELOW the list (always visible, never scrolls) */}
-          <div className="purchase-payment-strip">
-            {/* 1. Subtotal */}
-            <div className="strip-group strip-subtotal">
-              <span className="strip-label">{t("sales.subtotal", "Subtotal")}:</span>
-              <strong className="strip-val">PKR {subtotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</strong>
-            </div>
-
-            {/* 2. Discount (PKR) */}
-            <div className="strip-group strip-discount">
-              <span className="strip-label">{t("sales.discount", "Discount")}:</span>
-              <input
-                type="number"
-                min="0"
-                max={subtotal}
-                step="any"
-                value={form.discountAmount === 0 ? "" : form.discountAmount}
-                onChange={handleDiscountChange}
-                placeholder="0"
-                className="strip-input compact-num"
-                title="Discount in PKR (flat amount)"
-              />
-            </div>
-
-            {/* 3. Tax (PKR) - EXACT ONCE OCCURRENCE OF LABEL */}
-            <div className="strip-group strip-tax">
-              <span className="strip-label">{t("sales.tax", "Tax (PKR)")}:</span>
-              <input
-                type="number"
-                min="0"
-                step="any"
-                value={form.taxAmount === 0 ? "" : form.taxAmount}
-                onChange={handleTaxChange}
-                placeholder="0"
-                className="strip-input compact-num"
-                title="Tax in PKR"
-              />
-            </div>
-
-            {/* 4. Net Amount (Read-only, bold, highlighted) */}
-            <div className="strip-group strip-net">
-              <span className="strip-label">{t("sales.total_payable", "Net Amount")}:</span>
-              <strong className="strip-net-val">PKR {netAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</strong>
-            </div>
-
-            {/* 5. Payment Method pills */}
-            <div className="strip-group strip-method" title={t("sales.payment_method", "Payment Method")}>
-              <div className="pos-pill-group compact-pills">
-                <button
-                  type="button"
-                  className={`pos-pill-btn ${form.paymentMethod === "cash" ? "active" : ""}`}
-                  onClick={() => setForm({ ...form, paymentMethod: "cash" })}
-                >
-                  💵 {t("sales.cash", "Cash")}
-                </button>
-                <button
-                  type="button"
-                  className={`pos-pill-btn ${form.paymentMethod === "bank_transfer" ? "active" : ""}`}
-                  onClick={() => setForm({ ...form, paymentMethod: "bank_transfer" })}
-                >
-                  🏦 {t("sales.bank", "Bank")}
-                </button>
-                <button
-                  type="button"
-                  className={`pos-pill-btn ${form.paymentMethod === "mobile_wallet" ? "active" : ""}`}
-                  onClick={() => setForm({ ...form, paymentMethod: "mobile_wallet" })}
-                >
-                  📱 {t("sales.wallet", "Wallet")}
-                </button>
-                <button
-                  type="button"
-                  className={`pos-pill-btn ${form.paymentMethod === "cheque" ? "active" : ""}`}
-                  onClick={() => setForm({ ...form, paymentMethod: "cheque" })}
-                >
-                  📝 {t("sales.cheque", "Cheque")}
-                </button>
-              </div>
-            </div>
-
-            {/* 6. Paid Amount + Exact Net button */}
-            <div className="strip-group strip-paid">
-              <span className="strip-label">{t("purchases.amount_paid_to_vendor", "Paid")}:</span>
-              <div className="strip-paid-combo">
-                <input
-                  ref={paidAmountInputRef}
-                  type="number"
-                  min="0"
-                  max={netAmount >= 0 ? netAmount : undefined}
-                  step="any"
-                  value={form.paidAmount === 0 ? "" : form.paidAmount}
-                  onChange={handlePaidAmountChange}
-                  placeholder="0"
-                  className="strip-input paid-input"
-                  title="Paid Amount (PKR) - F9 to focus"
-                />
-                <button
-                  type="button"
-                  className="exact-net-btn"
-                  onClick={handleExactNet}
-                  title="Fill Paid Amount with Net Amount"
-                >
-                  {t("purchases.exact_net", "Exact Net")}
-                </button>
-              </div>
-            </div>
-
-            {/* 7. Balance Due */}
-            <div className="strip-group strip-balance">
-              <span className="strip-label">{t("sales.balance_due", "Balance Due")}:</span>
-              <strong className="strip-bal-val" style={{ color: balanceAmount > 0 ? "var(--danger, #ef4444)" : "var(--success, #10b981)" }}>
-                PKR {balanceAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-              </strong>
-            </div>
-
-            {/* 8. Due Date */}
-            <div className="strip-group strip-due-date">
-              <span className="strip-label">{t("sales.credit_due_date", "Due Date")}:</span>
-              <input
-                type="date"
-                min={todayStr}
-                value={balanceAmount <= 0 ? "" : form.dueDate}
-                onChange={(event) => setForm({ ...form, dueDate: event.target.value })}
-                disabled={balanceAmount <= 0}
-                required={balanceAmount > 0}
-                className="strip-input date-input"
-                style={{
-                  opacity: balanceAmount <= 0 ? 0.45 : 1,
-                  cursor: balanceAmount <= 0 ? "not-allowed" : "pointer"
-                }}
-                title={balanceAmount <= 0 ? "Due date disabled when balance is zero" : "Required when balance remains"}
-              />
-            </div>
-
-            {/* 9. Order Notes / Terms expander */}
-            <div className="strip-group strip-notes">
-              <button
-                type="button"
-                className="ghost-btn btn-sm strip-notes-toggle"
-                onClick={() => setShowNotes(!showNotes)}
-                title="Add order notes / terms"
-              >
-                📝 {showNotes ? (isUrdu ? "نوٹس چھپائیں" : "Notes ▲") : (form.notes ? (isUrdu ? "نوٹس لکھے ہیں" : "Notes (1)") : (isUrdu ? "نوٹس شامل کریں" : "Add order notes / terms"))}
-              </button>
-              {showNotes && (
-                <div className="notes-popover-box">
-                  <input
-                    type="text"
-                    value={form.notes}
-                    onChange={(event) => setForm({ ...form, notes: event.target.value })}
-                    placeholder="Vendor invoice #, warranty notes..."
-                    className="strip-input notes-input"
-                    autoFocus
-                  />
                 </div>
-              )}
-            </div>
-
-            {/* 10. Save button at the right end */}
-            <div className="strip-group strip-save">
-              <button
-                ref={saveButtonRef}
-                type="submit"
-                className="primary-btn purchase-strip-save-btn"
-                disabled={!canCreate || form.items.length === 0}
-                title={!canCreate ? "Operational role required" : form.items.length === 0 ? "Add at least one item" : "Save Vendor Purchase (F2 or Ctrl+Enter)"}
-              >
-                💾 {canCreate ? (isUrdu ? "خریداری محفوظ کریں" : "Save Vendor Purchase") : t("purchases.save_purchase_restricted", "Save Purchase (Restricted to Manager/Staff)")}
-              </button>
-              {!canCreate && (
-                <div className="alert info" style={{ fontSize: "0.74rem", marginTop: "0.35rem", padding: "0.35rem 0.5rem" }}>
-                  ℹ️ <strong>Operational Role Required:</strong> {t("purchases.operational_role_required", "Purchases must be recorded by assigned Branch Managers and Staff.")}
-                </div>
-              )}
+              </div>
             </div>
           </div>
         </form>

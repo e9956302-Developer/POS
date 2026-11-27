@@ -1463,10 +1463,8 @@ export function UniversalEntryRow({
         <div
           ref={scanContainerRef}
           style={
-            mode === "sale"
+            mode === "sale" || mode === "purchase"
               ? { flex: "3 1 12rem", minWidth: "12rem", position: "relative" }
-              : mode === "purchase"
-              ? { flex: "2.4 1 200px", minWidth: "16rem", position: "relative" }
               : { display: "flex", flexDirection: "column", gap: "0.3rem", position: "relative" }
           }
         >
@@ -1688,10 +1686,8 @@ export function UniversalEntryRow({
         <div
           ref={containerRef}
           style={
-            mode === "sale"
-              ? { flex: "5 1 16rem", minWidth: "16rem", position: "relative" }
-              : mode === "purchase"
-              ? { flex: "1.6 1 150px", minWidth: "12rem", position: "relative" }
+            mode === "sale" || mode === "purchase"
+              ? { flex: "5 1 14rem", minWidth: "14rem", position: "relative" }
               : { display: "flex", flexDirection: "column", gap: "0.3rem", position: "relative" }
           }
         >
@@ -1988,10 +1984,8 @@ export function UniversalEntryRow({
         {/* 3. Quantity */}
         <div
           style={
-            mode === "sale"
+            mode === "sale" || mode === "purchase"
               ? { width: "clamp(5.5rem, 8%, 7rem)", flex: "0 0 clamp(5.5rem, 8%, 7rem)", position: "relative" }
-              : mode === "purchase"
-              ? { width: "clamp(3.5rem, 5%, 4.5rem)", flex: "0 0 clamp(3.5rem, 5%, 4.5rem)" }
               : { display: "flex", flexDirection: "column", gap: "0.3rem" }
           }
         >
