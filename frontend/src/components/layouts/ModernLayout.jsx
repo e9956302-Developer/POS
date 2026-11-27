@@ -49,9 +49,6 @@ export function ModernLayout({
   const [openGroups, setOpenGroups] = useState({ reports: false });
   const [manuallyClosedGroups, setManuallyClosedGroups] = useState({});
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [railOverlayOpen, setRailOverlayOpen] = useState(false);
-  const [railFlyoutTab, setRailFlyoutTab] = useState(null);
-  const [flyoutPosition, setFlyoutPosition] = useState({ top: 100 });
 
   useEffect(() => {
     setManuallyClosedGroups({});
@@ -61,14 +58,6 @@ export function ModernLayout({
   const isPurchaseCounter = activeTab === "purchases_new" || (activeTab === "purchases" && activePurchaseSub !== "history");
   const isSaleCounter = activeTab === "sales_new" || activeTab === "sales_checkout" || activeTab === "sales";
   const isCounter = isPurchaseCounter || isSaleCounter;
-  const isRail = false; // Do not auto-hide side menu on creating new sales or new purchase
-
-  useEffect(() => {
-    if (!isCounter) {
-      setRailOverlayOpen(false);
-      setRailFlyoutTab(null);
-    }
-  }, [isCounter]);
 
   return (
     <div className={`modern-layout-root ${isCollapsed ? "sidebar-collapsed" : ""} ${isCounter ? "pos-counter-active" : ""}`}>
@@ -77,14 +66,6 @@ export function ModernLayout({
         <div
           className="modern-mobile-backdrop"
           onClick={() => setMobileMenuOpen(false)}
-        />
-      )}
-
-      {railOverlayOpen && (
-        <div
-          className="rail-overlay-backdrop"
-          onClick={() => setRailOverlayOpen(false)}
-          style={{ position: "fixed", inset: 0, zIndex: 1040, background: "rgba(0,0,0,0.4)" }}
         />
       )}
 
@@ -105,13 +86,7 @@ export function ModernLayout({
             <button
               type="button"
               className="modern-collapse-toggle"
-              onClick={() => {
-                if (isCounter) {
-                  setRailOverlayOpen(!railOverlayOpen);
-                } else {
-                  setIsCollapsed(!isCollapsed);
-                }
-              }}
+              onClick={() => setIsCollapsed(!isCollapsed)}
               title={isCollapsed ? "Expand Sidebar (240px)" : "Compact Sidebar (68px)"}
               aria-label="Toggle compact sidebar"
             >
@@ -142,12 +117,6 @@ export function ModernLayout({
                         if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
                           e.preventDefault();
                           setError("");
-                          if (isRail) {
-                            const rect = e.currentTarget.getBoundingClientRect();
-                            setFlyoutPosition({ top: Math.max(10, Math.min(window.innerHeight - 200, rect.top)) });
-                            setRailFlyoutTab(railFlyoutTab === tab.key ? null : tab.key);
-                            return;
-                          }
                           if (isCollapsed) {
                             setIsCollapsed(false);
                           }
@@ -162,12 +131,6 @@ export function ModernLayout({
                       }}
                       onClick={(e) => {
                         setError("");
-                        if (isRail) {
-                          const rect = e.currentTarget.getBoundingClientRect();
-                          setFlyoutPosition({ top: Math.max(10, Math.min(window.innerHeight - 200, rect.top)) });
-                          setRailFlyoutTab(railFlyoutTab === tab.key ? null : tab.key);
-                          return;
-                        }
                         if (isCollapsed) {
                           setIsCollapsed(false);
                         }
@@ -235,7 +198,6 @@ export function ModernLayout({
                   onClick={() => {
                     setError("");
                     setManuallyClosedGroups({});
-                    setRailFlyoutTab(null);
                     setActiveTab(tab.key);
                     setMobileMenuOpen(false);
                   }}
@@ -248,79 +210,6 @@ export function ModernLayout({
               );
             })}
           </nav>
-
-          {/* Rail Flyout Sub-menu Panel */}
-          {isRail && railFlyoutTab && (() => {
-            const tabObj = tabs.find((t) => t.key === railFlyoutTab);
-            if (!tabObj || !tabObj.subItems) return null;
-            return (
-              <>
-                <div
-                  className="rail-flyout-backdrop"
-                  onClick={() => setRailFlyoutTab(null)}
-                  style={{ position: "fixed", inset: 0, zIndex: 1040 }}
-                />
-                <div
-                  className="sidebar-rail-flyout"
-                  style={{
-                    position: "fixed",
-                    left: isRtl ? "auto" : "72px",
-                    right: isRtl ? "72px" : "auto",
-                    top: `${flyoutPosition.top}px`,
-                    zIndex: 1050,
-                    background: "var(--surface)",
-                    border: "1px solid var(--border)",
-                    borderRadius: "8px",
-                    boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
-                    padding: "6px",
-                    minWidth: "220px",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "2px"
-                  }}
-                >
-                  <div style={{ fontSize: "0.78rem", fontWeight: 700, padding: "4px 8px", color: "var(--text-muted)", borderBottom: "1px solid var(--border)", marginBottom: "4px" }}>
-                    {tabObj.icon} {tabObj.label}
-                  </div>
-                  {tabObj.subItems.map((sub) => {
-                    const isSubActive =
-                      activeTab === sub.key ||
-                      (activeTab === tabObj.key && sub.key === tabObj.subItems[0].key);
-                    return (
-                      <button
-                        key={sub.key}
-                        type="button"
-                        className={`modern-sub-nav-item ${isSubActive ? "active" : ""}`}
-                        onClick={() => {
-                          setError("");
-                          setActiveTab(sub.key);
-                          setRailFlyoutTab(null);
-                        }}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                          width: "100%",
-                          padding: "6px 8px",
-                          borderRadius: "6px",
-                          fontSize: "0.82rem",
-                          fontWeight: isSubActive ? 700 : 500,
-                          background: isSubActive ? "var(--primary-subtle, rgba(56, 189, 248, 0.15))" : "transparent",
-                          color: isSubActive ? "var(--primary, #38bdf8)" : "var(--text)",
-                          border: "none",
-                          cursor: "pointer",
-                          textAlign: isRtl ? "right" : "left"
-                        }}
-                      >
-                        <span className="modern-sub-nav-icon">{sub.icon}</span>
-                        <span className="modern-sub-nav-label">{sub.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </>
-            );
-          })()}
 
           {/* Sidebar Footer */}
           <div className="modern-sidebar-footer">
