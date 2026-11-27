@@ -49,26 +49,10 @@ export function ExecutiveLayout({
   const [openGroups, setOpenGroups] = useState({ reports: false });
   const [manuallyClosedGroups, setManuallyClosedGroups] = useState({});
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [railOverlayOpen, setRailOverlayOpen] = useState(false);
-  const [railFlyoutTab, setRailFlyoutTab] = useState(null);
-  const [flyoutPosition, setFlyoutPosition] = useState({ top: 100 });
-
-  useEffect(() => {
-    setManuallyClosedGroups({});
-  }, [activeTab]);
-
   const isSalesPage = activeTab === "sales" || activeTab.startsWith("sales_");
   const isPurchaseCounter = activeTab === "purchases_new" || (activeTab === "purchases" && activePurchaseSub !== "history");
   const isSaleCounter = activeTab === "sales_new" || activeTab === "sales_checkout" || activeTab === "sales";
   const isCounter = isPurchaseCounter || isSaleCounter;
-  const isRail = isPurchaseCounter && !railOverlayOpen;
-
-  useEffect(() => {
-    if (!isPurchaseCounter) {
-      setRailOverlayOpen(false);
-      setRailFlyoutTab(null);
-    }
-  }, [isPurchaseCounter]);
 
   const safeTabs = Array.isArray(tabs) ? tabs : [];
   const safeBranches = Array.isArray(branches) ? branches : [];
@@ -85,7 +69,7 @@ export function ExecutiveLayout({
   const userInitial = userName.charAt(0).toUpperCase();
 
   return (
-    <div className={`executive-layout-root ${isCollapsed || isRail ? "sidebar-collapsed" : ""} ${isCounter ? "pos-counter-active" : ""} ${isPurchaseCounter ? "purchase-counter-active" : ""} ${railOverlayOpen ? "rail-overlay-active" : ""}`}>
+    <div className={`executive-layout-root ${isCollapsed ? "sidebar-collapsed" : ""} ${isCounter ? "pos-counter-active" : ""} ${isPurchaseCounter ? "purchase-counter-active" : ""}`}>
       {/* Mobile Backdrop */}
       {mobileMenuOpen && (
         <div
@@ -94,22 +78,14 @@ export function ExecutiveLayout({
         />
       )}
 
-      {railOverlayOpen && (
-        <div
-          className="rail-overlay-backdrop"
-          onClick={() => setRailOverlayOpen(false)}
-          style={{ position: "fixed", inset: 0, zIndex: 1040, background: "rgba(0,0,0,0.4)" }}
-        />
-      )}
-
       {/* Floating Obsidian & Gold Sidebar */}
-      <aside className={`executive-sidebar ${isCollapsed || isRail ? "collapsed" : ""} ${isRail ? "is-rail" : ""} ${railOverlayOpen ? "rail-overlay" : ""} ${mobileMenuOpen ? "mobile-open" : ""}`}>
+      <aside className={`executive-sidebar ${isCollapsed ? "collapsed" : ""} ${mobileMenuOpen ? "mobile-open" : ""}`}>
         <div className="executive-sidebar-inner">
           {/* Brand Header with Gold Accent */}
           <div className="executive-sidebar-header">
             <div className="executive-brand-box">
               <span className="executive-brand-icon">💎</span>
-              {!isCollapsed && !isRail && (
+              {!isCollapsed && (
                 <div className="executive-brand-text">
                   <span className="executive-brand-title">POS Executive</span>
                   <span className="executive-brand-badge">LUXURY</span>
@@ -119,17 +95,11 @@ export function ExecutiveLayout({
             <button
               type="button"
               className="executive-collapse-toggle"
-              onClick={() => {
-                if (isPurchaseCounter) {
-                  setRailOverlayOpen(!railOverlayOpen);
-                } else {
-                  setIsCollapsed(!isCollapsed);
-                }
-              }}
-              title={isRail ? "Expand full sidebar (overlay)" : (railOverlayOpen ? "Close sidebar overlay" : (isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"))}
+              onClick={() => setIsCollapsed(!isCollapsed)}
+              title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
               aria-label="Toggle executive sidebar"
             >
-              {isRail ? "❯" : (railOverlayOpen ? "❮" : (isCollapsed ? "❯" : "❮"))}
+              {isCollapsed ? "❯" : "❮"}
             </button>
           </div>
 
@@ -156,12 +126,6 @@ export function ExecutiveLayout({
                         if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
                           e.preventDefault();
                           setError("");
-                          if (isRail) {
-                            const rect = e.currentTarget.getBoundingClientRect();
-                            setFlyoutPosition({ top: Math.max(10, Math.min(window.innerHeight - 200, rect.top)) });
-                            setRailFlyoutTab(railFlyoutTab === tab.key ? null : tab.key);
-                            return;
-                          }
                           if (isCollapsed) {
                             setIsCollapsed(false);
                           }
@@ -176,12 +140,6 @@ export function ExecutiveLayout({
                       }}
                       onClick={(e) => {
                         setError("");
-                        if (isRail) {
-                          const rect = e.currentTarget.getBoundingClientRect();
-                          setFlyoutPosition({ top: Math.max(10, Math.min(window.innerHeight - 200, rect.top)) });
-                          setRailFlyoutTab(railFlyoutTab === tab.key ? null : tab.key);
-                          return;
-                        }
                         if (isCollapsed) {
                           setIsCollapsed(false);
                         }
@@ -196,7 +154,7 @@ export function ExecutiveLayout({
                       title={tab.label}
                     >
                       <span className="executive-nav-icon">{tab.icon}</span>
-                      {!isCollapsed && !isRail && (
+                      {!isCollapsed && (
                         <>
                           <span className="executive-nav-label">{tab.label}</span>
                           <span
@@ -212,12 +170,14 @@ export function ExecutiveLayout({
                     </button>
 
                     {/* Accordion Sub-items */}
-                    {isGroupOpen && !isCollapsed && !isRail && (
+                    {isGroupOpen && !isCollapsed && (
                       <div className="executive-sub-nav-list">
                         {tab.subItems.map((sub) => {
                           const isSubActive =
                             activeTab === sub.key ||
-                            (activeTab === tab.key && sub.key === defaultSubKey);
+                            (activeTab === tab.key && sub.key === defaultSubKey) ||
+                            (sub.key === "purchases_new" && isPurchaseCounter) ||
+                            (sub.key === "purchases_history" && activeTab === "purchases" && activePurchaseSub === "history");
                           return (
                             <button
                               key={sub.key}
@@ -249,7 +209,6 @@ export function ExecutiveLayout({
                   onClick={() => {
                     setError("");
                     setManuallyClosedGroups({});
-                    setRailFlyoutTab(null);
                     setActiveTab(tab.key);
                     setMobileMenuOpen(false);
                   }}
@@ -257,84 +216,11 @@ export function ExecutiveLayout({
                   type="button"
                 >
                   <span className="executive-nav-icon">{tab.icon}</span>
-                  {!isCollapsed && !isRail && <span className="executive-nav-label">{tab.label}</span>}
+                  {!isCollapsed && <span className="executive-nav-label">{tab.label}</span>}
                 </button>
               );
             })}
           </nav>
-
-          {/* Rail Flyout Sub-menu Panel */}
-          {isRail && railFlyoutTab && (() => {
-            const tabObj = tabs.find((t) => t.key === railFlyoutTab);
-            if (!tabObj || !tabObj.subItems) return null;
-            return (
-              <>
-                <div
-                  className="rail-flyout-backdrop"
-                  onClick={() => setRailFlyoutTab(null)}
-                  style={{ position: "fixed", inset: 0, zIndex: 1040 }}
-                />
-                <div
-                  className="sidebar-rail-flyout executive-rail-flyout"
-                  style={{
-                    position: "fixed",
-                    top: `${flyoutPosition.top}px`,
-                    [isRtl ? "right" : "left"]: "clamp(3.8rem, 6.2vw, 4.8rem)",
-                    zIndex: 1050,
-                    background: "var(--surface, #1e293b)",
-                    border: "1px solid var(--border, rgba(255,255,255,0.15))",
-                    borderRadius: "8px",
-                    boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
-                    padding: "6px",
-                    minWidth: "200px",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "4px"
-                  }}
-                >
-                  <div style={{ padding: "4px 8px", fontSize: "0.75rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", borderBottom: "1px solid var(--border, rgba(255,255,255,0.08))", marginBottom: "2px" }}>
-                    {tabObj.label}
-                  </div>
-                  {tabObj.subItems.map((sub) => {
-                    const isSubActive =
-                      activeTab === sub.key ||
-                      (sub.key === "purchases_new" && isPurchaseCounter) ||
-                      (sub.key === "purchases_history" && activeTab === "purchases" && activePurchaseSub === "history");
-                    return (
-                      <button
-                        key={sub.key}
-                        type="button"
-                        onClick={() => {
-                          setError("");
-                          setActiveTab(sub.key);
-                          setRailFlyoutTab(null);
-                        }}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                          width: "100%",
-                          padding: "6px 8px",
-                          borderRadius: "6px",
-                          fontSize: "0.82rem",
-                          fontWeight: isSubActive ? 700 : 500,
-                          background: isSubActive ? "var(--primary-subtle, rgba(56, 189, 248, 0.15))" : "transparent",
-                          color: isSubActive ? "var(--primary, #38bdf8)" : "var(--text)",
-                          border: "none",
-                          cursor: "pointer",
-                          textAlign: isRtl ? "right" : "left"
-                        }}
-                      >
-                        <span className="executive-sub-nav-bullet" />
-                        <span className="executive-sub-nav-icon">{sub.icon}</span>
-                        <span className="executive-sub-nav-label">{sub.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </>
-            );
-          })()}
 
           {/* Sidebar Footer */}
           <div className="executive-sidebar-footer">
@@ -678,7 +564,10 @@ export function ExecutiveLayout({
           {activeParentTab && activeParentTab.subItems && activeParentTab.subItems.length > 0 && (
             <div className="executive-subnav-strip">
               {activeParentTab.subItems.map((sub) => {
-                const isSubActive = activeTab === sub.key;
+                const isSubActive =
+                  activeTab === sub.key ||
+                  (sub.key === "purchases_new" && isPurchaseCounter) ||
+                  (sub.key === "purchases_history" && activeTab === "purchases" && activePurchaseSub === "history");
                 return (
                   <button
                     key={sub.key}

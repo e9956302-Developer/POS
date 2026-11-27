@@ -72,21 +72,11 @@ test("Acceptance Criterion 1: Fixed-height non-scrolling layout, 2 info rows, si
     "No page title block should appear under breadcrumb"
   );
 
-  // Sidebar icon rail on Purchase page only
+  // Sidebar in-flow grid behavior on Purchase page (no auto-hiding rail overlay squashing content)
   assert.match(
     stylesSource,
-    /\.sidebar\.is-rail,\s*\.modern-sidebar\.is-rail,\s*\.executive-sidebar\.is-rail\s*\{[^}]*width:\s*clamp\(3\.5rem,\s*6vw,\s*4\.5rem\)\s*!important;/s,
-    "Sidebar icon rail must be clamp(3.5rem, 6vw, 4.5rem)"
-  );
-  assert.match(
-    stylesSource,
-    /\.app-shell\.purchase-counter-active:not\(\.rail-overlay-active\)\s*\{[^}]*grid-template-columns:\s*clamp\(3\.5rem,\s*6vw,\s*4\.5rem\)\s+minmax\(0,\s*1fr\)\s*!important;/s,
-    "Shell grid must adjust to icon rail width on Purchase page"
-  );
-  assert.match(
-    stylesSource,
-    /\.app-shell\.purchase-counter-active\.rail-overlay-active\s*\{[^}]*grid-template-columns:\s*clamp\(3\.5rem,\s*6vw,\s*4\.5rem\)\s+minmax\(0,\s*1fr\)\s*!important;/s,
-    "Overlay mode must keep content width unchanged"
+    /\.app-shell\.purchase-counter-active\.sidebar-collapsed\s*\{[^}]*grid-template-columns:\s*clamp\(3\.5rem,\s*6vw,\s*4\.5rem\)\s+minmax\(0,\s*1fr\)\s*!important;/s,
+    "Shell grid must adjust to icon rail width when collapsed on Purchase page"
   );
 
   // Right-side payment panel fixed clamp width clamp(17rem, 23%, 20rem)
@@ -297,7 +287,7 @@ test("Acceptance Criterion 8: Keyboard flow (initial scan focus, F8, F9, F2/Ctrl
   );
 });
 
-test("Layout Sidebars: Flyouts highlight active purchase tab in Classic, Modern, and Executive layouts", () => {
+test("Layout Sidebars: Submenus highlight active purchase tab in Classic, Modern, and Executive layouts", () => {
   const classic = fs.readFileSync(classicLayoutPath, "utf8");
   const modern = fs.readFileSync(modernLayoutPath, "utf8");
   const executive = fs.readFileSync(executiveLayoutPath, "utf8");
@@ -306,12 +296,12 @@ test("Layout Sidebars: Flyouts highlight active purchase tab in Classic, Modern,
     assert.match(
       code,
       /sub\.key === "purchases_new"\s*&&\s*isPurchaseCounter/,
-      `${name} layout flyout must highlight purchases_new when on purchase counter`
+      `${name} layout must highlight purchases_new when on purchase counter`
     );
     assert.match(
       code,
       /sub\.key === "purchases_history"\s*&&\s*activeTab === "purchases"\s*&&\s*activePurchaseSub === "history"/,
-      `${name} layout flyout must highlight purchases_history when on purchases directory`
+      `${name} layout must highlight purchases_history when on purchases directory`
     );
   }
 });

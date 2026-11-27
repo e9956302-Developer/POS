@@ -14202,12 +14202,8 @@ body.lang-ur,
 
 /* Fixed layout container at desktop widths (>= 64rem / 1024px) */
 @media (min-width: 64rem) {
-  /* Sidebar Icon Rail Grid on Purchase Page Only */
-  .app-shell.purchase-counter-active:not(.rail-overlay-active) {
-    grid-template-columns: clamp(3.5rem, 6vw, 4.5rem) minmax(0, 1fr) !important;
-  }
-
-  .app-shell.purchase-counter-active.rail-overlay-active {
+  /* Sidebar when manually collapsed on Counter Pages */
+  .app-shell.purchase-counter-active.sidebar-collapsed {
     grid-template-columns: clamp(3.5rem, 6vw, 4.5rem) minmax(0, 1fr) !important;
   }
 
@@ -14310,94 +14306,6 @@ body.lang-ur,
     display: flex !important;
     flex-direction: column !important;
     overflow: hidden !important;
-  }
-}
-
-/* Sidebar Icon Rail on Purchase Page Only */
-.sidebar.is-rail,
-.modern-sidebar.is-rail,
-.executive-sidebar.is-rail {
-  width: clamp(3.5rem, 6vw, 4.5rem) !important;
-  min-width: clamp(3.5rem, 6vw, 4.5rem) !important;
-  max-width: clamp(3.5rem, 6vw, 4.5rem) !important;
-  padding: 0.75rem 0.25rem !important;
-  align-items: center !important;
-  transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.sidebar.is-rail .brand-text,
-.sidebar.is-rail .nav-label,
-.sidebar.is-rail .nav-arrow,
-.sidebar.is-rail .sub-nav-list,
-.sidebar.is-rail .sidebar-footer-expanded,
-.modern-sidebar.is-rail .modern-nav-label,
-.modern-sidebar.is-rail .modern-brand-text,
-.modern-sidebar.is-rail .modern-sub-nav-list,
-.modern-sidebar.is-rail .modern-sidebar-footer,
-.executive-sidebar.is-rail .executive-brand-text,
-.executive-sidebar.is-rail .executive-nav-label,
-.executive-sidebar.is-rail .executive-sub-nav-list,
-.executive-sidebar.is-rail .executive-footer-full {
-  display: none !important;
-}
-
-.sidebar.is-rail .sidebar-footer-collapsed {
-  display: flex !important;
-}
-
-.sidebar.is-rail .nav-item,
-.modern-sidebar.is-rail .modern-nav-item,
-.executive-sidebar.is-rail .executive-nav-item {
-  justify-content: center !important;
-  padding: 0.5rem !important;
-  width: 100% !important;
-}
-
-/* Sidebar Overlay when Expanded from Rail */
-.sidebar.rail-overlay,
-.modern-sidebar.rail-overlay,
-.executive-sidebar.rail-overlay {
-  position: fixed !important;
-  top: 0 !important;
-  bottom: 0 !important;
-  left: 0 !important;
-  width: 260px !important;
-  min-width: 260px !important;
-  max-width: 260px !important;
-  height: 100vh !important;
-  z-index: 1050 !important;
-  box-shadow: 0 0 40px rgba(0, 0, 0, 0.6) !important;
-  padding: 1.25rem 1rem !important;
-  align-items: stretch !important;
-}
-
-[dir="rtl"] .sidebar.rail-overlay,
-[dir="rtl"] .modern-sidebar.rail-overlay,
-[dir="rtl"] .executive-sidebar.rail-overlay {
-  left: auto !important;
-  right: 0 !important;
-}
-
-.rail-overlay-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 1040;
-  background: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(2px);
-}
-
-.sidebar-rail-flyout {
-  animation: fadeInFlyout 0.15s ease-out;
-}
-
-@keyframes fadeInFlyout {
-  from {
-    opacity: 0;
-    transform: translateX(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
   }
 }
 
