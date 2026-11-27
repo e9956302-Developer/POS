@@ -103,6 +103,7 @@ export const translations = {
 
       // Reports subpages
       reports_pnl: "Profit & Loss (P&L)",
+      reports_profit: "Profit Report",
       reports_sales: "Sales Report",
       reports_expenses: "Operating Expenses",
       reports_inventory: "Inventory Valuation",
@@ -674,6 +675,7 @@ export const translations = {
 
       // Reports subpages
       reports_pnl: "نفع و نقصان (P&L)",
+      reports_profit: "منافع رپورٹ",
       reports_sales: "سیلز رپورٹ",
       reports_expenses: "اخراجات رپورٹ",
       reports_inventory: "اسٹاک مالیت",

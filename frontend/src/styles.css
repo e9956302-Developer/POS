@@ -14094,10 +14094,10 @@ body.lang-ur,
     overflow-x: hidden !important;
   }
   .pos-checkout-sidebar {
-    flex: 0 0 310px !important;
-    width: 310px !important;
-    min-width: 300px !important;
-    max-width: 320px !important;
+    flex: 0 0 clamp(16.5rem, 22%, 19rem) !important;
+    width: clamp(16.5rem, 22%, 19rem) !important;
+    min-width: 16.5rem !important;
+    max-width: 19rem !important;
     height: 100% !important;
     max-height: 100% !important;
     display: flex !important;

@@ -10,6 +10,7 @@ import { ReportLetterhead, AccountingSummaryRibbon, ReportSignatures } from "../
 
 export const REPORT_TABS = [
   { key: "pnl", subKey: "pnl", label: "Profit & Loss", icon: "📊", subtitle: "Official Income Statement & Margins" },
+  { key: "profit", subKey: "profit", label: "Profit Report", icon: "💰", subtitle: "Itemized Profit Margins & Sales Margins" },
   { key: "sales", subKey: "sales", label: "Sales & Turnover", icon: "📈", subtitle: "Daily Turnover & Sales Trajectory" },
   { key: "expenses", subKey: "expenses", label: "Operating Expenses", icon: "📉", subtitle: "Shop Overheads & Itemized Ledger" },
   { key: "inventory", subKey: "inventory", label: "Inventory Valuation", icon: "📦", subtitle: "Physical Stock Asset Audit" },
@@ -60,6 +61,8 @@ export function ReportsPage({ context, activeSubPage, onNavigateSubPage }) {
 
   // Data States
   const [pnlData, setPnlData] = useState(null);
+  const [profitData, setProfitData] = useState(null);
+  const [profitViewMode, setProfitViewMode] = useState("invoices"); // "invoices" | "products" | "daily"
   const [expenseList, setExpenseList] = useState([]);
   const [expenseCategoryFilter, setExpenseCategoryFilter] = useState("all");
   const [dividendData, setDividendData] = useState(null);
@@ -102,6 +105,7 @@ export function ReportsPage({ context, activeSubPage, onNavigateSubPage }) {
 
   const currentPeriodLabel = useMemo(() => {
     if (activeTab === "pnl") return pnlData?.period?.label || (reportPeriod === "this_month" ? "This Month" : reportPeriod);
+    if (activeTab === "profit") return profitData?.period?.label || (reportPeriod === "this_month" ? "This Month" : reportPeriod);
     if (activeTab === "dividends") return dividendData?.period?.label || "Current Period";
     if (activeTab === "salaries") return salaryTimeScope === "month" ? `Month: ${salaryMonthFilter}` : "All Historical Months";
     if (activeTab === "expenses") return pnlData?.period?.label || (reportPeriod === "this_month" ? "This Month" : reportPeriod);
@@ -116,6 +120,8 @@ export function ReportsPage({ context, activeSubPage, onNavigateSubPage }) {
     reportTitle:
       activeTab === "pnl"
         ? `Profit & Loss Statement (${pnlData?.period?.label || "Report"})`
+        : activeTab === "profit"
+        ? `Profit & Margin Report (${profitData?.period?.label || "Report"})`
         : activeTab === "expenses"
         ? "Operating Expenses Breakdown"
         : activeTab === "dividends"
@@ -148,6 +154,9 @@ export function ReportsPage({ context, activeSubPage, onNavigateSubPage }) {
       if (activeTab === "pnl") {
         const data = await api.reportPnL(`?${q.toString()}`);
         setPnlData(data);
+      } else if (activeTab === "profit") {
+        const data = await api.reportProfit(`?${q.toString()}`);
+        setProfitData(data);
       } else if (activeTab === "dividends") {
         const data = await api.reportDividends(`?${q.toString()}`);
         setDividendData(data);
@@ -281,6 +290,49 @@ export function ReportsPage({ context, activeSubPage, onNavigateSubPage }) {
     ];
 
     exportToCSV("Profit_And_Loss_Statement", rows, [], exportMeta);
+  }
+
+  function handleExportProfitCSV() {
+    if (!profitData) return;
+    if (profitViewMode === "invoices") {
+      const rows = (profitData.invoices || []).map((inv) => ({
+        InvoiceNumber: inv.invoice_number,
+        Date: inv.sale_date,
+        Branch: inv.branch_name,
+        Customer: inv.customer_name,
+        Phone: inv.customer_phone || "",
+        PaymentChannel: inv.payment_method,
+        ItemsCount: inv.items_count,
+        BilledAmount: Math.round(Number(inv.sale_amount || 0)),
+        CostPriceCOGS: Math.round(Number(inv.total_cogs || 0)),
+        GrossProfit: Math.round(Number(inv.gross_profit || 0)),
+        MarginPct: `${inv.margin_pct}%`
+      }));
+      exportToCSV("Profit_Report_Invoices", rows, [], exportMeta);
+    } else if (profitViewMode === "products") {
+      const rows = (profitData.productProfitability || []).map((p) => ({
+        ItemName: p.item_name,
+        Category: p.category,
+        UnitsSold: p.units_sold,
+        TotalRevenue: Math.round(Number(p.total_revenue || 0)),
+        TotalCost: Math.round(Number(p.total_cost || 0)),
+        GrossProfit: Math.round(Number(p.gross_profit || 0)),
+        MarginPct: `${p.margin_pct}%`
+      }));
+      exportToCSV("Profit_Report_Products", rows, [], exportMeta);
+    } else {
+      const rows = (profitData.dailyTrend || []).map((d) => ({
+        Date: d.date,
+        Orders: d.order_count,
+        SalesTurnover: Math.round(Number(d.sales || 0)),
+        COGS: Math.round(Number(d.cogs || 0)),
+        GrossProfit: Math.round(Number(d.gross_profit || 0)),
+        OperatingExpenses: Math.round(Number(d.expenses || 0)),
+        NetProfit: Math.round(Number(d.net_profit || 0)),
+        NetMarginPct: `${d.net_margin_pct}%`
+      }));
+      exportToCSV("Profit_Report_Daily_Trend", rows, [], exportMeta);
+    }
   }
 
   function handleExportDividendCSV() {
@@ -428,6 +480,8 @@ export function ReportsPage({ context, activeSubPage, onNavigateSubPage }) {
   function handleActiveExport() {
     if (activeTab === "pnl") {
       handleExportPnLCSV();
+    } else if (activeTab === "profit") {
+      handleExportProfitCSV();
     } else if (activeTab === "dividends") {
       handleExportDividendCSV();
     } else if (activeTab === "expenses") {
@@ -469,8 +523,8 @@ export function ReportsPage({ context, activeSubPage, onNavigateSubPage }) {
             </select>
           </label>
 
-          {/* Period Selector for P&L, Expenses, Dividends, Sales */}
-          {["pnl", "expenses", "dividends", "sales"].includes(activeTab) && (
+          {/* Period Selector for P&L, Profit, Expenses, Dividends, Sales */}
+          {["pnl", "profit", "expenses", "dividends", "sales"].includes(activeTab) && (
             <div className="accounting-period-pills">
               {[
                 { key: "this_month", label: "This Month" },
@@ -493,7 +547,7 @@ export function ReportsPage({ context, activeSubPage, onNavigateSubPage }) {
           )}
 
           {/* Custom Date Inputs */}
-          {reportPeriod === "custom" && ["pnl", "expenses", "dividends", "sales"].includes(activeTab) && (
+          {reportPeriod === "custom" && ["pnl", "profit", "expenses", "dividends", "sales"].includes(activeTab) && (
             <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
               <input
                 type="date"
@@ -571,6 +625,8 @@ export function ReportsPage({ context, activeSubPage, onNavigateSubPage }) {
         title={
           activeTab === "pnl"
             ? "STATEMENT OF PROFIT & LOSS / COMPREHENSIVE INCOME"
+            : activeTab === "profit"
+            ? "DETAILED PROFITABILITY & TRADING MARGIN REPORT"
             : activeTab === "expenses"
             ? "OPERATING EXPENSES & OVERHEADS AUDIT LEDGER"
             : activeTab === "dividends"
@@ -588,6 +644,8 @@ export function ReportsPage({ context, activeSubPage, onNavigateSubPage }) {
         subtitle={
           activeTab === "pnl"
             ? "Official Audited Income Statement & Profit Margins"
+            : activeTab === "profit"
+            ? "Itemized Invoice & Product Margins, COGS Verification & Net Profit"
             : activeTab === "expenses"
             ? "Detailed Chronological Audit of Operating Costs & Overhead Expenses"
             : activeTab === "dividends"
@@ -604,6 +662,7 @@ export function ReportsPage({ context, activeSubPage, onNavigateSubPage }) {
         }
         docRef={
           activeTab === "pnl" ? `REP-PNL-${(reportPeriod || "CUR").toUpperCase()}` :
+          activeTab === "profit" ? `REP-PRF-${(reportPeriod || "CUR").toUpperCase()}` :
           activeTab === "salaries" ? `REP-PAYROLL-${salaryTimeScope === "month" ? salaryMonthFilter.replace("-", "") : "ALL"}` :
           activeTab === "dividends" ? `REP-DIV-${reportBranchId}` :
           activeTab === "inventory" ? "REP-INV-ASSETS" :
@@ -804,6 +863,370 @@ export function ReportsPage({ context, activeSubPage, onNavigateSubPage }) {
 
           {/* Audit Verification & Authorization Signatures Block */}
           <ReportSignatures docType="Income Statement & Operating Financial Audit" />
+        </>
+      )}
+
+      {/* ======================================================== */}
+      {/* TAB: PROFIT & MARGIN ANALYSIS REPORT */}
+      {/* ======================================================== */}
+      {activeTab === "profit" && (
+        <>
+          {/* Executive Profitability Key Financial Metrics */}
+          <AccountingSummaryRibbon
+            title="Executive Profitability & Trading Margins Summary"
+            items={[
+              {
+                label: "Net Operating Turnover",
+                value: `Rs. ${Math.round(profitData?.financials?.adjustedRevenue || 0).toLocaleString()}`,
+                subtitle: `${profitData?.financials?.totalOrders || 0} orders billed`,
+                tone: "info"
+              },
+              {
+                label: "Cost of Goods Sold (COGS)",
+                value: `(Rs. ${Math.round(profitData?.financials?.totalCogs || 0).toLocaleString()})`,
+                subtitle: "Acquisition cost of sold stock",
+                tone: "warning"
+              },
+              {
+                label: "Gross Trading Profit",
+                value: `Rs. ${Math.round(profitData?.financials?.grossProfit || 0).toLocaleString()}`,
+                subtitle: `Gross Margin: ${profitData?.financials?.grossMarginPct || "0.00"}%`,
+                tone: (profitData?.financials?.grossProfit || 0) >= 0 ? "success" : "danger"
+              },
+              {
+                label: "Operating Overheads",
+                value: `(Rs. ${Math.round(profitData?.financials?.totalExpenses || 0).toLocaleString()})`,
+                subtitle: `${profitData?.financials?.expenseBreakdown?.length || 0} cost heads audited`,
+                tone: "danger"
+              },
+              {
+                label: "Net Operating Profit / (Loss)",
+                value: `Rs. ${Math.round(profitData?.financials?.netProfit || 0).toLocaleString()}`,
+                subtitle: `Net Margin: ${profitData?.financials?.netMarginPct || "0.00"}%`,
+                tone: (profitData?.financials?.netProfit || 0) >= 0 ? "success" : "danger",
+                badge: (profitData?.financials?.netProfit || 0) >= 0 ? "NET PROFIT" : "NET LOSS"
+              }
+            ]}
+          />
+
+          <SectionCard
+            title={`Profitability & Margin Analysis — ${profitData?.branch?.name || activeBranchName}`}
+            subtitle={`Itemized trading margins, unit cost accounting, and profitability audit covering ${profitData?.period?.label || "Period"}.`}
+            action={
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }} className="no-print">
+                {/* View Mode Switcher */}
+                <div style={{ display: "inline-flex", background: "var(--bg-card-subtle, rgba(0,0,0,0.06))", padding: "3px", borderRadius: "8px", gap: "3px" }}>
+                  <button
+                    type="button"
+                    className={`btn-sm ${profitViewMode === "invoices" ? "primary-btn" : "ghost-btn"}`}
+                    onClick={() => setProfitViewMode("invoices")}
+                    style={{ fontSize: "0.8rem", padding: "4px 10px", cursor: "pointer" }}
+                  >
+                    🧾 Sales Invoices
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn-sm ${profitViewMode === "products" ? "primary-btn" : "ghost-btn"}`}
+                    onClick={() => setProfitViewMode("products")}
+                    style={{ fontSize: "0.8rem", padding: "4px 10px", cursor: "pointer" }}
+                  >
+                    📱 Handsets & Products
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn-sm ${profitViewMode === "daily" ? "primary-btn" : "ghost-btn"}`}
+                    onClick={() => setProfitViewMode("daily")}
+                    style={{ fontSize: "0.8rem", padding: "4px 10px", cursor: "pointer" }}
+                  >
+                    📅 Daily Profit Ledger
+                  </button>
+                </div>
+                <button className="secondary-btn btn-sm" onClick={triggerPrint} title="Print profit statement">
+                  🖨️ Print
+                </button>
+                <button className="secondary-btn btn-sm" onClick={handleExportProfitCSV} title="Export current view to CSV">
+                  📥 Export CSV
+                </button>
+              </div>
+            }
+          >
+            {/* Search Filter Bar */}
+            <div style={{ display: "flex", gap: "12px", marginBottom: "1rem" }} className="no-print">
+              <input
+                type="text"
+                placeholder={
+                  profitViewMode === "invoices"
+                    ? "🔍 Search invoice #, customer name, phone, branch, or payment method..."
+                    : profitViewMode === "products"
+                    ? "🔍 Search handset model, brand, variant, or accessory product..."
+                    : "🔍 Search date..."
+                }
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid var(--border)" }}
+              />
+            </div>
+
+            {/* VIEW 1: INVOICE-LEVEL PROFITABILITY */}
+            {profitViewMode === "invoices" && (
+              <div className="table-responsive">
+                <table className="accounting-data-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: "12%" }}>Date</th>
+                      <th style={{ width: "14%" }}>Invoice Reference</th>
+                      <th style={{ width: "15%" }}>Branch</th>
+                      <th style={{ width: "18%" }}>Customer Account</th>
+                      <th style={{ width: "7%", textAlign: "center" }}>Items</th>
+                      <th style={{ width: "11%", textAlign: "right" }}>Sale (PKR)</th>
+                      <th style={{ width: "11%", textAlign: "right" }}>Cost (COGS)</th>
+                      <th style={{ width: "12%", textAlign: "right" }}>Gross Profit</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(!profitData?.invoices || profitData.invoices.length === 0) ? (
+                      <tr>
+                        <td colSpan={8} style={{ textAlign: "center", padding: "2.5rem", color: "var(--text-muted)" }}>
+                          No sales transactions recorded for this period.
+                        </td>
+                      </tr>
+                    ) : (
+                      profitData.invoices
+                        .filter((inv) => {
+                          if (!search) return true;
+                          const q = search.toLowerCase();
+                          return (
+                            (inv.invoice_number && inv.invoice_number.toLowerCase().includes(q)) ||
+                            (inv.customer_name && inv.customer_name.toLowerCase().includes(q)) ||
+                            (inv.customer_phone && inv.customer_phone.toLowerCase().includes(q)) ||
+                            (inv.branch_name && inv.branch_name.toLowerCase().includes(q)) ||
+                            (inv.payment_method && inv.payment_method.toLowerCase().includes(q))
+                          );
+                        })
+                        .map((inv) => {
+                          const isProf = Number(inv.gross_profit || 0) >= 0;
+                          return (
+                            <tr key={inv.id}>
+                              <td style={{ whiteSpace: "nowrap" }}>{inv.sale_date}</td>
+                              <td style={{ fontFamily: "var(--font-mono, monospace)", fontWeight: "700" }}>{inv.invoice_number}</td>
+                              <td>{inv.branch_name} <span className="small muted">({inv.branch_code})</span></td>
+                              <td>
+                                <strong>{inv.customer_name}</strong>
+                                {inv.customer_phone && <div className="small muted font-mono">{inv.customer_phone}</div>}
+                              </td>
+                              <td style={{ textAlign: "center" }}>{inv.items_count}</td>
+                              <td className="num-cell" style={{ fontWeight: "600" }}>
+                                Rs. {Math.round(Number(inv.sale_amount || 0)).toLocaleString()}
+                              </td>
+                              <td className="num-cell muted">
+                                Rs. {Math.round(Number(inv.total_cogs || 0)).toLocaleString()}
+                              </td>
+                              <td className={`num-cell ${isProf ? "positive-amount" : "negative-amount"}`} style={{ fontWeight: "700" }}>
+                                {isProf ? "+" : ""}Rs. {Math.round(Number(inv.gross_profit || 0)).toLocaleString()}
+                                <div style={{ fontSize: "0.75rem", opacity: 0.85 }}>({inv.margin_pct}%)</div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                    )}
+                  </tbody>
+                  {profitData?.invoices && profitData.invoices.length > 0 && (
+                    <tfoot>
+                      <tr className="accounting-subtotal-row">
+                        <td colSpan={5} style={{ fontWeight: "700" }}>TOTAL BILLED TRANSACTIONS ({profitData.invoices.length})</td>
+                        <td className="num-cell" style={{ fontWeight: "700" }}>
+                          Rs. {Math.round(profitData.invoices.reduce((s, i) => s + Number(i.sale_amount || 0), 0)).toLocaleString()}
+                        </td>
+                        <td className="num-cell" style={{ fontWeight: "700" }}>
+                          Rs. {Math.round(profitData.invoices.reduce((s, i) => s + Number(i.total_cogs || 0), 0)).toLocaleString()}
+                        </td>
+                        <td className="num-cell" style={{ fontWeight: "800", color: (profitData.financials?.grossProfit || 0) >= 0 ? "#10b981" : "#ef4444" }}>
+                          Rs. {Math.round(profitData.invoices.reduce((s, i) => s + Number(i.gross_profit || 0), 0)).toLocaleString()}
+                          <div style={{ fontSize: "0.78rem" }}>({profitData.financials?.grossMarginPct}%)</div>
+                        </td>
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
+              </div>
+            )}
+
+            {/* VIEW 2: PRODUCT / HANDSET PROFITABILITY */}
+            {profitViewMode === "products" && (
+              <div className="table-responsive">
+                <table className="accounting-data-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: "35%" }}>Handset Model / Product Item</th>
+                      <th style={{ width: "15%" }}>Category</th>
+                      <th style={{ width: "10%", textAlign: "center" }}>Units Sold</th>
+                      <th style={{ width: "14%", textAlign: "right" }}>Total Revenue</th>
+                      <th style={{ width: "13%", textAlign: "right" }}>Total COGS</th>
+                      <th style={{ width: "13%", textAlign: "right" }}>Gross Profit (Margin %)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(!profitData?.productProfitability || profitData.productProfitability.length === 0) ? (
+                      <tr>
+                        <td colSpan={6} style={{ textAlign: "center", padding: "2.5rem", color: "var(--text-muted)" }}>
+                          No items sold in this period.
+                        </td>
+                      </tr>
+                    ) : (
+                      profitData.productProfitability
+                        .filter((item) => {
+                          if (!search) return true;
+                          const q = search.toLowerCase();
+                          return (
+                            (item.item_name && item.item_name.toLowerCase().includes(q)) ||
+                            (item.category && item.category.toLowerCase().includes(q))
+                          );
+                        })
+                        .map((item, idx) => {
+                          const isProf = Number(item.gross_profit || 0) >= 0;
+                          return (
+                            <tr key={idx}>
+                              <td style={{ fontWeight: "700" }}>{item.item_name}</td>
+                              <td>
+                                <span className={`status-pill ${item.category.includes("Handset") ? "status-info" : "status-neutral"}`} style={{ fontSize: "0.75rem", padding: "2px 8px" }}>
+                                  {item.category}
+                                </span>
+                              </td>
+                              <td style={{ textAlign: "center", fontWeight: "600" }}>{item.units_sold}</td>
+                              <td className="num-cell" style={{ fontWeight: "600" }}>
+                                Rs. {Math.round(Number(item.total_revenue || 0)).toLocaleString()}
+                              </td>
+                              <td className="num-cell muted">
+                                Rs. {Math.round(Number(item.total_cost || 0)).toLocaleString()}
+                              </td>
+                              <td className={`num-cell ${isProf ? "positive-amount" : "negative-amount"}`} style={{ fontWeight: "700" }}>
+                                {isProf ? "+" : ""}Rs. {Math.round(Number(item.gross_profit || 0)).toLocaleString()}
+                                <div style={{ fontSize: "0.75rem", opacity: 0.85 }}>({item.margin_pct}%)</div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                    )}
+                  </tbody>
+                  {profitData?.productProfitability && profitData.productProfitability.length > 0 && (
+                    <tfoot>
+                      <tr className="accounting-subtotal-row">
+                        <td colSpan={2} style={{ fontWeight: "700" }}>TOTAL PRODUCT SALES</td>
+                        <td style={{ textAlign: "center", fontWeight: "700" }}>
+                          {profitData.productProfitability.reduce((s, i) => s + Number(i.units_sold || 0), 0)}
+                        </td>
+                        <td className="num-cell" style={{ fontWeight: "700" }}>
+                          Rs. {Math.round(profitData.productProfitability.reduce((s, i) => s + Number(i.total_revenue || 0), 0)).toLocaleString()}
+                        </td>
+                        <td className="num-cell" style={{ fontWeight: "700" }}>
+                          Rs. {Math.round(profitData.productProfitability.reduce((s, i) => s + Number(i.total_cost || 0), 0)).toLocaleString()}
+                        </td>
+                        <td className="num-cell" style={{ fontWeight: "800", color: (profitData.financials?.grossProfit || 0) >= 0 ? "#10b981" : "#ef4444" }}>
+                          Rs. {Math.round(profitData.productProfitability.reduce((s, i) => s + Number(i.gross_profit || 0), 0)).toLocaleString()}
+                          <div style={{ fontSize: "0.78rem" }}>({profitData.financials?.grossMarginPct}%)</div>
+                        </td>
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
+              </div>
+            )}
+
+            {/* VIEW 3: DAILY PROFIT LEDGER & TREND */}
+            {profitViewMode === "daily" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                {profitData?.dailyTrend && profitData.dailyTrend.length > 1 && (
+                  <div className="no-print" style={{ padding: "10px 0" }}>
+                    <BarChart
+                      data={profitData.dailyTrend.map((d) => ({
+                        label: d.date.slice(5),
+                        value: Math.max(0, Math.round(d.gross_profit))
+                      }))}
+                      height={200}
+                      color="#10b981"
+                      title="Daily Gross Profit Progression (PKR)"
+                    />
+                  </div>
+                )}
+
+                <div className="table-responsive">
+                  <table className="accounting-data-table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: "14%" }}>Trading Date</th>
+                        <th style={{ width: "10%", textAlign: "center" }}>Orders</th>
+                        <th style={{ width: "15%", textAlign: "right" }}>Turnover (PKR)</th>
+                        <th style={{ width: "14%", textAlign: "right" }}>COGS (Cost)</th>
+                        <th style={{ width: "15%", textAlign: "right" }}>Gross Profit</th>
+                        <th style={{ width: "14%", textAlign: "right" }}>Expenses</th>
+                        <th style={{ width: "18%", textAlign: "right" }}>Net Operating Profit</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(!profitData?.dailyTrend || profitData.dailyTrend.length === 0) ? (
+                        <tr>
+                          <td colSpan={7} style={{ textAlign: "center", padding: "2.5rem", color: "var(--text-muted)" }}>
+                            No daily trading activity on record for this period.
+                          </td>
+                        </tr>
+                      ) : (
+                        profitData.dailyTrend
+                          .filter((d) => !search || d.date.includes(search))
+                          .map((d, idx) => {
+                            const isNetProf = Number(d.net_profit || 0) >= 0;
+                            return (
+                              <tr key={idx}>
+                                <td style={{ fontFamily: "var(--font-mono, monospace)", fontWeight: "600" }}>{d.date}</td>
+                                <td style={{ textAlign: "center" }}>{d.order_count}</td>
+                                <td className="num-cell">Rs. {Math.round(Number(d.sales || 0)).toLocaleString()}</td>
+                                <td className="num-cell muted">Rs. {Math.round(Number(d.cogs || 0)).toLocaleString()}</td>
+                                <td className="num-cell" style={{ fontWeight: "600", color: Number(d.gross_profit || 0) >= 0 ? "#10b981" : "#ef4444" }}>
+                                  Rs. {Math.round(Number(d.gross_profit || 0)).toLocaleString()}
+                                </td>
+                                <td className="num-cell negative-amount">Rs. {Math.round(Number(d.expenses || 0)).toLocaleString()}</td>
+                                <td className={`num-cell ${isNetProf ? "positive-amount" : "negative-amount"}`} style={{ fontWeight: "700" }}>
+                                  {isNetProf ? "+" : ""}Rs. {Math.round(Number(d.net_profit || 0)).toLocaleString()}
+                                  <div style={{ fontSize: "0.75rem", opacity: 0.85 }}>({d.net_margin_pct}%)</div>
+                                </td>
+                              </tr>
+                            );
+                          })
+                      )}
+                    </tbody>
+                    {profitData?.dailyTrend && profitData.dailyTrend.length > 0 && (
+                      <tfoot>
+                        <tr className="accounting-grand-total-row">
+                          <td style={{ fontWeight: "800" }}>PERIOD TOTALS</td>
+                          <td style={{ textAlign: "center", fontWeight: "800" }}>
+                            {profitData.dailyTrend.reduce((s, d) => s + Number(d.order_count || 0), 0)}
+                          </td>
+                          <td className="num-cell" style={{ fontWeight: "800" }}>
+                            Rs. {Math.round(profitData.dailyTrend.reduce((s, d) => s + Number(d.sales || 0), 0)).toLocaleString()}
+                          </td>
+                          <td className="num-cell" style={{ fontWeight: "800" }}>
+                            Rs. {Math.round(profitData.dailyTrend.reduce((s, d) => s + Number(d.cogs || 0), 0)).toLocaleString()}
+                          </td>
+                          <td className="num-cell" style={{ fontWeight: "800", color: (profitData.financials?.grossProfit || 0) >= 0 ? "#10b981" : "#ef4444" }}>
+                            Rs. {Math.round(profitData.dailyTrend.reduce((s, d) => s + Number(d.gross_profit || 0), 0)).toLocaleString()}
+                          </td>
+                          <td className="num-cell negative-amount" style={{ fontWeight: "800" }}>
+                            Rs. {Math.round(profitData.dailyTrend.reduce((s, d) => s + Number(d.expenses || 0), 0)).toLocaleString()}
+                          </td>
+                          <td className="num-cell" style={{ fontWeight: "800", color: (profitData.financials?.netProfit || 0) >= 0 ? "#10b981" : "#ef4444" }}>
+                            Rs. {Math.round(profitData.dailyTrend.reduce((s, d) => s + Number(d.net_profit || 0), 0)).toLocaleString()}
+                            <div style={{ fontSize: "0.78rem" }}>({profitData.financials?.netMarginPct}%)</div>
+                          </td>
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
+              </div>
+            )}
+          </SectionCard>
+
+          {/* Audit Verification & Authorization Signatures Block */}
+          <ReportSignatures docType="Profitability Audit & Trading Margin Verification Statement" />
         </>
       )}
 

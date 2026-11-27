@@ -82,6 +82,7 @@ export const EMPLOYEE_SUB_PAGES = [
 
 export const REPORT_SUB_PAGES = [
   { key: "reports_pnl", subKey: "pnl", label: "Profit & Loss", icon: "📊" },
+  { key: "reports_profit", subKey: "profit", label: "Profit Report", icon: "💰" },
   { key: "reports_sales", subKey: "sales", label: "Sales & Turnover", icon: "📈" },
   { key: "reports_expenses", subKey: "expenses", label: "Operating Expenses", icon: "📉" },
   { key: "reports_inventory", subKey: "inventory", label: "Inventory Valuation", icon: "📦" },
@@ -347,6 +348,8 @@ export const SUB_ENTITY_MAP = {
   advances: "employees",
   commissions: "employees",
   pnl: "reports",
+  profit: "reports",
+  reports_profit: "reports",
   reports_inventory: "reports",
   reports_receivables: "reports",
   reports_payables: "reports",
@@ -2183,7 +2186,7 @@ function AppContent() {
             {activeTab === "top_settings" ? (
               <TopSettingsPage context={context} />
             ) : null}
-            {activeTab === "dashboard" ? <DashboardPage context={context} /> : null}
+            {activeTab === "dashboard" ? <DashboardPage context={context} onNavigate={setActiveTab} /> : null}
             {(isPurchaseActive || activeTab === "purchases") &&
             (canUse(session, "purchases", activePurchaseSub === "history" ? "view" : "create") ||
              canUse(session, "purchases", "view") ||

@@ -199,6 +199,7 @@ export const api = {
   reportPayables: () => request("/reports/payables"),
   reportDividends: (query = "") => request(`/reports/dividends${query}`),
   reportPnL: (query = "") => request(`/reports/pnl${query}`),
+  reportProfit: (query = "") => request(`/reports/profit${query}`),
   createBranch: (payload) => request("/branches", { method: "POST", body: JSON.stringify(payload) }),
   updateBranch: (id, payload) => request(`/branches/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   deleteBranch: (id) => request(`/branches/${id}`, { method: "DELETE" }),

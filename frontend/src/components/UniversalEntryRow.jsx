@@ -1432,7 +1432,17 @@ export function UniversalEntryRow({
       <div
         className={`pos-entry-row ${mode === "sale" ? "pos-sale-entry-row" : mode === "purchase" ? "purchase-entry-row" : "transfer-entry-row"}`}
         style={
-          mode === "purchase"
+          mode === "sale"
+            ? {
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                height: "38px",
+                maxHeight: "48px",
+                width: "100%",
+                boxSizing: "border-box"
+              }
+            : mode === "purchase"
             ? {
                 display: "flex",
                 alignItems: "center",
@@ -1443,14 +1453,9 @@ export function UniversalEntryRow({
               }
             : {
                 display: "grid",
-                gridTemplateColumns:
-                  mode === "sale"
-                    ? "minmax(280px, 2.2fr) minmax(180px, 1.4fr) 64px 80px"
-                    : "1.2fr 1.8fr 110px 100px",
-                gap: mode === "sale" ? "0.5rem" : "0.75rem",
-                alignItems: mode === "sale" ? "center" : "end",
-                height: mode === "sale" ? "38px" : "auto",
-                maxHeight: mode === "sale" ? "48px" : "none"
+                gridTemplateColumns: "1.2fr 1.8fr 110px 100px",
+                gap: "0.75rem",
+                alignItems: "end"
               }
         }
       >
@@ -1458,9 +1463,11 @@ export function UniversalEntryRow({
         <div
           ref={scanContainerRef}
           style={
-            mode === "purchase"
+            mode === "sale"
+              ? { flex: "3 1 12rem", minWidth: "12rem", position: "relative" }
+              : mode === "purchase"
               ? { flex: "2.4 1 200px", minWidth: "16rem", position: "relative" }
-              : { display: "flex", flexDirection: "column", gap: mode === "sale" ? "0" : "0.3rem", position: "relative" }
+              : { display: "flex", flexDirection: "column", gap: "0.3rem", position: "relative" }
           }
         >
           {mode !== "sale" && mode !== "purchase" && (
@@ -1681,9 +1688,11 @@ export function UniversalEntryRow({
         <div
           ref={containerRef}
           style={
-            mode === "purchase"
+            mode === "sale"
+              ? { flex: "5 1 16rem", minWidth: "16rem", position: "relative" }
+              : mode === "purchase"
               ? { flex: "1.6 1 150px", minWidth: "12rem", position: "relative" }
-              : { display: "flex", flexDirection: "column", gap: mode === "sale" ? "0" : "0.3rem", position: "relative" }
+              : { display: "flex", flexDirection: "column", gap: "0.3rem", position: "relative" }
           }
         >
           {mode !== "sale" && mode !== "purchase" && (
@@ -1979,9 +1988,11 @@ export function UniversalEntryRow({
         {/* 3. Quantity */}
         <div
           style={
-            mode === "purchase"
+            mode === "sale"
+              ? { width: "clamp(5.5rem, 8%, 7rem)", flex: "0 0 clamp(5.5rem, 8%, 7rem)", position: "relative" }
+              : mode === "purchase"
               ? { width: "clamp(3.5rem, 5%, 4.5rem)", flex: "0 0 clamp(3.5rem, 5%, 4.5rem)" }
-              : { display: "flex", flexDirection: "column", gap: mode === "sale" ? "0" : "0.3rem" }
+              : { display: "flex", flexDirection: "column", gap: "0.3rem" }
           }
         >
           {mode !== "sale" && mode !== "purchase" && (
@@ -1996,7 +2007,7 @@ export function UniversalEntryRow({
             min="1"
             className="pos-scanner-input"
             style={{
-              width: mode === "sale" ? "64px" : "100%",
+              width: "100%",
               height: mode === "sale" || mode === "purchase" ? "36px" : undefined,
               boxSizing: "border-box",
               textAlign: "center",
@@ -2095,7 +2106,7 @@ export function UniversalEntryRow({
         )}
 
         {/* 5. Add Button */}
-        <div style={mode === "purchase" ? { flex: "0 0 auto", minWidth: "4rem" } : undefined}>
+        <div style={mode === "sale" ? { flex: "0 0 auto", minWidth: "4.5rem" } : mode === "purchase" ? { flex: "0 0 auto", minWidth: "4rem" } : undefined}>
           <button
             ref={addButtonRef}
             tabIndex={4}

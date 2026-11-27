@@ -644,3 +644,374 @@ reportsRouter.get(
     });
   })
 );
+
+// =========================================================================
+// 6. DETAILED PROFITABILITY & MARGINS REPORT (COMPANY ADMIN)
+// =========================================================================
+reportsRouter.get(
+  "/profit",
+  asyncHandler(async (req, res) => {
+    let branchId = req.query.branchId;
+    let branch = null;
+    let branchCondition = "";
+    const params = { businessId: req.user.business_id };
+
+    if (branchId && branchId !== "all") {
+      await assertBranchAccess(req.user, branchId);
+      const [foundBranch] = await query(
+        "SELECT id, name, code, address FROM branches WHERE id = ? AND business_id = ?",
+        [branchId, req.user.business_id]
+      );
+      if (foundBranch) {
+        branch = foundBranch;
+        branchCondition = "AND so.branch_id = :branchId";
+        params.branchId = branchId;
+      }
+    } else if (req.user.branch_id && !isBusinessAdmin(req.user)) {
+      branchId = req.user.branch_id;
+      const [foundBranch] = await query(
+        "SELECT id, name, code, address FROM branches WHERE id = ? AND business_id = ?",
+        [branchId, req.user.business_id]
+      );
+      branch = foundBranch;
+      branchCondition = "AND so.branch_id = :branchId";
+      params.branchId = branchId;
+    } else {
+      branch = { id: "all", name: "All Store Outlets", code: "ALL" };
+    }
+
+    const { period = "this_month", startDate, endDate } = req.query;
+    const resolvedPeriod = resolvePeriod(period, startDate, endDate);
+    params.startDate = resolvedPeriod.startDate;
+    params.endDate = resolvedPeriod.endDate;
+
+    // 1. Sales & Revenue
+    const [salesRow] = await query(
+      `SELECT 
+         COALESCE(SUM(so.total_amount), 0) AS gross_sales,
+         COALESCE(SUM(so.tax_amount), 0) AS total_tax,
+         COALESCE(SUM(so.discount_amount), 0) AS total_discounts,
+         COALESCE(SUM(so.subtotal), 0) AS net_sales,
+         COUNT(DISTINCT so.id) AS total_orders
+       FROM sale_orders so
+       JOIN branches b ON b.id = so.branch_id
+       WHERE b.business_id = :businessId
+         ${branchCondition}
+         AND so.sale_date >= :startDate
+         AND so.sale_date <= :endDate
+         AND COALESCE(so.is_deleted, 0) = 0`,
+      params
+    );
+
+    // 2. Cost of Goods Sold (COGS)
+    const [cogsRow] = await query(
+      `SELECT 
+         COALESCE(SUM(CASE 
+           WHEN soi.mobile_unit_id IS NOT NULL THEN COALESCE(mu.cost_price, 0)
+           WHEN soi.product_id IS NOT NULL THEN COALESCE(p.cost_price, 0) * COALESCE(soi.quantity, 1)
+           ELSE 0
+         END), 0) AS total_cogs
+       FROM sale_order_items soi
+       JOIN sale_orders so ON so.id = soi.sale_order_id
+       JOIN branches b ON b.id = so.branch_id
+       LEFT JOIN mobile_units mu ON mu.id = soi.mobile_unit_id
+       LEFT JOIN products p ON p.id = soi.product_id
+       WHERE b.business_id = :businessId
+         ${branchCondition}
+         AND so.sale_date >= :startDate
+         AND so.sale_date <= :endDate
+         AND COALESCE(so.is_deleted, 0) = 0`,
+      params
+    );
+
+    // 3. Customer Sale Returns (Refunds)
+    const retBranchCond = branchId && branchId !== "all" ? "AND r.branch_id = :branchId" : "";
+    const [returnsRow] = await query(
+      `SELECT 
+         COALESCE(SUM(r.total_refund_amount), 0) AS total_refunds,
+         COUNT(r.id) AS return_count
+       FROM order_returns r
+       WHERE r.business_id = :businessId
+         ${retBranchCond}
+         AND r.return_type = 'customer_return'
+         AND r.return_date >= :startDate
+         AND r.return_date <= :endDate`,
+      params
+    );
+
+    // 4. Operating Expenses
+    const expBranchCond = branchId && branchId !== "all" ? "AND e.branch_id = :branchId" : "";
+    const [expensesRow] = await query(
+      `SELECT 
+         COALESCE(SUM(e.amount), 0) AS total_expenses,
+         COUNT(e.id) AS expense_count
+       FROM expenses e
+       JOIN branches b ON b.id = e.branch_id
+       WHERE b.business_id = :businessId
+         ${expBranchCond}
+         AND e.expense_date >= :startDate
+         AND e.expense_date <= :endDate
+         AND COALESCE(e.is_deleted, 0) = 0`,
+      params
+    );
+
+    // 5. Expense Breakdown by Category
+    const expenseBreakdown = await query(
+      `SELECT 
+         COALESCE(e.category, 'other') AS category,
+         COALESCE(SUM(e.amount), 0) AS amount,
+         COUNT(e.id) AS count
+       FROM expenses e
+       JOIN branches b ON b.id = e.branch_id
+       WHERE b.business_id = :businessId
+         ${expBranchCond}
+         AND e.expense_date >= :startDate
+         AND e.expense_date <= :endDate
+         AND COALESCE(e.is_deleted, 0) = 0
+       GROUP BY COALESCE(e.category, 'other')
+       ORDER BY amount DESC`,
+      params
+    );
+
+    // 6. Delivered Repairs Income
+    const repBranchCond = branchId && branchId !== "all" ? "AND rt.branch_id = :branchId" : "";
+    const [repairsRow] = await query(
+      `SELECT 
+         COALESCE(SUM(rt.actual_cost), 0) AS repair_revenue,
+         COUNT(rt.id) AS repair_count
+       FROM repair_tickets rt
+       WHERE rt.business_id = :businessId
+         ${repBranchCond}
+         AND rt.status = 'delivered'
+         AND (
+           (rt.delivered_date IS NOT NULL AND rt.delivered_date >= :startDate AND rt.delivered_date <= :endDate)
+           OR (rt.delivered_date IS NULL AND rt.received_date >= :startDate AND rt.received_date <= :endDate)
+         )`,
+      params
+    );
+
+    // 7. Itemized Invoices with Profit & Margin
+    const rawInvoices = await query(
+      `SELECT 
+         so.id,
+         so.invoice_number,
+         so.sale_date,
+         b.name AS branch_name,
+         b.code AS branch_code,
+         COALESCE(p.name, 'Walk-in Customer') AS customer_name,
+         p.phone AS customer_phone,
+         so.payment_method,
+         so.subtotal,
+         so.discount_amount,
+         so.tax_amount,
+         so.total_amount,
+         so.paid_amount,
+         so.balance_amount,
+         COUNT(soi.id) AS items_count,
+         COALESCE(SUM(CASE 
+           WHEN soi.mobile_unit_id IS NOT NULL THEN COALESCE(mu.cost_price, 0)
+           WHEN soi.product_id IS NOT NULL THEN COALESCE(prd.cost_price, 0) * COALESCE(soi.quantity, 1)
+           ELSE 0
+         END), 0) AS total_cogs
+       FROM sale_orders so
+       JOIN branches b ON b.id = so.branch_id
+       LEFT JOIN parties p ON p.id = so.customer_id
+       LEFT JOIN sale_order_items soi ON soi.sale_order_id = so.id
+       LEFT JOIN mobile_units mu ON mu.id = soi.mobile_unit_id
+       LEFT JOIN products prd ON prd.id = soi.product_id
+       WHERE b.business_id = :businessId
+         ${branchCondition}
+         AND so.sale_date >= :startDate
+         AND so.sale_date <= :endDate
+         AND COALESCE(so.is_deleted, 0) = 0
+       GROUP BY so.id, so.invoice_number, so.sale_date, b.name, b.code, p.name, p.phone, so.payment_method, so.subtotal, so.discount_amount, so.tax_amount, so.total_amount, so.paid_amount, so.balance_amount
+       ORDER BY so.sale_date DESC, so.id DESC`,
+      params
+    );
+
+    const invoices = rawInvoices.map((inv) => {
+      const saleAmount = Number(inv.total_amount || 0);
+      const cogs = Number(inv.total_cogs || 0);
+      const grossProfit = Number((saleAmount - cogs).toFixed(2));
+      const marginPct = saleAmount > 0 ? ((grossProfit / saleAmount) * 100).toFixed(2) : "0.00";
+      return {
+        ...inv,
+        sale_amount: saleAmount,
+        total_cogs: cogs,
+        gross_profit: grossProfit,
+        margin_pct: marginPct,
+        is_profitable: grossProfit >= 0
+      };
+    });
+
+    // 8. Product & Handset Model Profitability Breakdown
+    const handsetItems = await query(
+      `SELECT 
+         CONCAT(mm.company, ' ', mm.model_name, COALESCE(CONCAT(' (', mm.storage, ', ', mm.color, ')'), '')) AS item_name,
+         'Handset (IMEI)' AS category,
+         COUNT(soi.id) AS units_sold,
+         COALESCE(SUM(soi.unit_price * soi.quantity), 0) AS total_revenue,
+         COALESCE(SUM(mu.cost_price), 0) AS total_cost
+       FROM sale_order_items soi
+       JOIN sale_orders so ON so.id = soi.sale_order_id
+       JOIN branches b ON b.id = so.branch_id
+       JOIN mobile_units mu ON mu.id = soi.mobile_unit_id
+       JOIN mobile_models mm ON mm.id = mu.model_id
+       WHERE b.business_id = :businessId
+         ${branchCondition}
+         AND so.sale_date >= :startDate
+         AND so.sale_date <= :endDate
+         AND COALESCE(so.is_deleted, 0) = 0
+       GROUP BY mm.company, mm.model_name, mm.storage, mm.color`,
+      params
+    );
+
+    const accessoryItems = await query(
+      `SELECT 
+         prd.name AS item_name,
+         COALESCE(cat.name, prd.item_type, 'Accessory') AS category,
+         COALESCE(SUM(soi.quantity), 0) AS units_sold,
+         COALESCE(SUM(soi.unit_price * soi.quantity), 0) AS total_revenue,
+         COALESCE(SUM(prd.cost_price * soi.quantity), 0) AS total_cost
+       FROM sale_order_items soi
+       JOIN sale_orders so ON so.id = soi.sale_order_id
+       JOIN branches b ON b.id = so.branch_id
+       JOIN products prd ON prd.id = soi.product_id
+       LEFT JOIN categories cat ON cat.id = prd.category_id
+       WHERE b.business_id = :businessId
+         ${branchCondition}
+         AND so.sale_date >= :startDate
+         AND so.sale_date <= :endDate
+         AND COALESCE(so.is_deleted, 0) = 0
+       GROUP BY prd.id, prd.name, cat.name, prd.item_type`,
+      params
+    );
+
+    const productProfitability = [...handsetItems, ...accessoryItems]
+      .map((item) => {
+        const revenue = Number(item.total_revenue || 0);
+        const cost = Number(item.total_cost || 0);
+        const grossProfit = Number((revenue - cost).toFixed(2));
+        const marginPct = revenue > 0 ? ((grossProfit / revenue) * 100).toFixed(2) : "0.00";
+        return {
+          ...item,
+          total_revenue: revenue,
+          total_cost: cost,
+          gross_profit: grossProfit,
+          margin_pct: marginPct,
+          is_profitable: grossProfit >= 0
+        };
+      })
+      .sort((a, b) => b.total_revenue - a.total_revenue);
+
+    // 9. Daily Profit Trend
+    const dailySalesRows = await query(
+      `SELECT 
+         so.sale_date,
+         COUNT(DISTINCT so.id) AS order_count,
+         COALESCE(SUM(so.total_amount), 0) AS daily_sales,
+         COALESCE(SUM(CASE 
+           WHEN soi.mobile_unit_id IS NOT NULL THEN COALESCE(mu.cost_price, 0)
+           WHEN soi.product_id IS NOT NULL THEN COALESCE(prd.cost_price, 0) * COALESCE(soi.quantity, 1)
+           ELSE 0
+         END), 0) AS daily_cogs
+       FROM sale_orders so
+       JOIN branches b ON b.id = so.branch_id
+       LEFT JOIN sale_order_items soi ON soi.sale_order_id = so.id
+       LEFT JOIN mobile_units mu ON mu.id = soi.mobile_unit_id
+       LEFT JOIN products prd ON prd.id = soi.product_id
+       WHERE b.business_id = :businessId
+         ${branchCondition}
+         AND so.sale_date >= :startDate
+         AND so.sale_date <= :endDate
+         AND COALESCE(so.is_deleted, 0) = 0
+       GROUP BY so.sale_date
+       ORDER BY so.sale_date ASC`,
+      params
+    );
+
+    const dailyExpRows = await query(
+      `SELECT 
+         e.expense_date,
+         COALESCE(SUM(e.amount), 0) AS daily_expenses
+       FROM expenses e
+       JOIN branches b ON b.id = e.branch_id
+       WHERE b.business_id = :businessId
+         ${expBranchCond}
+         AND e.expense_date >= :startDate
+         AND e.expense_date <= :endDate
+         AND COALESCE(e.is_deleted, 0) = 0
+       GROUP BY e.expense_date`,
+      params
+    );
+
+    const expenseMap = new Map();
+    dailyExpRows.forEach((r) => {
+      const key = typeof r.expense_date === "string" ? r.expense_date : formatLocalDate(new Date(r.expense_date));
+      expenseMap.set(key, Number(r.daily_expenses || 0));
+    });
+
+    const dailyTrend = dailySalesRows.map((d) => {
+      const dateKey = typeof d.sale_date === "string" ? d.sale_date : formatLocalDate(new Date(d.sale_date));
+      const salesVal = Number(d.daily_sales || 0);
+      const cogsVal = Number(d.daily_cogs || 0);
+      const grossProf = salesVal - cogsVal;
+      const expVal = expenseMap.get(dateKey) || 0;
+      const netProf = grossProf - expVal;
+      const netMarg = salesVal > 0 ? ((netProf / salesVal) * 100).toFixed(2) : "0.00";
+      return {
+        date: dateKey,
+        order_count: Number(d.order_count || 0),
+        sales: salesVal,
+        cogs: cogsVal,
+        gross_profit: grossProf,
+        expenses: expVal,
+        net_profit: netProf,
+        net_margin_pct: netMarg,
+        is_profitable: netProf >= 0
+      };
+    });
+
+    const grossSales = Number(salesRow?.gross_sales || 0);
+    const netSales = Number(salesRow?.net_sales || 0);
+    const totalTax = Number(salesRow?.total_tax || 0);
+    const totalDiscounts = Number(salesRow?.total_discounts || 0);
+    const totalOrders = Number(salesRow?.total_orders || 0);
+    const totalCogs = Number(cogsRow?.total_cogs || 0);
+    const saleRefunds = Number(returnsRow?.total_refunds || 0);
+    const totalExpenses = Number(expensesRow?.total_expenses || 0);
+    const repairRevenue = Number(repairsRow?.repair_revenue || 0);
+
+    const adjustedRevenue = Math.max(0, netSales - saleRefunds) + repairRevenue;
+    const grossProfit = adjustedRevenue - totalCogs;
+    const netProfit = grossProfit - totalExpenses;
+    const grossMarginPct = adjustedRevenue > 0 ? ((grossProfit / adjustedRevenue) * 100).toFixed(2) : "0.00";
+    const netMarginPct = adjustedRevenue > 0 ? ((netProfit / adjustedRevenue) * 100).toFixed(2) : "0.00";
+
+    res.json({
+      branch,
+      period: resolvedPeriod,
+      financials: {
+        grossSales,
+        netSales,
+        totalTax,
+        totalDiscounts,
+        totalOrders,
+        saleRefunds,
+        repairRevenue,
+        adjustedRevenue,
+        totalCogs,
+        grossProfit,
+        grossMarginPct,
+        totalExpenses,
+        expenseBreakdown,
+        netProfit,
+        netMarginPct,
+        isProfitable: netProfit >= 0
+      },
+      invoices,
+      productProfitability,
+      dailyTrend
+    });
+  })
+);

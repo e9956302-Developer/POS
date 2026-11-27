@@ -1390,7 +1390,7 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
             }}
           >
             {/* 1. Customer info (widest share: flex-grow) */}
-            <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flex: "2.2 1 240px", minWidth: 0, height: "34px", position: "relative" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flex: "3.2 1 260px", minWidth: 0, height: "34px", position: "relative" }}>
               <span className="muted small" style={{ fontSize: "0.78rem", fontWeight: "600", whiteSpace: "nowrap" }}>
                 {t("sales.customer_box_title", "Customer")}:
               </span>
@@ -1520,7 +1520,7 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
             </div>
 
             {/* 3. Outlet / Branch */}
-            <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flex: "1.4 1 180px", minWidth: 0, height: "34px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flex: "1.1 1 150px", minWidth: 0, height: "34px" }}>
               <span className="muted small" style={{ fontSize: "0.78rem", fontWeight: "600", whiteSpace: "nowrap" }}>
                 {t("app.store_outlet", "Outlet")}:
               </span>
@@ -1583,19 +1583,6 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
                   </select>
                 )}
               </div>
-              <span className="muted small" style={{ fontSize: "0.72rem", display: "inline-flex", alignItems: "center", gap: "0.2rem", whiteSpace: "nowrap", flexShrink: 0 }}>
-                <span>📱{branchUnits.length} 📦{availableProducts.length}</span>
-                <button
-                  type="button"
-                  className="ghost-btn btn-sm"
-                  onClick={() => loadBranchUnits(form.branchId)}
-                  disabled={isLoadingBranchUnits}
-                  title="Reload branch stock"
-                  style={{ padding: "0 2px", fontSize: "0.72rem" }}
-                >
-                  🔄
-                </button>
-              </span>
             </div>
           </div>
 
@@ -1772,13 +1759,20 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
 
               <div className="table-wrap pos-cart-scroll-container" style={{ margin: 0, border: "none" }}>
                 <table className="pos-cart-table">
+                  <colgroup>
+                    <col style={{ width: "auto" }} />
+                    <col style={{ width: "clamp(5rem, 8%, 6rem)" }} />
+                    <col style={{ width: "clamp(6.5rem, 11%, 8rem)" }} />
+                    <col style={{ width: "clamp(6.5rem, 11%, 8rem)" }} />
+                    <col style={{ width: "clamp(2.25rem, 3.5%, 2.75rem)" }} />
+                  </colgroup>
                   <thead>
                     <tr>
-                      <th style={{ width: "auto" }}>{t("sales.table_item", "Item & Identification")}</th>
-                      <th style={{ width: "70px", minWidth: "70px", maxWidth: "70px", textAlign: "center" }}>{t("sales.table_qty", "Qty")}</th>
-                      <th style={{ width: "100px", minWidth: "100px", maxWidth: "100px", textAlign: "right" }}>{t("sales.table_unit_price", "Unit Price")}</th>
-                      <th style={{ width: "100px", minWidth: "100px", maxWidth: "100px", textAlign: "right" }}>{t("sales.table_subtotal", "Subtotal")}</th>
-                      <th style={{ width: "40px", minWidth: "40px", maxWidth: "40px", textAlign: "center" }}>{t("sales.table_remove", "Remove")}</th>
+                      <th style={{ textAlign: isRtl ? "right" : "left" }}>{t("sales.table_item", "Item & Identification")}</th>
+                      <th style={{ width: "clamp(5rem, 8%, 6rem)", textAlign: "center" }}>{t("sales.table_qty", "Qty")}</th>
+                      <th style={{ width: "clamp(6.5rem, 11%, 8rem)", textAlign: "right" }}>{t("sales.table_unit_price", "Unit Price")}</th>
+                      <th style={{ width: "clamp(6.5rem, 11%, 8rem)", textAlign: "right" }}>{t("sales.table_subtotal", "Subtotal")}</th>
+                      <th style={{ width: "clamp(2.25rem, 3.5%, 2.75rem)", textAlign: "center" }}>{t("sales.table_remove", "Remove")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1841,6 +1835,7 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
                                     overflow: "hidden",
                                     textOverflow: "ellipsis"
                                   }}
+                                  title={isPhone ? `📱 IMEI: ${item.imei || "N/A"}${item.color ? ` • ${item.color}` : ""}${item.storage ? ` ${item.storage}` : ""}` : `📦 SKU: ${item.sku || "N/A"}`}
                                 >
                                   {isPhone
                                     ? `📱 IMEI: ${item.imei || "N/A"}${item.color ? ` • ${item.color}` : ""}${item.storage ? ` ${item.storage}` : ""}`
@@ -1849,8 +1844,8 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
                               </div>
                             </td>
 
-                            {/* 2. Qty (70px, editable in place) */}
-                            <td style={{ width: "70px", minWidth: "70px", maxWidth: "70px", textAlign: "center", padding: "2px 4px", verticalAlign: "middle" }}>
+                            {/* 2. Qty (clamp(5rem, 8%, 6rem), editable in place) */}
+                            <td style={{ width: "clamp(5rem, 8%, 6rem)", minWidth: "5rem", maxWidth: "6rem", textAlign: "center", padding: "2px 4px", verticalAlign: "middle" }}>
                               {isPhone ? (
                                 <span className="muted" style={{ fontWeight: "700", fontSize: "0.82rem" }}>
                                   1
@@ -1874,7 +1869,8 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
                                     }
                                   }}
                                   style={{
-                                    width: "56px",
+                                    width: "100%",
+                                    boxSizing: "border-box",
                                     height: "26px",
                                     textAlign: "center",
                                     padding: "1px 2px",
@@ -1889,8 +1885,8 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
                               )}
                             </td>
 
-                            {/* 3. Unit Price (100px, right-aligned, editable) */}
-                            <td style={{ width: "100px", minWidth: "100px", maxWidth: "100px", textAlign: "right", padding: "2px 4px", verticalAlign: "middle" }}>
+                            {/* 3. Unit Price (clamp(6.5rem, 11%, 8rem), right-aligned, editable) */}
+                            <td style={{ width: "clamp(6.5rem, 11%, 8rem)", minWidth: "6.5rem", maxWidth: "8rem", textAlign: "right", padding: "2px 4px", verticalAlign: "middle" }}>
                               <input
                                 type="number"
                                 step="any"
@@ -1906,7 +1902,8 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
                                   }
                                 }}
                                 style={{
-                                  width: "86px",
+                                  width: "100%",
+                                  boxSizing: "border-box",
                                   height: "26px",
                                   textAlign: "right",
                                   padding: "1px 4px",
@@ -1921,13 +1918,13 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
                               />
                             </td>
 
-                            {/* 4. Subtotal (100px, right-aligned) */}
-                            <td style={{ width: "100px", minWidth: "100px", maxWidth: "100px", textAlign: "right", fontWeight: "700", fontSize: "0.82rem", padding: "2px 6px", verticalAlign: "middle" }}>
+                            {/* 4. Subtotal (clamp(6.5rem, 11%, 8rem), right-aligned) */}
+                            <td style={{ width: "clamp(6.5rem, 11%, 8rem)", minWidth: "6.5rem", maxWidth: "8rem", textAlign: "right", fontWeight: "700", fontSize: "0.82rem", padding: "2px 6px", verticalAlign: "middle", whiteSpace: "nowrap" }}>
                               PKR {lineSubtotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                             </td>
 
-                            {/* 5. Remove (40px, one delete icon per row) */}
-                            <td style={{ width: "40px", minWidth: "40px", maxWidth: "40px", textAlign: "center", padding: "2px 4px", verticalAlign: "middle" }}>
+                            {/* 5. Remove (clamp(2.25rem, 3.5%, 2.75rem), one delete icon per row) */}
+                            <td style={{ width: "clamp(2.25rem, 3.5%, 2.75rem)", minWidth: "2.25rem", maxWidth: "2.75rem", textAlign: "center", padding: "2px 2px", verticalAlign: "middle" }}>
                               <button
                                 type="button"
                                 className="ghost-btn"
@@ -1937,14 +1934,11 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
                                   padding: "2px",
                                   fontSize: "0.85rem",
                                   lineHeight: 1,
-                                  borderRadius: "4px",
-                                  background: "transparent",
-                                  border: "none",
-                                  cursor: "pointer"
+                                  borderRadius: "4px"
                                 }}
-                                title="Remove item"
+                                title={isUrdu ? "حذف کریں" : "Remove item"}
                               >
-                                🗑️
+                                ✕
                               </button>
                             </td>
                           </tr>
