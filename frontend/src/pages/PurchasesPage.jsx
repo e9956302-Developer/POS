@@ -1575,7 +1575,7 @@ export function PurchasesPage({ context = {}, activeSubPage, onNavigateSubPage }
                       placeholder="e.g. 42101-1234567-1"
                       required
                       className="vendor-row-input"
-                      style={{ direction: "ltr", unicodeBidi: "isolate" }}
+                      style={{ direction: "ltr", unicodeBidi: "isolate", boxSizing: "border-box" }}
                     />
                     {purchaserCnicError && (
                       <span className="field-error" style={{ color: "var(--danger, #ef4444)", fontSize: "0.75rem", display: "block" }}>

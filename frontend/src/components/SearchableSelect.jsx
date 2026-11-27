@@ -333,6 +333,7 @@ export function SearchableSelect({
           type="text"
           value={inputValue}
           placeholder={selectedOption ? selectedOption.label : placeholder}
+          title={inputValue || placeholder}
           disabled={disabled}
           autoFocus={autoFocus}
           autoComplete="off"
@@ -423,8 +424,10 @@ export function SearchableSelect({
           style={{
             position: "absolute",
             top: "calc(100% + 4px)",
-            left: 0,
-            right: 0,
+            insetInlineStart: 0,
+            minWidth: "100%",
+            width: "max-content",
+            maxWidth: "min(92vw, 36rem)",
             background: "var(--surface)",
             border: "1.5px solid var(--border)",
             borderRadius: "10px",
@@ -493,12 +496,10 @@ export function SearchableSelect({
                       userSelect: "none"
                     }}
                   >
-                    <div style={{ display: "flex", flexDirection: "column", gap: "0.05rem", overflow: "hidden", minWidth: 0 }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.05rem", minWidth: 0 }}>
                       <span
                         style={{
                           fontWeight: isSelected ? 700 : 500,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
                           whiteSpace: "nowrap"
                         }}
                       >

@@ -1463,8 +1463,10 @@ export function UniversalEntryRow({
         <div
           ref={scanContainerRef}
           style={
-            mode === "sale" || mode === "purchase"
-              ? { flex: "3 1 12rem", minWidth: "12rem", position: "relative" }
+            mode === "sale"
+              ? { flex: "3.2 1 clamp(14rem, 24%, 18rem)", minWidth: "clamp(14rem, 24%, 18rem)", position: "relative" }
+              : mode === "purchase"
+              ? { flex: "3.2 1 clamp(14rem, 24%, 18rem)", minWidth: "clamp(14rem, 24%, 18rem)", position: "relative" }
               : { display: "flex", flexDirection: "column", gap: "0.3rem", position: "relative" }
           }
         >
@@ -1628,8 +1630,10 @@ export function UniversalEntryRow({
               style={{
                 position: "absolute",
                 top: "calc(100% + 4px)",
-                left: 0,
-                right: 0,
+                insetInlineStart: 0,
+                minWidth: "100%",
+                width: "max-content",
+                maxWidth: "min(92vw, 42rem)",
                 zIndex: 1000,
                 background: "var(--surface, #1e293b)",
                 border: "1px solid var(--border, #334155)",
@@ -1686,8 +1690,10 @@ export function UniversalEntryRow({
         <div
           ref={containerRef}
           style={
-            mode === "sale" || mode === "purchase"
-              ? { flex: "5 1 14rem", minWidth: "14rem", position: "relative" }
+            mode === "sale"
+              ? { flex: "5 1 clamp(16.5rem, 32%, 24rem)", minWidth: "clamp(16.5rem, 32%, 24rem)", position: "relative" }
+              : mode === "purchase"
+              ? { flex: "5 1 clamp(15rem, 28%, 22rem)", minWidth: "clamp(15rem, 28%, 22rem)", position: "relative" }
               : { display: "flex", flexDirection: "column", gap: "0.3rem", position: "relative" }
           }
         >
@@ -1822,8 +1828,10 @@ export function UniversalEntryRow({
               style={{
                 position: "absolute",
                 top: "calc(100% + 4px)",
-                left: 0,
-                right: 0,
+                insetInlineStart: 0,
+                minWidth: "100%",
+                width: "max-content",
+                maxWidth: "min(92vw, 45rem)",
                 zIndex: 1000,
                 background: "var(--surface, #1e293b)",
                 border: "1px solid var(--border, #334155)",
@@ -1984,7 +1992,9 @@ export function UniversalEntryRow({
         {/* 3. Quantity */}
         <div
           style={
-            mode === "sale" || mode === "purchase"
+            mode === "sale"
+              ? { width: "clamp(5.5rem, 8%, 7rem)", flex: "0 0 clamp(5.5rem, 8%, 7rem)", position: "relative" }
+              : mode === "purchase"
               ? { width: "clamp(5.5rem, 8%, 7rem)", flex: "0 0 clamp(5.5rem, 8%, 7rem)", position: "relative" }
               : { display: "flex", flexDirection: "column", gap: "0.3rem" }
           }
@@ -2005,6 +2015,7 @@ export function UniversalEntryRow({
               height: mode === "sale" || mode === "purchase" ? "36px" : undefined,
               boxSizing: "border-box",
               textAlign: "center",
+              padding: "0 0.35rem",
               fontWeight: 600,
               opacity: selectedEntryItem?.itemType === "handset" ? 0.65 : 1,
               cursor: selectedEntryItem?.itemType === "handset" ? "not-allowed" : "text",
@@ -2055,7 +2066,7 @@ export function UniversalEntryRow({
 
         {/* 4. Purchase Rate (ONLY for mode === "purchase") */}
         {mode === "purchase" && (
-          <div style={{ width: "clamp(5.5rem, 8%, 7rem)", flex: "0 0 clamp(5.5rem, 8%, 7rem)" }}>
+          <div style={{ width: "clamp(6.5rem, 10%, 8.5rem)", flex: "0 0 clamp(6.5rem, 10%, 8.5rem)" }}>
             <input
               ref={purchaseRateFieldRef}
               tabIndex={4}
@@ -2067,6 +2078,7 @@ export function UniversalEntryRow({
                 width: "100%",
                 height: "36px",
                 textAlign: "right",
+                padding: "0 0.45rem",
                 fontWeight: 700,
                 color: "var(--primary, #38bdf8)",
                 boxSizing: "border-box"
@@ -2100,7 +2112,7 @@ export function UniversalEntryRow({
         )}
 
         {/* 5. Add Button */}
-        <div style={mode === "sale" ? { flex: "0 0 auto", minWidth: "4.5rem" } : mode === "purchase" ? { flex: "0 0 auto", minWidth: "4rem" } : undefined}>
+        <div style={mode === "sale" ? { flex: "0 0 auto", minWidth: "4.5rem" } : mode === "purchase" ? { flex: "0 0 auto", minWidth: "4.5rem" } : undefined}>
           <button
             ref={addButtonRef}
             tabIndex={4}

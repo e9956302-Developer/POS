@@ -99,8 +99,34 @@ export const api = {
   createModel: (payload) => request("/models", { method: "POST", body: JSON.stringify(payload) }),
   updateModel: (id, payload) => request(`/models/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   deleteModel: (id) => request(`/models/${id}`, { method: "DELETE" }),
-  dashboard: (date, branchId) =>
-    request(`/dashboard/summary?date=${encodeURIComponent(date)}${branchId ? `&branchId=${branchId}` : ""}`),
+  dashboard: (dateOrOptions, maybeBranchId, maybeDateTo) => {
+    let dateFrom;
+    let dateTo;
+    let branchId;
+    if (typeof dateOrOptions === "object" && dateOrOptions !== null) {
+      dateFrom = dateOrOptions.dateFrom;
+      dateTo = dateOrOptions.dateTo;
+      branchId = dateOrOptions.branchId;
+    } else if (typeof maybeDateTo === "string" && /^\d{4}-\d{2}-\d{2}$/.test(maybeDateTo)) {
+      dateFrom = dateOrOptions;
+      dateTo = maybeDateTo;
+      branchId = maybeBranchId;
+    } else if (typeof maybeBranchId === "string" && /^\d{4}-\d{2}-\d{2}$/.test(maybeBranchId)) {
+      dateFrom = dateOrOptions;
+      dateTo = maybeBranchId;
+      branchId = maybeDateTo;
+    } else {
+      dateFrom = dateOrOptions;
+      dateTo = dateOrOptions;
+      branchId = maybeBranchId;
+    }
+    const params = new URLSearchParams();
+    if (dateFrom) params.set("dateFrom", dateFrom);
+    if (dateTo) params.set("dateTo", dateTo);
+    if (dateFrom && dateFrom === dateTo) params.set("date", dateFrom);
+    if (branchId) params.set("branchId", branchId);
+    return request(`/dashboard/summary?${params.toString()}`);
+  },
   cashRegisterSession: (branchId, date) =>
     request(`/cash-register/session?branchId=${branchId}&date=${encodeURIComponent(date)}`),
   openCashRegister: (payload) => request("/cash-register/open", { method: "POST", body: JSON.stringify(payload) }),

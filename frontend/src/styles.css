@@ -2679,6 +2679,82 @@ tbody tr.row-highlight-danger td.saas-actions-col {
   flex-wrap: wrap;
 }
 
+/* ========================================================
+   COMPANY ADMIN DASHBOARD DATE FILTER ROW
+   ======================================================== */
+.dashboard-filter-container {
+  margin-bottom: 1.25rem;
+}
+
+.dashboard-filter-row {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  width: 100%;
+}
+
+.dashboard-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  flex: 1 1 clamp(140px, 20vw, 240px);
+  min-width: clamp(120px, 18vw, 160px);
+}
+
+.dashboard-filter-field label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-muted, #64748b);
+  display: block;
+}
+
+.dashboard-filter-field input[type="date"] {
+  width: 100%;
+  padding: 0.55rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--input-bg, #fff);
+  color: var(--text);
+  font-size: 0.88rem;
+  box-sizing: border-box;
+}
+
+.dashboard-filter-field input[type="date"]:focus {
+  outline: 2px solid var(--primary, #3b82f6);
+  border-color: var(--primary, #3b82f6);
+}
+
+.dashboard-today-btn {
+  flex: 0 0 auto;
+  align-self: flex-end;
+  height: 38px;
+  padding: 0 1.25rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.dashboard-date-inline-error {
+  flex: 1 1 100%;
+  color: var(--danger, #ef4444);
+  font-size: 0.84rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.25rem;
+}
+
+.dashboard-period-caption {
+  font-size: 0.82rem;
+  color: var(--text-muted, #64748b);
+  margin-top: 0.45rem;
+  font-weight: 500;
+}
+
 .stats-grid {
   display: grid;
   gap: 1rem;
@@ -14324,7 +14400,8 @@ body.lang-ur,
 }
 
 .purchase-info-row-1 .vendor-field-supplier {
-  flex: 2 1 14rem;
+  flex: 2.5 1 clamp(16rem, 30%, 26rem);
+  min-width: clamp(16rem, 30%, 26rem);
 }
 
 .purchase-info-row-1 .vendor-field-supplier.supplier-full-width {
@@ -14333,21 +14410,23 @@ body.lang-ur,
 }
 
 .purchase-info-row-1 .vendor-field-purchaser {
-  flex: 1.2 1 11rem;
+  flex: 1.5 1 clamp(12rem, 18%, 16rem);
+  min-width: clamp(12rem, 18%, 16rem);
 }
 
 .purchase-info-row-1 .vendor-field-cnic {
-  flex: 1.2 1 11rem;
+  flex: 1.2 1 clamp(10rem, 14%, 13rem);
+  min-width: clamp(10rem, 14%, 13rem);
 }
 
 .purchase-info-row-2 .vendor-field-date {
-  flex: 0 0 clamp(8rem, 12%, 10rem);
-  width: clamp(8rem, 12%, 10rem);
+  flex: 0 0 clamp(9.5rem, 12%, 11rem);
+  width: clamp(9.5rem, 12%, 11rem);
 }
 
 .purchase-info-row-2 .vendor-field-outlet {
-  flex: 0 0 clamp(11rem, 18%, 15rem);
-  width: clamp(11rem, 18%, 15rem);
+  flex: 0 0 clamp(12rem, 20%, 16rem);
+  width: clamp(12rem, 20%, 16rem);
 }
 
 .vendor-row-item {
@@ -14467,30 +14546,31 @@ body.lang-ur,
 .purchase-products-table th.col-item,
 .purchase-products-table td.col-item {
   width: auto;
-  min-width: 40%;
+  min-width: 30%;
   text-align: left;
 }
 
 .purchase-products-table col.col-qty,
 .purchase-products-table th.col-qty,
 .purchase-products-table td.col-qty {
-  width: clamp(5rem, 8%, 6rem);
+  width: clamp(5.2rem, 8%, 6.5rem);
   text-align: center;
 }
 
 .purchase-products-table col.col-rate,
 .purchase-products-table th.col-rate,
 .purchase-products-table td.col-rate {
-  width: clamp(6.5rem, 11%, 8rem);
+  width: clamp(7.5rem, 13%, 9.5rem);
   text-align: right;
 }
 
 .purchase-products-table col.col-subtotal,
 .purchase-products-table th.col-subtotal,
 .purchase-products-table td.col-subtotal {
-  width: clamp(6.5rem, 11%, 8rem);
+  width: clamp(7.5rem, 13%, 9.5rem);
   text-align: right;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .purchase-products-table col.col-remove,
@@ -14738,23 +14818,30 @@ body.lang-ur,
 }
 
 .pay-row-input.compact-num {
-  width: 5.5rem;
+  width: clamp(6.5rem, 45%, 7.5rem);
+  min-width: 6.5rem;
   text-align: right;
   direction: ltr;
   unicode-bidi: isolate;
+  box-sizing: border-box;
+  padding: 0 0.45rem;
 }
 
 .pay-row-input.paid-input {
-  width: 5.5rem;
+  width: clamp(6.5rem, 45%, 7.5rem);
+  min-width: 6.5rem;
   text-align: right;
   font-weight: 700;
   direction: ltr;
   unicode-bidi: isolate;
+  box-sizing: border-box;
+  padding: 0 0.45rem;
 }
 
 .pay-row-input.date-input {
-  width: 8.5rem;
+  width: clamp(9.5rem, 55%, 11rem);
   font-size: 0.78rem;
+  box-sizing: border-box;
 }
 
 .pay-paid-combo {

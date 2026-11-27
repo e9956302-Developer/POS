@@ -29,7 +29,7 @@ test("Sale Counter: Payment panel narrowed and cart table columns proportioned w
   // 2. Cart table colgroup column shares
   assert.match(
     salesSource,
-    /<colgroup>\s*<col\s+style=\{\{\s*width:\s*"auto"\s*\}\}\s*\/>\s*<col\s+style=\{\{\s*width:\s*"clamp\(5rem,\s*8%,\s*6rem\)"\s*\}\}\s*\/>\s*<col\s+style=\{\{\s*width:\s*"clamp\(6\.5rem,\s*11%,\s*8rem\)"\s*\}\}\s*\/>\s*<col\s+style=\{\{\s*width:\s*"clamp\(6\.5rem,\s*11%,\s*8rem\)"\s*\}\}\s*\/>\s*<col\s+style=\{\{\s*width:\s*"clamp\(2\.25rem,\s*3\.5%,\s*2\.75rem\)"\s*\}\}\s*\/>/s,
+    /<colgroup>\s*<col\s+style=\{\{\s*width:\s*"auto"\s*\}\}\s*\/>\s*<col\s+style=\{\{\s*width:\s*"clamp\(5\.2rem,\s*8%,\s*6\.5rem\)"\s*\}\}\s*\/>\s*<col\s+style=\{\{\s*width:\s*"clamp\(7\.5rem,\s*13%,\s*9\.5rem\)"\s*\}\}\s*\/>\s*<col\s+style=\{\{\s*width:\s*"clamp\(7\.5rem,\s*13%,\s*9\.5rem\)"\s*\}\}\s*\/>\s*<col\s+style=\{\{\s*width:\s*"clamp\(2\.25rem,\s*3\.5%,\s*2\.75rem\)"\s*\}\}\s*\/>/s,
     "Cart table must specify colgroup with relative clamp widths for all 5 columns"
   );
 
@@ -49,18 +49,18 @@ test("Sale Counter: Payment panel narrowed and cart table columns proportioned w
 test("Sale Counter: Entry row relative proportions and increased quantity width", () => {
   const entryRowSource = fs.readFileSync(entryRowPath, "utf8");
 
-  // 1. Universal scan field share ~30% (flex: 3 1 12rem, minWidth: 12rem)
+  // 1. Universal scan field share ~30%
   assert.match(
     entryRowSource,
-    /mode === "sale"\s*\?\s*\{\s*flex:\s*"3 1 12rem",\s*minWidth:\s*"12rem",\s*position:\s*"relative"\s*\}/s,
-    "Universal scan field in sale mode must have flex 3 1 12rem and minWidth 12rem"
+    /mode === "sale"\s*\?\s*\{\s*flex:\s*"3\.2 1 clamp\(14rem,\s*24%,\s*18rem\)",\s*minWidth:\s*"clamp\(14rem,\s*24%,\s*18rem\)",\s*position:\s*"relative"\s*\}/s,
+    "Universal scan field in sale mode must have flex 3.2 1 clamp(14rem, 24%, 18rem) and minWidth clamp(14rem, 24%, 18rem)"
   );
 
-  // 2. Product / phone model search field widest ~45-50% (flex: 5 1 16rem, minWidth: 16rem)
+  // 2. Product / phone model search field widest ~45-50%
   assert.match(
     entryRowSource,
-    /mode === "sale"\s*\?\s*\{\s*flex:\s*"5 1 16rem",\s*minWidth:\s*"16rem",\s*position:\s*"relative"\s*\}/s,
-    "Product search field in sale mode must have flex 5 1 16rem and minWidth 16rem"
+    /mode === "sale"\s*\?\s*\{\s*flex:\s*"5 1 clamp\(16\.5rem,\s*32%,\s*24rem\)",\s*minWidth:\s*"clamp\(16\.5rem,\s*32%,\s*24rem\)",\s*position:\s*"relative"\s*\}/s,
+    "Product search field in sale mode must have flex 5 1 clamp(16.5rem, 32%, 24rem) and minWidth clamp(16.5rem, 32%, 24rem)"
   );
 
   // 3. Quantity field clamp(5.5rem, 8%, 7rem)
@@ -94,7 +94,7 @@ test("Sale Counter: Customer info row removed stock indicators and expanded cust
   // 2. Customer field flex expanded to take freed space
   assert.match(
     salesSource,
-    /flex:\s*"3\.2 1 260px"/,
-    "Customer field flex must expand to flex 3.2 1 260px"
+    /flex:\s*"3\.2 1 clamp\(16rem,\s*30%,\s*26rem\)"/,
+    "Customer field flex must expand to flex 3.2 1 clamp(16rem, 30%, 26rem)"
   );
 });

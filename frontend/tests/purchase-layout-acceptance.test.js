@@ -56,13 +56,13 @@ test("Acceptance Criterion 1: Fixed-height non-scrolling layout, 2 info rows, si
   // Date and Outlet in Row 2
   assert.match(
     stylesSource,
-    /\.purchase-info-row-2\s+\.vendor-field-date\s*\{[^}]*width:\s*clamp\(8rem,\s*12%,\s*10rem\);/s,
-    "Row 2 date must be clamp(8rem, 12%, 10rem)"
+    /\.purchase-info-row-2\s+\.vendor-field-date\s*\{[^}]*width:\s*clamp\(9\.5rem,\s*12%,\s*11rem\);/s,
+    "Row 2 date must be clamp(9.5rem, 12%, 11rem)"
   );
   assert.match(
     stylesSource,
-    /\.purchase-info-row-2\s+\.vendor-field-outlet\s*\{[^}]*width:\s*clamp\(11rem,\s*18%,\s*15rem\);/s,
-    "Row 2 outlet must be clamp(11rem, 18%, 15rem)"
+    /\.purchase-info-row-2\s+\.vendor-field-outlet\s*\{[^}]*width:\s*clamp\(12rem,\s*20%,\s*16rem\);/s,
+    "Row 2 outlet must be clamp(12rem, 20%, 16rem)"
   );
 
   // No page title block under breadcrumb
@@ -162,32 +162,32 @@ test("Acceptance Criterion 4: Walk-in vs Supplier selection rules", () => {
 test("Acceptance Criterion 5: Entry row relative proportions", () => {
   const entryRowSource = fs.readFileSync(entryRowPath, "utf8");
 
-  // 1. Scan field ~25-30% (flex 3 1 12rem, minWidth 12rem)
+  // 1. Scan field ~25-30%
   assert.match(
     entryRowSource,
-    /mode === "sale" \|\| mode === "purchase"\s*\?\s*\{\s*flex:\s*"3 1 12rem",\s*minWidth:\s*"12rem",\s*position:\s*"relative"\s*\}/s,
-    "Universal scan field in purchase mode must have flex 3 1 12rem and minWidth 12rem"
+    /mode === "purchase"\s*\?\s*\{\s*flex:\s*"3\.2 1 clamp\(14rem,\s*24%,\s*18rem\)",\s*minWidth:\s*"clamp\(14rem,\s*24%,\s*18rem\)",\s*position:\s*"relative"\s*\}/s,
+    "Universal scan field in purchase mode must have flex 3.2 1 clamp(14rem, 24%, 18rem) and minWidth clamp(14rem, 24%, 18rem)"
   );
 
-  // 2. Product field widest ~40-45% (flex 5 1 14rem, minWidth 14rem)
+  // 2. Product field widest ~40-45%
   assert.match(
     entryRowSource,
-    /mode === "sale" \|\| mode === "purchase"\s*\?\s*\{\s*flex:\s*"5 1 14rem",\s*minWidth:\s*"14rem",\s*position:\s*"relative"\s*\}/s,
-    "Product search field in purchase mode must have flex 5 1 14rem and minWidth 14rem"
+    /mode === "purchase"\s*\?\s*\{\s*flex:\s*"5 1 clamp\(15rem,\s*28%,\s*22rem\)",\s*minWidth:\s*"clamp\(15rem,\s*28%,\s*22rem\)",\s*position:\s*"relative"\s*\}/s,
+    "Product search field in purchase mode must have flex 5 1 clamp(15rem, 28%, 22rem) and minWidth clamp(15rem, 28%, 22rem)"
   );
 
   // 3. Quantity clamp(5.5rem, 8%, 7rem)
   assert.match(
     entryRowSource,
-    /mode === "sale" \|\| mode === "purchase"\s*\?\s*\{\s*width:\s*"clamp\(5\.5rem,\s*8%,\s*7rem\)",\s*flex:\s*"0 0 clamp\(5\.5rem,\s*8%,\s*7rem\)"/s,
+    /mode === "purchase"\s*\?\s*\{\s*width:\s*"clamp\(5\.5rem,\s*8%,\s*7rem\)",\s*flex:\s*"0 0 clamp\(5\.5rem,\s*8%,\s*7rem\)"/s,
     "Quantity field in purchase mode must have clamp(5.5rem, 8%, 7rem) width"
   );
 
-  // 4. Purchase Rate clamp(5.5rem, 8%, 7rem)
+  // 4. Purchase Rate clamp(6.5rem, 10%, 8.5rem)
   assert.match(
     entryRowSource,
-    /mode === "purchase"\s*&&\s*\(\s*<div\s+style=\{\{\s*width:\s*"clamp\(5\.5rem,\s*8%,\s*7rem\)",\s*flex:\s*"0 0 clamp\(5\.5rem,\s*8%,\s*7rem\)"\s*\}\}>/s,
-    "Purchase Rate field must have clamp(5.5rem, 8%, 7rem) width"
+    /mode === "purchase"\s*&&\s*\(\s*<div\s+style=\{\{\s*width:\s*"clamp\(6\.5rem,\s*10%,\s*8\.5rem\)",\s*flex:\s*"0 0 clamp\(6\.5rem,\s*10%,\s*8\.5rem\)"\s*\}\}>/s,
+    "Purchase Rate field must have clamp(6.5rem, 10%, 8.5rem) width"
   );
 });
 

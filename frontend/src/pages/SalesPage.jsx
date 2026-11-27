@@ -1390,7 +1390,7 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
             }}
           >
             {/* 1. Customer info (widest share: flex-grow) */}
-            <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flex: "3.2 1 260px", minWidth: 0, height: "34px", position: "relative" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flex: "3.2 1 clamp(16rem, 30%, 26rem)", minWidth: "clamp(16rem, 30%, 26rem)", height: "34px", position: "relative" }}>
               <span className="muted small" style={{ fontSize: "0.78rem", fontWeight: "600", whiteSpace: "nowrap" }}>
                 {t("sales.customer_box_title", "Customer")}:
               </span>
@@ -1454,7 +1454,7 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
                         customerPhoneRef.current?.focus();
                       }
                     }}
-                    style={{ width: "130px", height: "30px", padding: "0.2rem 0.5rem", fontSize: "0.82rem", borderRadius: "6px", border: "1px solid var(--border)", background: "var(--input-bg, var(--surface))", color: "var(--text)" }}
+                    style={{ width: "clamp(11rem, 18vw, 15rem)", minWidth: "11rem", height: "30px", padding: "0.2rem 0.5rem", fontSize: "0.82rem", borderRadius: "6px", border: "1px solid var(--border)", background: "var(--input-bg, var(--surface))", color: "var(--text)", boxSizing: "border-box" }}
                   />
                   <input
                     ref={customerPhoneRef}
@@ -1469,7 +1469,7 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
                         setShowWalkInDetails(false);
                       }
                     }}
-                    style={{ width: "130px", height: "30px", padding: "0.2rem 0.5rem", fontSize: "0.82rem", borderRadius: "6px", border: "1px solid var(--border)", background: "var(--input-bg, var(--surface))", color: "var(--text)" }}
+                    style={{ width: "clamp(11rem, 18vw, 15rem)", minWidth: "11rem", height: "30px", padding: "0.2rem 0.5rem", fontSize: "0.82rem", borderRadius: "6px", border: "1px solid var(--border)", background: "var(--input-bg, var(--surface))", color: "var(--text)", boxSizing: "border-box" }}
                   />
                   <button
                     type="button"
@@ -1485,7 +1485,7 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
             </div>
 
             {/* 2. Sale Date */}
-            <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flex: "1 1 140px", minWidth: 0, height: "34px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flex: "1 1 clamp(9.5rem, 12%, 11rem)", minWidth: "clamp(9.5rem, 12%, 11rem)", height: "34px" }}>
               <span className="muted small" style={{ fontSize: "0.78rem", fontWeight: "600", whiteSpace: "nowrap" }}>
                 {t("sales.sale_date", "Date")}:
               </span>
@@ -1520,7 +1520,7 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
             </div>
 
             {/* 3. Outlet / Branch */}
-            <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flex: "1.1 1 150px", minWidth: 0, height: "34px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flex: "1.2 1 clamp(11rem, 16%, 15rem)", minWidth: "clamp(11rem, 16%, 15rem)", height: "34px" }}>
               <span className="muted small" style={{ fontSize: "0.78rem", fontWeight: "600", whiteSpace: "nowrap" }}>
                 {t("app.store_outlet", "Outlet")}:
               </span>
@@ -1761,17 +1761,17 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
                 <table className="pos-cart-table">
                   <colgroup>
                     <col style={{ width: "auto" }} />
-                    <col style={{ width: "clamp(5rem, 8%, 6rem)" }} />
-                    <col style={{ width: "clamp(6.5rem, 11%, 8rem)" }} />
-                    <col style={{ width: "clamp(6.5rem, 11%, 8rem)" }} />
+                    <col style={{ width: "clamp(5.2rem, 8%, 6.5rem)" }} />
+                    <col style={{ width: "clamp(7.5rem, 13%, 9.5rem)" }} />
+                    <col style={{ width: "clamp(7.5rem, 13%, 9.5rem)" }} />
                     <col style={{ width: "clamp(2.25rem, 3.5%, 2.75rem)" }} />
                   </colgroup>
                   <thead>
                     <tr>
                       <th style={{ textAlign: isRtl ? "right" : "left" }}>{t("sales.table_item", "Item & Identification")}</th>
-                      <th style={{ width: "clamp(5rem, 8%, 6rem)", textAlign: "center" }}>{t("sales.table_qty", "Qty")}</th>
-                      <th style={{ width: "clamp(6.5rem, 11%, 8rem)", textAlign: "right" }}>{t("sales.table_unit_price", "Unit Price")}</th>
-                      <th style={{ width: "clamp(6.5rem, 11%, 8rem)", textAlign: "right" }}>{t("sales.table_subtotal", "Subtotal")}</th>
+                      <th style={{ width: "clamp(5.2rem, 8%, 6.5rem)", textAlign: "center" }}>{t("sales.table_qty", "Qty")}</th>
+                      <th style={{ width: "clamp(7.5rem, 13%, 9.5rem)", textAlign: "right" }}>{t("sales.table_unit_price", "Unit Price")}</th>
+                      <th style={{ width: "clamp(7.5rem, 13%, 9.5rem)", textAlign: "right" }}>{t("sales.table_subtotal", "Subtotal")}</th>
                       <th style={{ width: "clamp(2.25rem, 3.5%, 2.75rem)", textAlign: "center" }}>{t("sales.table_remove", "Remove")}</th>
                     </tr>
                   </thead>
@@ -1844,8 +1844,8 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
                               </div>
                             </td>
 
-                            {/* 2. Qty (clamp(5rem, 8%, 6rem), editable in place) */}
-                            <td style={{ width: "clamp(5rem, 8%, 6rem)", minWidth: "5rem", maxWidth: "6rem", textAlign: "center", padding: "2px 4px", verticalAlign: "middle" }}>
+                            {/* 2. Qty (clamp(5.2rem, 8%, 6.5rem), editable in place) */}
+                            <td style={{ width: "clamp(5.2rem, 8%, 6.5rem)", minWidth: "5.2rem", maxWidth: "6.5rem", textAlign: "center", padding: "2px 4px", verticalAlign: "middle" }}>
                               {isPhone ? (
                                 <span className="muted" style={{ fontWeight: "700", fontSize: "0.82rem" }}>
                                   1
@@ -1885,8 +1885,8 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
                               )}
                             </td>
 
-                            {/* 3. Unit Price (clamp(6.5rem, 11%, 8rem), right-aligned, editable) */}
-                            <td style={{ width: "clamp(6.5rem, 11%, 8rem)", minWidth: "6.5rem", maxWidth: "8rem", textAlign: "right", padding: "2px 4px", verticalAlign: "middle" }}>
+                            {/* 3. Unit Price (clamp(7.5rem, 13%, 9.5rem), right-aligned, editable) */}
+                            <td style={{ width: "clamp(7.5rem, 13%, 9.5rem)", minWidth: "7.5rem", maxWidth: "9.5rem", textAlign: "right", padding: "2px 4px", verticalAlign: "middle" }}>
                               <input
                                 type="number"
                                 step="any"
@@ -1906,7 +1906,7 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
                                   boxSizing: "border-box",
                                   height: "26px",
                                   textAlign: "right",
-                                  padding: "1px 4px",
+                                  padding: "1px 6px",
                                   fontWeight: "600",
                                   fontSize: "0.82rem",
                                   borderRadius: "4px",
@@ -1918,8 +1918,8 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
                               />
                             </td>
 
-                            {/* 4. Subtotal (clamp(6.5rem, 11%, 8rem), right-aligned) */}
-                            <td style={{ width: "clamp(6.5rem, 11%, 8rem)", minWidth: "6.5rem", maxWidth: "8rem", textAlign: "right", fontWeight: "700", fontSize: "0.82rem", padding: "2px 6px", verticalAlign: "middle", whiteSpace: "nowrap" }}>
+                            {/* 4. Subtotal (clamp(7.5rem, 13%, 9.5rem), right-aligned) */}
+                            <td style={{ width: "clamp(7.5rem, 13%, 9.5rem)", minWidth: "7.5rem", maxWidth: "9.5rem", textAlign: "right", fontWeight: "700", fontSize: "0.82rem", padding: "2px 6px", verticalAlign: "middle", whiteSpace: "nowrap" }}>
                               PKR {lineSubtotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                             </td>
 
@@ -2002,7 +2002,7 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
                     value={form.discountValue}
                     onChange={(e) => setForm({ ...form, discountValue: e.target.value })}
                     placeholder="0"
-                    style={{ width: "80px", height: "26px", textAlign: isRtl ? "left" : "right", padding: "1px 4px", fontSize: "0.8rem" }}
+                    style={{ width: "clamp(6.5rem, 45%, 7.5rem)", minWidth: "6.5rem", height: "26px", textAlign: isRtl ? "left" : "right", padding: "1px 6px", fontSize: "0.82rem", boxSizing: "border-box" }}
                   />
                 </div>
                 {cartDiscountAmount > 0 && form.discountType === "percentage" && (
@@ -2023,7 +2023,7 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
                     value={form.taxAmount}
                     onChange={(e) => setForm({ ...form, taxAmount: e.target.value })}
                     placeholder="0"
-                    style={{ width: "80px", height: "26px", textAlign: isRtl ? "left" : "right", padding: "1px 4px", fontSize: "0.8rem" }}
+                    style={{ width: "clamp(6.5rem, 45%, 7.5rem)", minWidth: "6.5rem", height: "26px", textAlign: isRtl ? "left" : "right", padding: "1px 6px", fontSize: "0.82rem", boxSizing: "border-box" }}
                   />
                 </div>
 
@@ -2102,7 +2102,7 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
                     placeholder={t("sales.amount_received", "Amount Received")}
                     style={{
                       flex: 1,
-                      minWidth: 0,
+                      minWidth: "clamp(7rem, 45%, 8.5rem)",
                       padding: "0.3rem 0.5rem",
                       fontSize: "0.92rem",
                       fontWeight: "700",
@@ -2146,7 +2146,7 @@ export function SalesPage({ context, activeSubPage, onNavigateSubPage }) {
                       type="date"
                       value={form.dueDate}
                       onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
-                      style={{ width: "120px", height: "26px", padding: "1px 4px", fontSize: "0.76rem" }}
+                      style={{ width: "clamp(9.5rem, 55%, 11rem)", height: "26px", padding: "1px 6px", fontSize: "0.78rem", boxSizing: "border-box" }}
                     />
                   </div>
                 )}

@@ -3,22 +3,117 @@ import { api } from "../api.js";
 import { SectionCard } from "../components/SectionCard.jsx";
 import { StatCard } from "../components/StatCard.jsx";
 import { BarChart, DonutChart } from "../components/Charts.jsx";
+import { getTodayDateStringPK } from "../utils/date.js";
+
+function formatDisplayDate(dateStr) {
+  if (!dateStr) return "";
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const dd = String(day).padStart(2, "0");
+  const mmm = months[month - 1] || "";
+  return `${dd} ${mmm} ${year}`;
+}
+
+export function getPeriodCaption(from, to, today) {
+  if (!from || !to) return "";
+  if (from === to && from === today) {
+    return `Showing figures for today (${formatDisplayDate(from)})`;
+  }
+  if (from === to) {
+    return `Showing figures for ${formatDisplayDate(from)}`;
+  }
+  return `Showing figures for ${formatDisplayDate(from)} \u2013 ${formatDisplayDate(to)}`;
+}
 
 export function DashboardPage({ context, onNavigate }) {
+  const role = context.session?.role_name || context.session?.roleName || context.user?.role_name || context.user?.roleName;
+  const isCompanyAdmin = ["business_super_admin", "admin"].includes(role);
+
+  const today = getTodayDateStringPK();
   const [branchId, setBranchId] = useState(context.session.branch_id || context.session.branchId || "");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(today);
+  const [dateFrom, setDateFrom] = useState(today);
+  const [dateTo, setDateTo] = useState(today);
+  const [dateError, setDateError] = useState("");
+  const [appliedPeriod, setAppliedPeriod] = useState({ dateFrom: today, dateTo: today });
   const [summary, setSummary] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
+    let isCancelled = false;
+    setIsLoading(true);
     setError("");
-    api.dashboard(date, branchId)
-      .then(setSummary)
-      .catch((loadError) => setError(loadError.message));
-  }, [date, branchId]);
+
+    const reqPromise = isCompanyAdmin
+      ? api.dashboard({ dateFrom: appliedPeriod.dateFrom, dateTo: appliedPeriod.dateTo, branchId })
+      : api.dashboard({ dateFrom: date, dateTo: date, branchId });
+
+    reqPromise
+      .then((data) => {
+        if (!isCancelled) {
+          setSummary(data);
+          setIsLoading(false);
+        }
+      })
+      .catch((loadError) => {
+        if (!isCancelled) {
+          setError(loadError.message);
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [isCompanyAdmin, appliedPeriod.dateFrom, appliedPeriod.dateTo, branchId, date]);
+
+  const handleDateFromChange = (e) => {
+    const newFrom = e.target.value;
+    setDateFrom(newFrom);
+    if (!newFrom || !dateTo) {
+      return;
+    }
+    if (newFrom > dateTo) {
+      setDateError("Date From cannot be after Date To");
+    } else {
+      setDateError("");
+      setAppliedPeriod({ dateFrom: newFrom, dateTo });
+    }
+  };
+
+  const handleDateToChange = (e) => {
+    let newTo = e.target.value;
+    if (newTo && newTo > today) {
+      newTo = today;
+    }
+    setDateTo(newTo);
+    if (!dateFrom || !newTo) {
+      return;
+    }
+    if (dateFrom > newTo) {
+      setDateError("Date From cannot be after Date To");
+    } else {
+      setDateError("");
+      setAppliedPeriod({ dateFrom, dateTo: newTo });
+    }
+  };
+
+  const handleResetToday = () => {
+    setDateFrom(today);
+    setDateTo(today);
+    setDateError("");
+    setAppliedPeriod({ dateFrom: today, dateTo: today });
+  };
 
   const selectedBranch = context.branches?.find((b) => String(b.id) === String(branchId));
   const isSelectedBranchExpired = selectedBranch && (selectedBranch.is_expired || selectedBranch.effective_status === "expired");
+
+  const displayPeriodStr = isCompanyAdmin
+    ? appliedPeriod.dateFrom === appliedPeriod.dateTo
+      ? appliedPeriod.dateFrom
+      : `${appliedPeriod.dateFrom} to ${appliedPeriod.dateTo}`
+    : date;
 
   if (!summary && error) {
     return (
@@ -39,10 +134,52 @@ export function DashboardPage({ context, onNavigate }) {
                   );
                 })}
               </select>
-              <input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+              {!isCompanyAdmin && (
+                <input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+              )}
             </div>
           }
         >
+          {isCompanyAdmin && (
+            <div className="dashboard-filter-container">
+              <div className="dashboard-filter-row">
+                <div className="dashboard-filter-field">
+                  <label htmlFor="dashboard-date-from-err">Date From</label>
+                  <input
+                    id="dashboard-date-from-err"
+                    type="date"
+                    value={dateFrom}
+                    onChange={handleDateFromChange}
+                  />
+                </div>
+                <div className="dashboard-filter-field">
+                  <label htmlFor="dashboard-date-to-err">Date To</label>
+                  <input
+                    id="dashboard-date-to-err"
+                    type="date"
+                    max={today}
+                    value={dateTo}
+                    onChange={handleDateToChange}
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="secondary-btn dashboard-today-btn"
+                  onClick={handleResetToday}
+                >
+                  Today
+                </button>
+                {dateError && (
+                  <div className="dashboard-date-inline-error" role="alert">
+                    <span>⚠️</span> {dateError}
+                  </div>
+                )}
+              </div>
+              <div className="dashboard-period-caption">
+                {getPeriodCaption(appliedPeriod.dateFrom, appliedPeriod.dateTo, today)}
+              </div>
+            </div>
+          )}
           <div className="alert error">{error}</div>
         </SectionCard>
       </div>
@@ -92,7 +229,9 @@ export function DashboardPage({ context, onNavigate }) {
                 );
               })}
             </select>
-            <input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+            {!isCompanyAdmin && (
+              <input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+            )}
           </div>
         }
       >
@@ -117,49 +256,95 @@ export function DashboardPage({ context, onNavigate }) {
           </div>
         )}
         {error ? <div className="alert error">{error}</div> : null}
-        <div className="stats-grid">
-          {summary.profit && (
-            <>
-              <StatCard
-                label="Net Operating Profit"
-                value={`PKR ${Number(summary.profit.netProfit).toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
-                tone={summary.profit.isProfitable ? "positive" : "danger"}
-                badge={summary.profit.isProfitable ? "PROFIT" : "LOSS"}
-                subtitle={`Net Margin: ${summary.profit.netMarginPct}% • MTD: PKR ${Number(summary.profit.mtd?.netProfit || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
-              />
-              <StatCard
-                label="Gross Trading Profit"
-                value={`PKR ${Number(summary.profit.grossProfit).toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
-                tone={summary.profit.grossProfit >= 0 ? "positive" : "danger"}
-                subtitle={`Gross Margin: ${summary.profit.grossMarginPct}% on Turnover`}
-              />
-              <StatCard
-                label="Cost of Goods Sold (COGS)"
-                value={`PKR ${Number(summary.profit.totalCogs).toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
-                tone="warning"
-                subtitle="Cost of items sold today"
-              />
-            </>
-          )}
-          <StatCard label="Total Sales" value={`PKR ${Number(summary.sales.totalSales).toLocaleString(undefined, { maximumFractionDigits: 2 })}`} tone="positive" />
-          <StatCard label="Total Purchases" value={`PKR ${Number(summary.purchases.totalPurchases).toLocaleString(undefined, { maximumFractionDigits: 2 })}`} />
-          <StatCard label="Collections Received" value={`PKR ${Number(summary.sales.collected).toLocaleString(undefined, { maximumFractionDigits: 2 })}`} tone="positive" />
-          <StatCard label="Payments Made" value={`PKR ${Number(summary.purchases.paidOut).toLocaleString(undefined, { maximumFractionDigits: 2 })}`} />
-          <StatCard label="Total Expenses" value={`PKR ${Number(summary.expenses.totalExpenses).toLocaleString(undefined, { maximumFractionDigits: 2 })}`} tone="warning" />
-          <StatCard label="Inventory In Hand" value={`${summary.stock.inHandCount} units`} />
-          <StatCard label="Stock Value" value={`PKR ${Number(summary.stock.stockValue).toLocaleString(undefined, { maximumFractionDigits: 2 })}`} />
-          <StatCard label="Pending Receivables" value={`PKR ${Number(summary.receivables.pendingReceivables).toLocaleString(undefined, { maximumFractionDigits: 2 })}`} tone="positive" />
-          <StatCard label="Pending Payables" value={`PKR ${Number(summary.payables.pendingPayables).toLocaleString(undefined, { maximumFractionDigits: 2 })}`} tone="warning" />
-          <StatCard label="Due Today" value={`PKR ${Number(summary.receivables.dueToday).toLocaleString(undefined, { maximumFractionDigits: 2 })}`} tone="warning" />
-          <StatCard label="Overdue" value={`PKR ${Number(summary.receivables.overdue).toLocaleString(undefined, { maximumFractionDigits: 2 })}`} tone="danger" />
-        </div>
+
+        {isCompanyAdmin && (
+          <div className="dashboard-filter-container">
+            <div className="dashboard-filter-row">
+              <div className="dashboard-filter-field">
+                <label htmlFor="dashboard-date-from">Date From</label>
+                <input
+                  id="dashboard-date-from"
+                  type="date"
+                  value={dateFrom}
+                  onChange={handleDateFromChange}
+                />
+              </div>
+              <div className="dashboard-filter-field">
+                <label htmlFor="dashboard-date-to">Date To</label>
+                <input
+                  id="dashboard-date-to"
+                  type="date"
+                  max={today}
+                  value={dateTo}
+                  onChange={handleDateToChange}
+                />
+              </div>
+              <button
+                type="button"
+                className="secondary-btn dashboard-today-btn"
+                onClick={handleResetToday}
+              >
+                Today
+              </button>
+              {dateError && (
+                <div className="dashboard-date-inline-error" role="alert">
+                  <span>⚠️</span> {dateError}
+                </div>
+              )}
+            </div>
+            <div className="dashboard-period-caption">
+              {getPeriodCaption(appliedPeriod.dateFrom, appliedPeriod.dateTo, today)}
+            </div>
+          </div>
+        )}
+
+        {isLoading ? (
+          <div className="panel-loading">Loading dashboard...</div>
+        ) : (
+          <div className="stats-grid">
+            {summary.profit && (
+              <>
+                <StatCard
+                  label="Net Operating Profit"
+                  value={`PKR ${Number(summary.profit.netProfit).toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
+                  tone={summary.profit.isProfitable ? "positive" : "danger"}
+                  badge={summary.profit.isProfitable ? "PROFIT" : "LOSS"}
+                  subtitle={`Net Margin: ${summary.profit.netMarginPct}% • MTD: PKR ${Number(summary.profit.mtd?.netProfit || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
+                />
+                <StatCard
+                  label="Gross Trading Profit"
+                  value={`PKR ${Number(summary.profit.grossProfit).toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
+                  tone={summary.profit.grossProfit >= 0 ? "positive" : "danger"}
+                  subtitle={`Gross Margin: ${summary.profit.grossMarginPct}% on Turnover`}
+                />
+                <StatCard
+                  label="Cost of Goods Sold (COGS)"
+                  value={`PKR ${Number(summary.profit.totalCogs).toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
+                  tone="warning"
+                  subtitle="Cost of items sold today"
+                />
+              </>
+            )}
+            <StatCard label="Total Sales" value={`PKR ${Number(summary.sales.totalSales).toLocaleString(undefined, { maximumFractionDigits: 2 })}`} tone="positive" />
+            <StatCard label="Total Purchases" value={`PKR ${Number(summary.purchases.totalPurchases).toLocaleString(undefined, { maximumFractionDigits: 2 })}`} />
+            <StatCard label="Collections Received" value={`PKR ${Number(summary.sales.collected).toLocaleString(undefined, { maximumFractionDigits: 2 })}`} tone="positive" />
+            <StatCard label="Payments Made" value={`PKR ${Number(summary.purchases.paidOut).toLocaleString(undefined, { maximumFractionDigits: 2 })}`} />
+            <StatCard label="Total Expenses" value={`PKR ${Number(summary.expenses.totalExpenses).toLocaleString(undefined, { maximumFractionDigits: 2 })}`} tone="warning" />
+            <StatCard label="Inventory In Hand" value={`${summary.stock.inHandCount} units`} />
+            <StatCard label="Stock Value" value={`PKR ${Number(summary.stock.stockValue).toLocaleString(undefined, { maximumFractionDigits: 2 })}`} />
+            <StatCard label="Pending Receivables" value={`PKR ${Number(summary.receivables.pendingReceivables).toLocaleString(undefined, { maximumFractionDigits: 2 })}`} tone="positive" />
+            <StatCard label="Pending Payables" value={`PKR ${Number(summary.payables.pendingPayables).toLocaleString(undefined, { maximumFractionDigits: 2 })}`} tone="warning" />
+            <StatCard label="Due Today" value={`PKR ${Number(summary.receivables.dueToday).toLocaleString(undefined, { maximumFractionDigits: 2 })}`} tone="warning" />
+            <StatCard label="Overdue" value={`PKR ${Number(summary.receivables.overdue).toLocaleString(undefined, { maximumFractionDigits: 2 })}`} tone="danger" />
+          </div>
+        )}
       </SectionCard>
 
       {/* Company Admin Profit & Margins Executive Center */}
-      {summary.profit && (
+      {!isLoading && summary.profit && (
         <SectionCard
           title="Company Profitability & Trading Margin Audit"
-          subtitle={`Audited daily profit equation and Month-to-Date (MTD) cumulative yield for ${date}.`}
+          subtitle={`Audited daily profit equation and Month-to-Date (MTD) cumulative yield for ${displayPeriodStr}.`}
           action={
             <div style={{ display: "flex", gap: "8px" }}>
               <button
@@ -188,7 +373,7 @@ export function DashboardPage({ context, onNavigate }) {
               }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontWeight: "700", fontSize: "0.95rem" }}>📅 Daily Profit Waterfall ({date})</span>
+                <span style={{ fontWeight: "700", fontSize: "0.95rem" }}>📅 Daily Profit Waterfall ({displayPeriodStr})</span>
                 <span
                   className={`status-pill ${summary.profit.isProfitable ? "status-success" : "status-danger"}`}
                   style={{ fontSize: "0.75rem", padding: "2px 8px" }}
@@ -322,15 +507,17 @@ export function DashboardPage({ context, onNavigate }) {
       )}
 
       {/* Visual Analytics Charts */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "20px" }}>
-        <SectionCard title="Financial Flow Comparison" subtitle="Daily turnover, procurement, and overhead metrics.">
-          <BarChart data={comparisonChartData} height={220} color="#3b82f6" />
-        </SectionCard>
+      {!isLoading && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "20px" }}>
+          <SectionCard title="Financial Flow Comparison" subtitle="Daily turnover, procurement, and overhead metrics.">
+            <BarChart data={comparisonChartData} height={220} color="#3b82f6" />
+          </SectionCard>
 
-        <SectionCard title="Cash & Working Capital Balance" subtitle="Breakdown of collections, dues, and operating expenses.">
-          <DonutChart data={financialFlowDonut} size={180} />
-        </SectionCard>
-      </div>
+          <SectionCard title="Cash & Working Capital Balance" subtitle="Breakdown of collections, dues, and operating expenses.">
+            <DonutChart data={financialFlowDonut} size={180} />
+          </SectionCard>
+        </div>
+      )}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "20px" }}>
         {/* Branch Subscription Health Card */}

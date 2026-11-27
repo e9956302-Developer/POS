@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { query } from "../../db/pool.js";
-import { todayString } from "../../utils/http.js";
+import { todayString, badRequest } from "../../utils/http.js";
 import { assertBranchAccess, businessScopeCondition, businessScopeParams, isBusinessAdmin } from "../../middleware/auth.js";
 
 export const dashboardRouter = Router();
@@ -9,13 +9,31 @@ export const dashboardRouter = Router();
 dashboardRouter.get(
   "/summary",
   asyncHandler(async (req, res) => {
-    const date = req.query.date || todayString();
+    const today = todayString();
+    const dateParam = req.query.date;
+    const dateFrom = req.query.dateFrom || dateParam || today;
+    let dateTo = req.query.dateTo || dateParam || dateFrom || today;
+
+    if (dateTo > today) {
+      dateTo = today;
+    }
+
+    if (dateFrom > dateTo) {
+      throw badRequest("Date From cannot be after Date To");
+    }
+
     const branchId = req.query.branchId;
     if (branchId) {
       await assertBranchAccess(req.user, branchId, null, { allowExpiredForAdmin: true });
     }
     const branchFilter = branchId ? " AND b.id = :branchId" : "";
-    const params = { ...businessScopeParams(req.user), ...(branchId ? { branchId } : {}), date };
+    const params = {
+      ...businessScopeParams(req.user),
+      ...(branchId ? { branchId } : {}),
+      date: dateTo,
+      dateFrom,
+      dateTo
+    };
 
     const [[sales]] = await Promise.all([
       query(
@@ -27,7 +45,7 @@ dashboardRouter.get(
                 COUNT(DISTINCT so.id) AS orderCount
          FROM sale_orders so
          JOIN branches b ON b.id = so.branch_id
-         WHERE so.sale_date = :date
+         WHERE so.sale_date >= :dateFrom AND so.sale_date <= :dateTo
            AND COALESCE(so.is_deleted, 0) = 0
            AND ${businessScopeCondition(req.user, "b")}${branchFilter}`,
         params
@@ -35,7 +53,7 @@ dashboardRouter.get(
     ]);
 
     const canViewProfit = isBusinessAdmin(req.user) || req.user.role_name === "top_admin";
-    const monthStart = `${date.slice(0, 7)}-01`;
+    const monthStart = `${dateTo.slice(0, 7)}-01`;
     const mtdParams = { ...params, monthStart };
 
     const [
@@ -59,7 +77,7 @@ dashboardRouter.get(
                 COALESCE(SUM(paid_amount), 0) AS paidOut
          FROM purchase_orders po
          JOIN branches b ON b.id = po.branch_id
-         WHERE po.purchase_date = :date
+         WHERE po.purchase_date >= :dateFrom AND po.purchase_date <= :dateTo
            AND COALESCE(po.is_deleted, 0) = 0
            AND ${businessScopeCondition(req.user, "b")}${branchFilter}`,
         params
@@ -68,7 +86,7 @@ dashboardRouter.get(
         `SELECT COALESCE(SUM(amount), 0) AS totalExpenses
          FROM expenses e
          JOIN branches b ON b.id = e.branch_id
-         WHERE e.expense_date = :date
+         WHERE e.expense_date >= :dateFrom AND e.expense_date <= :dateTo
            AND COALESCE(e.is_deleted, 0) = 0
            AND ${businessScopeCondition(req.user, "b")}${branchFilter}`,
         params
@@ -84,8 +102,8 @@ dashboardRouter.get(
       ),
       query(
         `SELECT COALESCE(SUM(balance_amount), 0) AS pendingReceivables,
-                COALESCE(SUM(CASE WHEN due_date = :date THEN balance_amount ELSE 0 END), 0) AS dueToday,
-                COALESCE(SUM(CASE WHEN due_date < :date THEN balance_amount ELSE 0 END), 0) AS overdue
+                COALESCE(SUM(CASE WHEN due_date >= :dateFrom AND due_date <= :dateTo THEN balance_amount ELSE 0 END), 0) AS dueToday,
+                COALESCE(SUM(CASE WHEN due_date < :dateFrom THEN balance_amount ELSE 0 END), 0) AS overdue
          FROM receivables r
          JOIN branches b ON b.id = r.branch_id
          WHERE r.balance_amount > 0
@@ -122,7 +140,7 @@ dashboardRouter.get(
              JOIN branches b ON b.id = so.branch_id
              LEFT JOIN mobile_units mu ON mu.id = soi.mobile_unit_id
              LEFT JOIN products p ON p.id = soi.product_id
-             WHERE so.sale_date = :date
+             WHERE so.sale_date >= :dateFrom AND so.sale_date <= :dateTo
                AND COALESCE(so.is_deleted, 0) = 0
                AND ${businessScopeCondition(req.user, "b")}${branchFilter}`,
             params
@@ -134,7 +152,7 @@ dashboardRouter.get(
                     COUNT(r.id) AS returnCount
              FROM order_returns r
              JOIN branches b ON b.id = r.branch_id
-             WHERE r.return_date = :date
+             WHERE r.return_date >= :dateFrom AND r.return_date <= :dateTo
                AND r.return_type = 'customer_return'
                AND ${businessScopeCondition(req.user, "b")}${branchFilter}`,
             params
@@ -148,8 +166,8 @@ dashboardRouter.get(
              JOIN branches b ON b.id = rt.branch_id
              WHERE rt.status = 'delivered'
                AND (
-                 (rt.delivered_date IS NOT NULL AND rt.delivered_date = :date)
-                 OR (rt.delivered_date IS NULL AND rt.received_date = :date)
+                 (rt.delivered_date IS NOT NULL AND rt.delivered_date >= :dateFrom AND rt.delivered_date <= :dateTo)
+                 OR (rt.delivered_date IS NULL AND rt.received_date >= :dateFrom AND rt.received_date <= :dateTo)
                )
                AND ${businessScopeCondition(req.user, "b")}${branchFilter}`,
             params
@@ -162,7 +180,7 @@ dashboardRouter.get(
                     COUNT(DISTINCT so.id) AS orderCount
              FROM sale_orders so
              JOIN branches b ON b.id = so.branch_id
-             WHERE so.sale_date >= :monthStart AND so.sale_date <= :date
+             WHERE so.sale_date >= :monthStart AND so.sale_date <= :dateTo
                AND COALESCE(so.is_deleted, 0) = 0
                AND ${businessScopeCondition(req.user, "b")}${branchFilter}`,
             mtdParams
@@ -180,7 +198,7 @@ dashboardRouter.get(
              JOIN branches b ON b.id = so.branch_id
              LEFT JOIN mobile_units mu ON mu.id = soi.mobile_unit_id
              LEFT JOIN products p ON p.id = soi.product_id
-             WHERE so.sale_date >= :monthStart AND so.sale_date <= :date
+             WHERE so.sale_date >= :monthStart AND so.sale_date <= :dateTo
                AND COALESCE(so.is_deleted, 0) = 0
                AND ${businessScopeCondition(req.user, "b")}${branchFilter}`,
             mtdParams
@@ -191,7 +209,7 @@ dashboardRouter.get(
             `SELECT COALESCE(SUM(r.total_refund_amount), 0) AS totalRefunds
              FROM order_returns r
              JOIN branches b ON b.id = r.branch_id
-             WHERE r.return_date >= :monthStart AND r.return_date <= :date
+             WHERE r.return_date >= :monthStart AND r.return_date <= :dateTo
                AND r.return_type = 'customer_return'
                AND ${businessScopeCondition(req.user, "b")}${branchFilter}`,
             mtdParams
@@ -204,8 +222,8 @@ dashboardRouter.get(
              JOIN branches b ON b.id = rt.branch_id
              WHERE rt.status = 'delivered'
                AND (
-                 (rt.delivered_date IS NOT NULL AND rt.delivered_date >= :monthStart AND rt.delivered_date <= :date)
-                 OR (rt.delivered_date IS NULL AND rt.received_date >= :monthStart AND rt.received_date <= :date)
+                 (rt.delivered_date IS NOT NULL AND rt.delivered_date >= :monthStart AND rt.delivered_date <= :dateTo)
+                 OR (rt.delivered_date IS NULL AND rt.received_date >= :monthStart AND rt.received_date <= :dateTo)
                )
                AND ${businessScopeCondition(req.user, "b")}${branchFilter}`,
             mtdParams
@@ -216,7 +234,7 @@ dashboardRouter.get(
             `SELECT COALESCE(SUM(amount), 0) AS totalExpenses
              FROM expenses e
              JOIN branches b ON b.id = e.branch_id
-             WHERE e.expense_date >= :monthStart AND e.expense_date <= :date
+             WHERE e.expense_date >= :monthStart AND e.expense_date <= :dateTo
                AND COALESCE(e.is_deleted, 0) = 0
                AND ${businessScopeCondition(req.user, "b")}${branchFilter}`,
             mtdParams
@@ -287,7 +305,9 @@ dashboardRouter.get(
     }
 
     res.json({
-      date,
+      date: dateTo,
+      dateFrom,
+      dateTo,
       sales,
       purchases,
       expenses,
